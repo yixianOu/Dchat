@@ -62,6 +62,9 @@ func main() {
 	msg, _ = nc.Request("minmax.max", requestData, 2*time.Second)
 	result = decode(msg)
 	fmt.Printf("Requested max value, got %d\n", result.Max)
+	msg, _ = nc.Request("minmax.max", requestData, 2*time.Second)
+	result = decode(msg)
+	fmt.Printf("Requested max value, got %d\n", result.Max)
 
 	fmt.Printf("Endpoint '%s' requests: %d\n", srv.Stats().Endpoints[0].Name, srv.Stats().Endpoints[0].NumRequests)
 	fmt.Printf("Endpoint '%s' requests: %d\n", srv.Stats().Endpoints[1].Name, srv.Stats().Endpoints[1].NumRequests)
