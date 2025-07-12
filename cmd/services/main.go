@@ -15,7 +15,6 @@ import (
 )
 
 func main() {
-
 	url, exists := os.LookupEnv("NATS_URL")
 	if !exists {
 		url = nats.DefaultURL
