@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
@@ -20,6 +21,13 @@ func main() {
 		clientKeyFile  string
 		caFile         string
 	)
+
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Println("获取当前目录失败:", err)
+		return
+	}
+	fmt.Printf("Current working directory: %s\n", dir)
 
 	flag.StringVar(&host, "host", "localhost", "Client connection host/IP.")
 	flag.IntVar(&port, "port", 4222, "Client connection port.")
