@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"github.com/nats-io/jwt/v2"
@@ -22,7 +22,7 @@ func main() {
 	flag.Parse()
 
 	// 1. 读取操作员种子密钥
-	seedBytes, err := ioutil.ReadFile(*operatorSeedFile)
+	seedBytes, err := os.ReadFile(*operatorSeedFile)
 	if err != nil {
 		log.Fatalf("读取操作员种子密钥失败: %v", err)
 	}
@@ -65,7 +65,7 @@ func main() {
 
 	// 可选：保存JWT到文件
 	if *outputJWT != "" {
-		err = ioutil.WriteFile(*outputJWT, []byte(accountJWT), 0644)
+		err = os.WriteFile(*outputJWT, []byte(accountJWT), 0644)
 		if err != nil {
 			log.Fatalf("保存JWT到文件失败: %v", err)
 		}
