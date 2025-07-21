@@ -12,7 +12,7 @@ import (
 // jwtPath := "~/.local/share/nats/nsc/stores/local/accounts/APP/users/user.jwt"
 // credsFile := "~/.local/share/nats/nsc/keys/creds/local/APP/user.creds" #(nsc)
 // natsURL := "nats://0.0.0.0:4222"
-func main() {
+func test() {
 	// 从环境变量获取服务器 URL
 	natsURL := os.Getenv("NATS_MAIN_URL")
 	if natsURL == "" {
