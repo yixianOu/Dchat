@@ -21,7 +21,6 @@ nats context save main-user \
 
 
 nats context save main-sys \
-  --server "$NATS_MAIN_URL" \
   --nsc nsc://local/SYS/sys
 
 
