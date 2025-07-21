@@ -24,7 +24,7 @@ func main() {
 		subjectName      = "foo"
 		credsFileAppUser = "~/.local/share/nats/nsc/keys/creds/local/APP/user.creds"
 		credsFileSysUser = "/home/orician/.local/share/nats/nsc/keys/creds/local/SYS/sys.creds"
-		resolverFile     = "/home/orician/workspace/learn/nats/Dchat/cmd/leafNode/resolver.conf"
+		resolverFile     = "/home/orician/workspace/learn/nats/Dchat/cmd/LeafJWT/resolver.conf"
 	)
 
 	mainClientOpt := NATSClient{
@@ -88,7 +88,7 @@ func main() {
 
 	// 等待服务器完全启动（增加等待时间）
 	fmt.Println("等待主服务器启动...")
-	time.Sleep(10 * time.Second)
+	time.Sleep(100 * time.Second)
 
 	// 测试系统账户连接
 	fmt.Println("测试系统账户连接...")
