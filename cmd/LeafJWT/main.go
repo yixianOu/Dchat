@@ -78,6 +78,42 @@ func main() {
 		},
 	}
 
+	// 依次执行3条nsc命令，并打印输出
+	nscCmds := [][]string{
+		{"edit", "operator", "--require-signing-keys", "--account-jwt-server-url", fmt.Sprintf("nats://%s:%d", address, mainPort)},
+		{"edit", "account", "APP", "--sk", "generate"},
+		{"generate", "config", "--nats-resolver", "--sys-account", "SYS"},
+	}
+	for i, args := range nscCmds {
+		fmt.Printf("执行 nsc 命令 %d: nsc %s\n", i+1, args)
+		if i == 2 { // 第3条命令重定向输出到resolverFile
+			execCmd := exec.Command("nsc", args...)
+			err := exec.Command("touch", resolverFile).Run() // 确保文件存在
+			if err != nil {
+				panic(fmt.Sprintf("无法创建resolverFile: %v", err))
+			}
+			outFile, err := exec.Command("tee", resolverFile).StdinPipe()
+			if err != nil {
+				panic(fmt.Sprintf("无法打开resolverFile: %v", err))
+			}
+			execCmd.Stdout = outFile
+			execCmd.Stderr = outFile
+			err = execCmd.Run()
+			outFile.Close()
+			if err != nil {
+				panic(fmt.Sprintf("nsc命令失败: nsc %v\n错误: %v", args, err))
+			}
+			fmt.Printf("nsc命令输出已写入: %s\n", resolverFile)
+		} else {
+			execCmd := exec.Command("nsc", args...)
+			output, err := execCmd.CombinedOutput()
+			if err != nil {
+				panic(fmt.Sprintf("nsc命令失败: nsc %v\n错误: %v\n输出: %s", args, err, string(output)))
+			}
+			fmt.Printf("nsc命令输出:\n%s\n", string(output))
+		}
+	}
+
 	// 创建并启动main服务器
 	mainServer, err := server.NewServer(&mainServerOpt)
 	if err != nil {
@@ -101,7 +137,7 @@ func main() {
 
 	// 执行nsc cli命令: nsc push -a APP
 	fmt.Println("执行 nsc push 命令...")
-	execCmd := exec.Command("nsc", "push", "-a", "APP", "-u", mainClientOpt.url)
+	execCmd := exec.Command("nsc", "push", "-a", "APP")
 	output, err := execCmd.CombinedOutput()
 	if err != nil {
 		panic(fmt.Sprintf("执行nsc命令失败: %v\n输出: %s", err, string(output)))
