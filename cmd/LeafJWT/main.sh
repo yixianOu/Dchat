@@ -1,17 +1,17 @@
 #!/bin/sh
-set -euo pipefail
+set -eu pipefail
 
 NATS_MAIN_URL="nats://0.0.0.0:4222"
 NATS_LEAF_URL="nats://0.0.0.0:4223"
 
-nsc add operator --generate-signing-key --sys --name local
+# nsc add operator --generate-signing-key --sys --name local
 
 nsc edit operator --require-signing-keys \
   --account-jwt-server-url "$NATS_MAIN_URL"
 
-nsc add account APP
+# nsc add account APP
 nsc edit account APP --sk generate
-nsc add user --account APP user
+# nsc add user --account APP user
 
 nsc env
 
