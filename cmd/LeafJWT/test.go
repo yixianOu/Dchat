@@ -79,7 +79,7 @@ func main() {
 		},
 		NoSigs: true, // Disable signal handling
 	}
-
+	mainServerOpts.ProcessConfigFile(absResolverPath)
 	mainServer, err := server.NewServer(&mainServerOpts)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create main server: %v", err))
