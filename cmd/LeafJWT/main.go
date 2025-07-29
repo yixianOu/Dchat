@@ -152,6 +152,7 @@ func main() {
 	// Start leaf node server
 	go leafServer.Start()
 	defer leafServer.Shutdown()
+	// leafServer.ReloadOptions()
 
 	if !leafServer.ReadyForConnections(10 * time.Second) {
 		panic("Leaf node server not ready for connections within timeout")
