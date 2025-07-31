@@ -105,46 +105,81 @@ Region A                    Region B
 
 ## 技术细节
 
-### 服务器节点配置
+### Routes配置示例
+
+#### 节点配置
 ```conf
-# nats-server-asia.conf
+# nats-routes-node.conf
 port: 4222
-server_name: "server-asia-1"
+server_name: "node-#{node_id}"
 
-# Gateway配置 - 服务器间互联
-gateway: {
-  name: "asia"
-  port: 7222
-  gateways: [
-    {name: "europe", urls: ["nats://frp-eu.com:23456"]},
-    {name: "america", urls: ["nats://frp-us.com:34567"]}
+# Routes集群配置
+cluster: {
+  name: "decentralized_chat"
+  port: 6222
+  routes: [
+    "nats://seed-node.example.com:6222"  # 只需要一个种子节点
   ]
-}
-
-# LeafNode配置 - 接受客户端连接
-leafnodes: {
-  port: 7422
 }
 
 # 账户配置
 include "accounts.conf"
 ```
 
-### LeafNode客户端配置
-```conf
-# 用户设备NATS配置
-port: 4223
-leafnode: {
-  remotes: [
-    {urls: ["nats://frp-asia.com:12345"]},    # 亚洲服务器
-    {urls: ["nats://frp-eu.com:23456"]},      # 欧洲服务器(备用)
-  ]
-}
+#### FRP配置（Routes端口）
+```ini
+[common]
+server_addr = frp.server.com
+server_port = 7000
+token = your_token
+
+# Routes端口映射
+[cluster]
+type = tcp
+local_port = 6222
+# remote_port 不指定，使用随机分配
 ```
+
+### Routes实现方案
+
+#### 启动流程
+1. **种子节点启动**：第一个节点启动作为种子
+2. **节点加入**：新节点连接到种子节点（或任意现有节点）
+3. **自动发现**：Routes协议自动建立全网状连接
+4. **消息路由**：所有节点间消息自动路由
+
+#### 动态扩展示例
+```bash
+# 启动种子节点
+nats-server -c seed-node.conf
+
+# 新节点加入（只需要种子节点地址）
+nats-server -c new-node.conf  # routes: ["nats://seed:6222"]
+
+# 网络自动形成全连通图：
+# seed ←→ new-node ←→ another-node ←→ ...
+```
+
+### 技术优势
+
+#### 1. 真正去中心化
+- ❌ 无单点故障：任意节点故障网络仍可用
+- ✅ 无固定服务器：所有节点地位平等  
+- ✅ 无配置依赖：不需要固定的"超级节点"
+
+#### 2. 动态自适应
+- ✅ **链式发现**：A→B→C，A自动发现C
+- ✅ **热插拔**：节点可随时加入/退出
+- ✅ **自愈网络**：故障节点自动从网络中移除
+
+#### 3. 配置简化
+- ✅ **单一种子**：只需要一个初始连接点
+- ✅ **零运维**：无需修改现有节点配置
+- ✅ **容错启动**：种子节点故障后其他节点可作为种子
 
 ### FRP配置策略
 
-#### 采用随机端口映射 + 实时服务发现
+#### Routes集群的FRP映射
 
 **FRP配置示例：**
 ```ini
@@ -153,16 +188,16 @@ server_addr = frp.server.com
 server_port = 7000
 token = your_token
 
-# LeafNode端口映射
-[leafnode]
+# NATS客户端端口映射
+[nats-client]
 type = tcp
-local_port = 7422
+local_port = 4222
 # remote_port 不指定，使用随机分配
 
-# Gateway端口映射(如果需要)
-[gateway]
-type = tcp  
-local_port = 7222
+# Routes集群端口映射
+[nats-routes]
+type = tcp
+local_port = 6222
 # remote_port 不指定，使用随机分配
 ```
 
@@ -171,26 +206,80 @@ local_port = 7222
 - ✅ FRP自动管理，稳定可靠
 - ✅ 支持大规模节点扩展
 - ✅ 降低运维复杂度
+- ✅ Routes自动发现，无需手动配置连接
 
 ## 实现优势
 
-### 去中心化特性
-- 无单点故障：任一Gateway集群故障不影响全局
-- 就近连接：用户自动连接最近的Gateway集群
-- 消息传播：聊天消息在所有Gateway集群间同步
+### 真正去中心化特性
+- ✅ **无单点故障**：Routes全网状网络，任意节点故障不影响全局
+- ✅ **无固定服务器**：所有节点地位平等，无"超级节点"概念
+- ✅ **自动发现**：新节点连接任意现有节点即可加入网络
+- ✅ **动态自愈**：故障节点自动从网络中移除
 
 ### 可扩展性
-- 水平扩展：增加新的服务器节点支持更多用户
-- 弹性伸缩：LeafNode可动态连接和断开
-- 负载分散：用户分布连接到不同服务器节点
+- ✅ **水平扩展**：Routes支持无限节点扩展
+- ✅ **弹性伸缩**：节点可动态加入和退出网络
+- ✅ **负载分散**：消息路由自动在所有节点间分布
+- ✅ **配置简化**：新节点只需一个种子节点地址
 
-### 纯LeafNode架构优势
-- 单向连接：只需LeafNode主动连接服务器
-- 零配置扩展：新节点加入无需修改现有配置  
-- 简化运维：服务器配置相对固定
-- 灵活路由：通过账户和权限控制消息路由
+### Routes架构优势
+- ✅ **链式连接**：支持A→B→C的自动发现连接
+- ✅ **全网状拓扑**：最终形成完全连通的网状网络  
+- ✅ **零配置扩展**：新节点加入无需修改现有配置
+- ✅ **灵活路由**：消息自动在全网络中路由
 
-## Option
+## 真正去中心化方案：NATS Routes集群
+
+### 核心发现：Routes支持动态链式连接！
+
+从NATS源码分析发现，**Routes机制支持链式连接和动态扩展**：
+
+#### Routes vs LeafNode vs Gateway对比
+
+| 特性 | Routes | LeafNode | Gateway |
+|------|--------|----------|---------|
+| **链式连接** | ✅ 支持链式连接 | ❌ 无法链式连接 | ✅ 支持但需双向配置 |
+| **动态扩展** | ✅ 自动发现和连接 | ❌ 需要预配置服务器 | ❌ 需要双方修改配置 |
+| **配置复杂度** | ✅ 简单，只需指定一个种子节点 | ✅ 简单 | ❌ 复杂，需要双向配置 |
+| **去中心化** | ✅ 真正去中心化 | ❌ 需要固定服务器 | ❌ 需要固定服务器 |
+
+#### Routes链式连接原理
+
+```
+节点A ──routes──► 节点B ──routes──► 节点C
+   ▲                                  │
+   └─────────── 自动发现连接 ──────────┘
+```
+
+**关键优势：**
+- ✅ **链式连接**：A→B→C，A会自动发现并连接到C
+- ✅ **动态发现**：新节点只需连接到任一现有节点
+- ✅ **全网状拓扑**：最终形成完全连通的网状网络
+- ✅ **零固定节点**：任意节点都可以作为种子节点
+
+### 新架构设计：纯Routes集群
+
+```
+Region A            Region B            Region C
+┌──────────┐       ┌──────────┐       ┌──────────┐
+│ NATS     │◄──────┤ NATS     │──────►│ NATS     │
+│ (Routes) │       │ (Routes) │       │ (Routes) │
+└─────▲────┘       └─────▲────┘       └─────▲────┘
+      │                  │                  │
+      │                  │                  │
+┌─────▼────┐       ┌─────▼────┐       ┌─────▼────┐
+│用户设备   │       │用户设备   │       │用户设备   │
+│(Client)  │       │(Client)  │       │(Client)  │
+└──────────┘       └──────────┘       └──────────┘
+```
+
+**新方案特点：**
+- 🎯 **真正去中心化**：无固定服务器，任意节点故障不影响网络
+- 🎯 **动态扩展**：新节点连接到任一现有节点即可加入网络
+- 🎯 **自动发现**：Routes会自动建立全网状连接
+- 🎯 **配置简单**：每个节点只需要一个种子节点地址
+
+## Option（已废弃）
 
 leafNode cluster无法热更新,考虑mcp server
 中心化的frp(暴露cluster端口),发现靠tls公钥(携带公网cluster端口)
@@ -200,12 +289,13 @@ leafNode cluster无法热更新,考虑mcp server
 leafNode不支持链式连接,考虑Gateway
 
 ## TODO
-1. ✅ 重新设计：纯LeafNode架构替代Gateway
+1. ✅ 重新设计：纯LeafNode架构替代Gateway（已废弃）
 2. ✅ 简化FRP策略：纯随机端口+DHT服务发现
-3. 🔄 实现LeafNode服务器Demo
-4. ⏳ 实现FRP API客户端
-5. ⏳ 开发DHT服务发现机制
-6. ⏳ 实现LeafNode客户端连接
-7. ⏳ 开发跨区域网桥机制
-8. ⏳ 集成消息加密和用户认证
-9. ⏳ 构建聊天室UI界面
+3. 🎯 **重新设计：Routes集群实现真正去中心化**
+4. 🔄 实现Routes集群Demo
+5. ⏳ 实现FRP API客户端
+6. ⏳ 开发DHT服务发现机制
+7. ⏳ 实现客户端连接
+8. ⏳ 开发跨区域消息路由
+9. ⏳ 集成消息加密和用户认证
+10. ⏳ 构建聊天室UI界面
