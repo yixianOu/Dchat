@@ -58,7 +58,7 @@
 #### 3. Wails框架
 - **用途**：构建现代化桌面应用
 - **优势**：
-  - ✅ Go后端 + Web前端
+  - ✅ Go后端 + React前端
   - ✅ 原生性能
   - ✅ 跨平台打包
   - ✅ 热重载开发
@@ -128,8 +128,8 @@ Tailscale方案优势：
 
 ```
 ┌─────────────────────────────────────┐
-│              前端 (Web)              │
-│  Vue.js / React / Vanilla JS       │
+│             前端 (React)            │
+│         React.js + JSX             │
 ├─────────────────────────────────────┤
 │             Wails Bridge            │
 ├─────────────────────────────────────┤
@@ -237,9 +237,20 @@ dchat/
 │   ├── dist/
 │   ├── index.html
 │   ├── src/
-│   │   ├── main.js
-│   │   ├── components/
-│   │   └── styles/
+│   │   ├── main.jsx       # React入口文件
+│   │   ├── App.jsx        # 主应用组件
+│   │   ├── components/    # React组件
+│   │   │   ├── ChatRoom.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   └── UserList.jsx
+│   │   └── styles/        # CSS样式
+│   │       ├── App.css
+│   │       └── components/
+│   ├── package.json       # Node.js依赖
+│   └── vite.config.js     # Vite配置
+├── wailsjs/               # Wails生成的JS绑定
+│   ├── go/
+│   └── runtime/
 ├── internal/              # 内部包
 │   ├── nats/             # NATS客户端
 │   ├── network/          # Tailscale集成
@@ -501,103 +512,495 @@ func (cs *ChatService) SendMessage(roomName, content string) error {
 
 ### 4. 前端界面设计
 
-**Vue.js聊天界面：**
-```vue
-<!-- frontend/src/components/ChatRoom.vue -->
-<template>
-  <div class="chat-room">
-    <!-- 聊天室头部 -->
-    <div class="room-header">
-      <h3>{{ roomName }}</h3>
-      <div class="online-users">
-        <span v-for="user in onlineUsers" :key="user.id" class="user-badge">
-          {{ user.nickname }}
-        </span>
-      </div>
-    </div>
+**React.js聊天界面：**
+```jsx
+// frontend/src/components/ChatRoom.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { SendMessage, GetChatHistory } from '../../wailsjs/go/main/App';
+import { EventsOn } from '../../wailsjs/runtime/runtime';
+
+const ChatRoom = ({ roomName }) => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const messagesContainerRef = useRef(null);
+
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
     
-    <!-- 消息列表 -->
-    <div class="messages" ref="messagesContainer">
-      <div v-for="msg in messages" :key="msg.id" class="message">
-        <div class="message-header">
-          <span class="username">{{ msg.username }}</span>
-          <span class="timestamp">{{ formatTime(msg.timestamp) }}</span>
-        </div>
-        <div class="message-content">{{ msg.content }}</div>
-      </div>
-    </div>
-    
-    <!-- 输入框 -->
-    <div class="input-area">
-      <input 
-        v-model="newMessage" 
-        @keyup.enter="sendMessage"
-        placeholder="输入消息..."
-        class="message-input"
-      />
-      <button @click="sendMessage" class="send-button">发送</button>
-    </div>
-  </div>
-</template>
-
-<script>
-import { ref, onMounted, nextTick } from 'vue'
-
-export default {
-  name: 'ChatRoom',
-  props: ['roomName'],
-  setup(props) {
-    const messages = ref([])
-    const newMessage = ref('')
-    const onlineUsers = ref([])
-    const messagesContainer = ref(null)
-
-    const sendMessage = async () => {
-      if (!newMessage.value.trim()) return
-      
+    try {
       // 调用Go后端方法
-      await window.go.main.App.SendMessage(props.roomName, newMessage.value)
-      newMessage.value = ''
+      await SendMessage(roomName, newMessage);
+      setNewMessage('');
+    } catch (error) {
+      console.error('发送消息失败:', error);
     }
+  };
 
-    const loadMessages = async () => {
-      const history = await window.go.main.App.GetChatHistory(props.roomName)
-      messages.value = history
-      await nextTick()
-      scrollToBottom()
+  const loadMessages = async () => {
+    try {
+      const history = await GetChatHistory(roomName);
+      setMessages(history || []);
+      setTimeout(scrollToBottom, 0);
+    } catch (error) {
+      console.error('加载消息历史失败:', error);
     }
+  };
 
-    const scrollToBottom = () => {
-      const container = messagesContainer.value
-      container.scrollTop = container.scrollHeight
+  const scrollToBottom = () => {
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
     }
+  };
 
-    const formatTime = (timestamp) => {
-      return new Date(timestamp).toLocaleTimeString()
+  const formatTime = (timestamp) => {
+    return new Date(timestamp).toLocaleTimeString();
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      sendMessage();
     }
+  };
 
-    onMounted(() => {
-      loadMessages()
-      // 订阅消息更新
-      window.runtime.EventsOn('new-message', (msg) => {
-        if (msg.room_id === props.roomName) {
-          messages.value.push(msg)
-          nextTick(() => scrollToBottom())
-        }
-      })
-    })
+  useEffect(() => {
+    loadMessages();
+    
+    // 订阅消息更新
+    const unsubscribe = EventsOn('new-message', (msg) => {
+      if (msg.room_id === roomName) {
+        setMessages(prev => [...prev, msg]);
+        setTimeout(scrollToBottom, 0);
+      }
+    });
 
-    return {
-      messages,
-      newMessage,
-      onlineUsers,
-      messagesContainer,
-      sendMessage,
-      formatTime
-    }
+    // 订阅在线用户更新
+    const unsubscribeUsers = EventsOn('users-update', (users) => {
+      setOnlineUsers(users);
+    });
+
+    // 清理订阅
+    return () => {
+      if (unsubscribe) unsubscribe();
+      if (unsubscribeUsers) unsubscribeUsers();
+    };
+  }, [roomName]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  return (
+    <div className="chat-room">
+      {/* 聊天室头部 */}
+      <div className="room-header">
+        <h3>{roomName}</h3>
+        <div className="online-users">
+          {onlineUsers.map(user => (
+            <span key={user.id} className="user-badge">
+              {user.nickname}
+            </span>
+          ))}
+        </div>
+      </div>
+      
+      {/* 消息列表 */}
+      <div className="messages" ref={messagesContainerRef}>
+        {messages.map(msg => (
+          <div key={msg.id} className="message">
+            <div className="message-header">
+              <span className="username">{msg.username}</span>
+              <span className="timestamp">{formatTime(msg.timestamp)}</span>
+            </div>
+            <div className="message-content">{msg.content}</div>
+          </div>
+        ))}
+      </div>
+      
+      {/* 输入框 */}
+      <div className="input-area">
+        <input 
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="输入消息..."
+          className="message-input"
+        />
+        <button onClick={sendMessage} className="send-button">
+          发送
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default ChatRoom;
+```
+
+**React入口文件：**
+```jsx
+// frontend/src/main.jsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+**Wails配置文件：**
+```json
+{
+  "name": "dchat",
+  "outputfilename": "dchat",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": {
+    "name": "DChat Team",
+    "email": "team@dchat.dev"
+  },
+  "info": {
+    "productName": "DChat",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2025, DChat Team",
+    "comments": "去中心化聊天室应用"
   }
 }
-</script>
+```
+
+**Package.json配置：**
+```json
+{
+  "name": "dchat-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^4.3.0"
+  }
+}
+```
+
+**React样式文件：**
+```css
+/* frontend/src/App.css */
+.app {
+  display: flex;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.sidebar {
+  width: 250px;
+  background: #2f3349;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  padding: 20px;
+  border-bottom: 1px solid #3f4458;
+}
+
+.app-header h2 {
+  margin: 0 0 15px 0;
+  color: #ffffff;
+}
+
+.network-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.rooms-list {
+  flex: 1;
+  padding: 20px;
+}
+
+.rooms-list h4 {
+  margin: 0 0 15px 0;
+  color: #8e9297;
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.room-item {
+  padding: 8px 12px;
+  margin: 2px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.room-item:hover {
+  background: #393c4a;
+}
+
+.room-item.active {
+  background: #5865f2;
+}
+
+.join-room-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 15px;
+  background: #5865f2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-room {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.room-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #e3e5e8;
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.room-header h3 {
+  margin: 0;
+  color: #2e3338;
+}
+
+.online-users {
+  display: flex;
+  gap: 5px;
+}
+
+.user-badge {
+  background: #e3e5e8;
+  color: #2e3338;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f2f3f5;
+}
+
+.message {
+  margin-bottom: 15px;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.username {
+  font-weight: 600;
+  color: #5865f2;
+  font-size: 14px;
+}
+
+.timestamp {
+  font-size: 12px;
+  color: #72767d;
+}
+
+.message-content {
+  color: #2e3338;
+  line-height: 1.4;
+}
+
+.input-area {
+  padding: 20px;
+  background: white;
+  border-top: 1px solid #e3e5e8;
+  display: flex;
+  gap: 10px;
+}
+
+.message-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #e3e5e8;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.message-input:focus {
+  border-color: #5865f2;
+}
+
+.send-button {
+  padding: 12px 24px;
+  background: #5865f2;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.send-button:hover {
+  background: #4752c4;
+}
+```
+```
+
+**主应用组件：**
+```jsx
+// frontend/src/App.jsx
+import React, { useState, useEffect } from 'react';
+import ChatRoom from './components/ChatRoom';
+import { GetTailscaleStatus, GetConnectedRooms } from '../wailsjs/go/main/App';
+import './App.css';
+
+const App = () => {
+  const [currentRoom, setCurrentRoom] = useState('general');
+  const [rooms, setRooms] = useState(['general']);
+  const [networkStatus, setNetworkStatus] = useState('connecting');
+  const [tailscaleIP, setTailscaleIP] = useState('');
+
+  useEffect(() => {
+    // 检查网络状态
+    const checkNetworkStatus = async () => {
+      try {
+        const status = await GetTailscaleStatus();
+        setNetworkStatus(status.connected ? 'connected' : 'disconnected');
+        setTailscaleIP(status.ip);
+      } catch (error) {
+        console.error('获取网络状态失败:', error);
+        setNetworkStatus('error');
+      }
+    };
+
+    // 加载聊天室列表
+    const loadRooms = async () => {
+      try {
+        const connectedRooms = await GetConnectedRooms();
+        setRooms(connectedRooms);
+      } catch (error) {
+        console.error('加载聊天室失败:', error);
+      }
+    };
+
+    checkNetworkStatus();
+    loadRooms();
+
+    // 定期检查网络状态
+    const interval = setInterval(checkNetworkStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const joinRoom = (roomName) => {
+    if (!rooms.includes(roomName)) {
+      setRooms(prev => [...prev, roomName]);
+    }
+    setCurrentRoom(roomName);
+  };
+
+  const getStatusColor = () => {
+    switch (networkStatus) {
+      case 'connected': return '#4CAF50';
+      case 'connecting': return '#FF9800';
+      case 'disconnected': return '#F44336';
+      default: return '#9E9E9E';
+    }
+  };
+
+  return (
+    <div className="app">
+      {/* 侧边栏 */}
+      <div className="sidebar">
+        <div className="app-header">
+          <h2>DChat</h2>
+          <div className="network-status">
+            <div 
+              className="status-indicator"
+              style={{ backgroundColor: getStatusColor() }}
+            />
+            <span className="status-text">
+              {networkStatus === 'connected' ? `已连接 (${tailscaleIP})` : networkStatus}
+            </span>
+          </div>
+        </div>
+        
+        <div className="rooms-list">
+          <h4>聊天室</h4>
+          {rooms.map(room => (
+            <div 
+              key={room}
+              className={`room-item ${room === currentRoom ? 'active' : ''}`}
+              onClick={() => setCurrentRoom(room)}
+            >
+              #{room}
+            </div>
+          ))}
+          
+          <button 
+            className="join-room-btn"
+            onClick={() => {
+              const roomName = prompt('输入聊天室名称:');
+              if (roomName) joinRoom(roomName);
+            }}
+          >
+            + 加入聊天室
+          </button>
+        </div>
+      </div>
+      
+      {/* 主聊天区域 */}
+      <div className="main-content">
+        <ChatRoom roomName={currentRoom} />
+      </div>
+    </div>
+  );
+};
+
+export default App;
 ```
 
 ## 部署和使用
@@ -624,7 +1027,12 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 git clone https://github.com/your-org/dchat.git
 cd dchat
 
-# 构建开发版本
+# 安装前端依赖
+cd frontend
+npm install
+cd ..
+
+# 构建开发版本（支持热重载）
 wails dev
 
 # 构建生产版本
@@ -682,7 +1090,7 @@ Alice (种子) ←→ Bob ←→ Charlie
 ### Phase 3: Wails应用开发 (计划中)
 - ⏳ 项目结构搭建
 - ⏳ Go后端服务架构
-- ⏳ Vue.js前端界面
+- ⏳ React.js前端界面
 - ⏳ NATS客户端集成
 
 ### Phase 4: 聊天功能 (计划中)
@@ -750,5 +1158,12 @@ Alice (种子) ←→ Bob ←→ Charlie
 **项目愿景**：构建一个真正去中心化、安全、易用的现代聊天平台，让每个人都能拥有自己的通信网络。
 
 **开始时间**：2025年8月3日  
-**技术栈**：NATS Routes + Tailscale + Wails + Go + Vue.js  
+**技术栈**：NATS Routes + Tailscale + Wails + Go + React.js  
 **核心特性**：去中心化、链式连接、零配置、企业级安全
+
+TODO:
+1. 广播tailscale内网IP和集群端口到特定主题
+2. route配置是否支持热重载?
+3. 完善React组件的TypeScript类型定义
+4. 添加React状态管理（Context或Redux）
+5. 实现React组件的单元测试
