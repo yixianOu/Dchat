@@ -485,6 +485,9 @@ Alice (种子) ←→ Bob ←→ Charlie
 TODO:
 1. 广播tailscale内网IP和集群端口到特定主题
 2. route配置是否支持热重载?
-3. 完善React组件的TypeScript类型定义
-4. 添加React状态管理（Context或Redux）
-5. 实现React组件的单元测试
+3. 读go代码和前端代码,计划修改方案
+4. 通过手动输入或tailscale cli自动查询ip
+5. tls加密连接,nsc自动生成凭证用于本地连接
+6. 完善React组件的TypeScript类型定义
+7. 添加React状态管理（Context或Redux）
+8. 实现React组件的单元测试

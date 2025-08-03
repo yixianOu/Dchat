@@ -41,7 +41,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	localIP, err := a.tailscale.GetLocalIP()
 	if err != nil {
 		log.Printf("Warning: Failed to get Tailscale IP: %v", err)
-		localIP = "127.0.0.1" // fallback to localhost
+		panic("")
 	}
 
 	// 初始化NATS服务
