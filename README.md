@@ -350,7 +350,7 @@ cd dchat
 
 # 安装前端依赖
 cd frontend
-npm install
+pnpm install
 cd ..
 
 # 构建开发版本（支持热重载）
