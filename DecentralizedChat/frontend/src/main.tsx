@@ -11,11 +11,7 @@ if (!container) {
 
 const root = createRoot(container);
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+root.render(<App />);
 
 // 使文件成为模块
 export {};
