@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SendMessage, GetChatHistory } from '../../wailsjs/go/main/App';
+import { SendMessage, GetChatHistory } from '../services/mockWails';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
+import { Message, User, ChatRoomProps, MessageEvent } from '../types';
 
-const ChatRoom = ({ roomName }) => {
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const messagesContainerRef = useRef(null);
+const ChatRoom: React.FC<ChatRoomProps> = ({ roomName }) => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState<string>('');
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const sendMessage = async () => {
+  const sendMessage = async (): Promise<void> => {
     if (!newMessage.trim()) return;
     
     try {
@@ -20,9 +21,9 @@ const ChatRoom = ({ roomName }) => {
     }
   };
 
-  const loadMessages = async () => {
+  const loadMessages = async (): Promise<void> => {
     try {
-      const history = await GetChatHistory(roomName);
+      const history: Message[] = await GetChatHistory(roomName);
       setMessages(history || []);
       setTimeout(scrollToBottom, 0);
     } catch (error) {
@@ -30,18 +31,18 @@ const ChatRoom = ({ roomName }) => {
     }
   };
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (): void => {
     const container = messagesContainerRef.current;
     if (container) {
       container.scrollTop = container.scrollHeight;
     }
   };
 
-  const formatTime = (timestamp) => {
+  const formatTime = (timestamp: number): string => {
     return new Date(timestamp).toLocaleTimeString();
   };
 
-  const handleKeyPress = (e) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter') {
       sendMessage();
     }
@@ -51,22 +52,21 @@ const ChatRoom = ({ roomName }) => {
     loadMessages();
     
     // 订阅消息更新
-    const unsubscribe = EventsOn('new-message', (msg) => {
+    EventsOn('new-message', (msg: MessageEvent) => {
       if (msg.room_id === roomName) {
-        setMessages(prev => [...prev, msg]);
+        setMessages((prev: Message[]) => [...prev, msg]);
         setTimeout(scrollToBottom, 0);
       }
     });
 
     // 订阅在线用户更新
-    const unsubscribeUsers = EventsOn('users-update', (users) => {
+    EventsOn('users-update', (users: User[]) => {
       setOnlineUsers(users);
     });
 
-    // 清理订阅
+    // 清理订阅在组件卸载时处理
     return () => {
-      if (unsubscribe) unsubscribe();
-      if (unsubscribeUsers) unsubscribeUsers();
+      // Wails EventsOn 不返回unsubscribe函数，由Wails自动处理
     };
   }, [roomName]);
 
