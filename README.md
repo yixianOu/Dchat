@@ -1,3 +1,6 @@
+# 2025-08-06
+- 完善 internal/routes/routes.go，支持链式集群、动态节点加入、集群连通性检查、消息路由测试等功能，参考cmd/routes/main.go。
+- 重构 internal/nats/service.go，仅保留NATS客户端功能，支持鉴权连接，去除服务端嵌入式启动。
 # 去中心化聊天室 - DChat
 
 ## 项目概述

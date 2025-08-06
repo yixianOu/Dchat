@@ -2,77 +2,46 @@ package nats
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/nats-io/nats.go"
 )
 
 type Service struct {
-	conn        *nats.Conn
-	localIP     string
-	clusterPort int
-	clientPort  int
+	conn *nats.Conn
 }
 
-type ConnectionConfig struct {
-	LocalIP     string
-	ClientPort  int
-	ClusterPort int
-	Routes      []string
+type ClientConfig struct {
+	URL      string // 例如 nats://127.0.0.1:4222
+	User     string // 可选
+	Password string // 可选
+	Token    string // 可选
+	Name     string // 客户端名称
 }
 
-func NewService(config ConnectionConfig) (*Service, error) {
-	svc := &Service{
-		localIP:     config.LocalIP,
-		clusterPort: config.ClusterPort,
-		clientPort:  config.ClientPort,
+// 新建NATS客户端服务，支持鉴权
+func NewService(cfg ClientConfig) (*Service, error) {
+	var opts []nats.Option
+	if cfg.User != "" && cfg.Password != "" {
+		opts = append(opts, nats.UserInfo(cfg.User, cfg.Password))
 	}
-
-	// 启动内嵌的NATS服务器
-	if err := svc.startNATSServer(config); err != nil {
-		return nil, fmt.Errorf("failed to start NATS server: %w", err)
+	if cfg.Token != "" {
+		opts = append(opts, nats.Token(cfg.Token))
 	}
+	if cfg.Name != "" {
+		opts = append(opts, nats.Name(cfg.Name))
+	}
+	opts = append(opts,
+		nats.ReconnectWait(time.Second),
+		nats.MaxReconnects(-1),
+	)
 
-	// 连接到本地NATS服务器
-	if err := svc.connect(); err != nil {
+	nc, err := nats.Connect(cfg.URL, opts...)
+	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
 
-	return svc, nil
-}
-
-func (s *Service) startNATSServer(config ConnectionConfig) error {
-	// TODO: 使用NATS server嵌入式启动
-	// 这里需要集成NATS server的嵌入式模式
-	log.Printf("Starting NATS server on %s:%d (cluster: %d)", config.LocalIP, config.ClientPort, config.ClusterPort)
-
-	// 临时实现：假设外部NATS服务器已启动
-	time.Sleep(1 * time.Second)
-	return nil
-}
-
-func (s *Service) connect() error {
-	url := fmt.Sprintf("nats://%s:%d", s.localIP, s.clientPort)
-
-	var err error
-	s.conn, err = nats.Connect(url,
-		nats.ReconnectWait(time.Second),
-		nats.MaxReconnects(-1),
-		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			log.Printf("NATS disconnected: %v", err)
-		}),
-		nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Printf("NATS reconnected to %s", nc.ConnectedUrl())
-		}),
-	)
-
-	if err != nil {
-		return fmt.Errorf("failed to connect to NATS: %w", err)
-	}
-
-	log.Printf("Connected to NATS server at %s", url)
-	return nil
+	return &Service{conn: nc}, nil
 }
 
 func (s *Service) Subscribe(subject string, handler func(msg *nats.Msg)) error {
@@ -80,7 +49,6 @@ func (s *Service) Subscribe(subject string, handler func(msg *nats.Msg)) error {
 	if err != nil {
 		return fmt.Errorf("failed to subscribe to %s: %w", subject, err)
 	}
-	log.Printf("Subscribed to subject: %s", subject)
 	return nil
 }
 
@@ -93,11 +61,8 @@ func (s *Service) Publish(subject string, data []byte) error {
 }
 
 func (s *Service) PublishJSON(subject string, data interface{}) error {
-	err := s.conn.Publish(subject, nil) // TODO: 实现JSON序列化
-	if err != nil {
-		return fmt.Errorf("failed to publish JSON to %s: %w", subject, err)
-	}
-	return nil
+	// TODO: 实现JSON序列化
+	return fmt.Errorf("PublishJSON未实现")
 }
 
 func (s *Service) Close() error {
@@ -117,7 +82,6 @@ func (s *Service) GetStats() map[string]interface{} {
 			"connected": false,
 		}
 	}
-
 	stats := s.conn.Stats()
 	return map[string]interface{}{
 		"connected":    s.conn.IsConnected(),

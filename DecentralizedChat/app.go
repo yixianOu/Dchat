@@ -45,11 +45,9 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 
 	// 初始化NATS服务
-	natsConfig := nats.ConnectionConfig{
-		LocalIP:     localIP,
-		ClientPort:  4222,
-		ClusterPort: 6222,
-		Routes:      []string{}, // 稍后通过Tailscale发现
+	natsConfig := nats.ClientConfig{
+		URL:  fmt.Sprintf("nats://%s:4222", localIP),
+		Name: "DChatClient",
 	}
 
 	a.natsSvc, err = nats.NewService(natsConfig)

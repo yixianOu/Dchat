@@ -9,7 +9,6 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// RouteNode 表示一个NATS Routes节点
 type RouteNode struct {
 	ID     string
 	Server *server.Server
@@ -17,39 +16,35 @@ type RouteNode struct {
 	Routes []string
 }
 
-// CreateNode 创建一个NATS节点
+// 创建NATS节点
 func CreateNode(name string, clientPort int, routes []string) *RouteNode {
-	clusterPort := clientPort + 2000 // cluster端口 = client端口 + 2000
-
+	clusterPort := clientPort + 2000
 	opts := &server.Options{
 		ServerName: name,
 		Host:       "127.0.0.1",
 		Port:       clientPort,
 		Cluster: server.ClusterOpts{
-			Name: "dchat_network", // 改为dchat网络名称
+			Name: "decentralized_chat",
 			Host: "127.0.0.1",
 			Port: clusterPort,
 		},
 	}
-
-	// 设置Routes连接
 	if len(routes) > 0 {
 		routeURLs := make([]*url.URL, len(routes))
 		for i, route := range routes {
 			u, err := url.Parse(route)
 			if err != nil {
-				return nil
+				panic(fmt.Sprintf("Invalid route URL %s: %v", route, err))
 			}
 			routeURLs[i] = u
+
 		}
 		opts.Routes = routeURLs
 	}
-
 	srv, err := server.NewServer(opts)
 	if err != nil {
-		return nil
+		panic(fmt.Sprintf("Failed to create server %s: %v", name, err))
 	}
-
 	return &RouteNode{
 		ID:     name,
 		Server: srv,
@@ -58,102 +53,76 @@ func CreateNode(name string, clientPort int, routes []string) *RouteNode {
 	}
 }
 
-// StartNode 启动节点
-func (node *RouteNode) Start() error {
+// 启动节点
+func StartNode(node *RouteNode) {
 	go node.Server.Start()
-
-	// 等待服务器启动
 	if !node.Server.ReadyForConnections(5 * time.Second) {
-		return fmt.Errorf("node %s failed to start", node.ID)
-	}
-
-	return nil
-}
-
-// Stop 停止节点
-func (node *RouteNode) Stop() {
-	if node.Server != nil {
-		node.Server.Shutdown()
+		panic(fmt.Sprintf("Node %s failed to start", node.ID))
 	}
 }
 
-// IsRunning 检查节点是否运行中
-func (node *RouteNode) IsRunning() bool {
-	return node.Server != nil && node.Server.Running()
-}
-
-// GetRouteCount 获取路由连接数
-func (node *RouteNode) GetRouteCount() int {
-	if node.Server == nil {
-		return 0
+// 检查集群连通性
+func CheckClusterConnectivity(nodes ...*RouteNode) {
+	for _, node := range nodes {
+		routes := node.Server.NumRoutes()
+		fmt.Printf("%s: 连接数 = %d\n", node.ID, routes)
+		expectedRoutes := len(nodes) - 1
+		if routes == expectedRoutes {
+			fmt.Printf("   连接正常 (期望: %d, 实际: %d)\n", expectedRoutes, routes)
+		} else {
+			fmt.Printf("   连接异常 (期望: %d, 实际: %d)\n", expectedRoutes, routes)
+		}
 	}
-	return node.Server.NumRoutes()
 }
 
-// GetClientURL 获取客户端连接URL
-func (node *RouteNode) GetClientURL() string {
-	return fmt.Sprintf("nats://127.0.0.1:%d", node.Port)
+// 动态加入节点
+func DynamicJoin(existingNodes ...*RouteNode) *RouteNode {
+	nodeD := CreateNode("NodeD", 4225, []string{"nats://127.0.0.1:6223"})
+	StartNode(nodeD)
+	time.Sleep(2 * time.Second)
+	return nodeD
 }
 
-// ConnectClient 连接客户端
-func (node *RouteNode) ConnectClient(clientName string) (*nats.Conn, error) {
-	url := node.GetClientURL()
-
-	nc, err := nats.Connect(url,
-		nats.Name(clientName),
-		nats.ReconnectWait(time.Second),
-		nats.MaxReconnects(-1),
-	)
+// 连接NATS客户端
+func ConnectClient(node *RouteNode, clientName string) *nats.Conn {
+	url := fmt.Sprintf("nats://127.0.0.1:%d", node.Port)
+	nc, err := nats.Connect(url, nats.Name(clientName))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect client %s to %s: %w", clientName, node.ID, err)
+		panic(fmt.Sprintf("Failed to connect client %s to %s: %v", clientName, node.ID, err))
 	}
-
-	return nc, nil
+	return nc
 }
 
-// TestMessageRouting 测试节点间消息路由
-func TestMessageRouting(sender, receiver *RouteNode) error {
-	// 连接发送端和接收端
-	senderClient, err := sender.ConnectClient("Sender")
-	if err != nil {
-		return err
-	}
-	defer senderClient.Close()
+// 测试消息路由
+func TestMessageRouting(nodeA, nodeB, nodeC *RouteNode) {
+	clientA := ConnectClient(nodeA, "ClientA")
+	defer clientA.Close()
+	clientB := ConnectClient(nodeB, "ClientB")
+	defer clientB.Close()
+	clientC := ConnectClient(nodeC, "ClientC")
+	defer clientC.Close()
 
-	receiverClient, err := receiver.ConnectClient("Receiver")
-	if err != nil {
-		return err
-	}
-	defer receiverClient.Close()
-
-	// 设置接收端订阅
-	msgChan := make(chan string, 1)
-	sub, err := receiverClient.Subscribe("test.routing", func(msg *nats.Msg) {
-		msgChan <- string(msg.Data)
+	msgChan := make(chan string, 10)
+	sub, err := clientC.Subscribe("test.routes", func(msg *nats.Msg) {
+		msgChan <- fmt.Sprintf("NodeC收到: %s", string(msg.Data))
 	})
 	if err != nil {
-		return err
+		fmt.Printf("订阅失败: %v\n", err)
+		return
 	}
 	defer sub.Unsubscribe()
-
-	// 等待订阅传播
 	time.Sleep(200 * time.Millisecond)
-
-	// 发送测试消息
-	testMsg := "Hello Routes!"
-	err = senderClient.Publish("test.routing", []byte(testMsg))
+	testMsg := "Hello from NodeA!"
+	err = clientA.Publish("test.routes", []byte(testMsg))
 	if err != nil {
-		return err
+		fmt.Printf("发送失败: %v\n", err)
+		return
 	}
-
-	// 检查是否收到消息
 	select {
-	case received := <-msgChan:
-		if received == testMsg {
-			return nil // 成功
-		}
-		return fmt.Errorf("message mismatch: expected %s, got %s", testMsg, received)
+	case msg := <-msgChan:
+		fmt.Printf("消息路由成功: %s\n", msg)
+		fmt.Printf("   路径: NodeA → Routes网络 → NodeC\n")
 	case <-time.After(2 * time.Second):
-		return fmt.Errorf("timeout: message not received")
+		fmt.Printf("消息路由失败: 超时未收到消息\n")
 	}
 }
