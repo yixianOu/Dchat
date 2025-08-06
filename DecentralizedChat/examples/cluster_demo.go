@@ -36,9 +36,9 @@ func main() {
 	}
 
 	// 3. 创建并启动节点A（种子节点）
-	nodeA := cm.CreateNode("NodeA", 4222, 6222, []string{})
-	if nodeA == nil {
-		fmt.Println("创建NodeA失败")
+	nodeA, err := cm.CreateNode("NodeA", 4222, 6222, []string{})
+	if err != nil {
+		fmt.Printf("创建NodeA失败: %v\n", err)
 		return
 	}
 	if err := cm.StartNode(nodeA); err != nil {
@@ -50,9 +50,9 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// 4. 创建并启动节点B
-	nodeB := cm.CreateNode("NodeB", 4223, 6223, []string{fmt.Sprintf("nats://%s:6222", cfg.Routes.Host)})
-	if nodeB == nil {
-		fmt.Println("创建NodeB失败")
+	nodeB, err := cm.CreateNode("NodeB", 4223, 6223, []string{fmt.Sprintf("nats://%s:6222", cfg.Routes.Host)})
+	if err != nil {
+		fmt.Printf("创建NodeB失败: %v\n", err)
 		return
 	}
 	if err := cm.StartNode(nodeB); err != nil {
@@ -100,8 +100,10 @@ func main() {
 
 	// 8. 测试动态节点加入
 	fmt.Println("\n=== 测试动态节点加入 ===")
-	nodeD := cm.DynamicJoin("NodeD", 4225, 6225, 6223) // 连接到NodeB的集群端口
-	if nodeD != nil {
+	nodeD, err := cm.DynamicJoin("NodeD", 4225, 6225, 6223) // 连接到NodeB的集群端口
+	if err != nil {
+		fmt.Printf("动态节点加入失败: %v\n", err)
+	} else {
 		defer nodeD.Server.Shutdown()
 		fmt.Println("✅ 动态节点加入成功")
 

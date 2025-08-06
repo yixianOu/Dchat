@@ -124,7 +124,28 @@ go run examples/cluster_demo.go  # 验证集群演示正常运行
 - **结构优化**：RouteNode增加ClusterPort字段，直接存储集群端口
 - **API清理**：移除所有基于offset的端口计算逻辑
 
+### 6. 错误处理完善重构 (2024-12-28 15:10)
+
+#### 执行步骤：
+```bash
+# 1. 检查所有函数的错误处理
+grep -r "err" internal/routes/routes.go  # 查找错误处理模式
+
+# 2. 重构函数返回值以包含错误信息
+go build ./...  # 验证编译无错误
+
+# 3. 更新调用方处理新的错误返回值
+go run examples/cluster_demo.go  # 测试错误处理功能
+```
+
+#### 实现内容：
+- **CreateNode函数**：改为返回(*RouteNode, error)，当URL解析或服务器创建失败时返回具体错误
+- **ConnectClient函数**：改为返回(*nats.Conn, error)，移除panic改为返回错误
+- **TestMessageRouting函数**：改为返回error，所有内部错误都正确传播
+- **DynamicJoin函数**：改为返回(*RouteNode, error)，节点创建和启动失败时返回详细错误信息
+
 #### 技术特点：
-- 显式配置：所有端口配置明确指定，无隐式计算
-- 方法简化：减少参数依赖，提高代码可读性
-- 类型安全：避免端口计算错误，增强系统稳定性
+- 错误传播：所有内部错误都正确向上传播，不再静默失败
+- 错误信息：提供详细的中文错误描述，便于调试和排错
+- 调用安全：移除panic调用，改为优雅的错误返回
+- 接口一致：所有可能失败的函数都遵循Go的错误处理惯例

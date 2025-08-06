@@ -49,7 +49,7 @@ func NewDefaultClusterManager(clusterName string, host string) *ClusterManager {
 }
 
 // 创建NATS节点
-func (cm *ClusterManager) CreateNode(name string, clientPort int, clusterPort int, routes []string) *RouteNode {
+func (cm *ClusterManager) CreateNode(name string, clientPort int, clusterPort int, routes []string) (*RouteNode, error) {
 	opts := &server.Options{
 		ServerName: name,
 		Host:       cm.config.Host,
@@ -65,7 +65,7 @@ func (cm *ClusterManager) CreateNode(name string, clientPort int, clusterPort in
 		for i, route := range routes {
 			u, err := url.Parse(route)
 			if err != nil {
-				return nil
+				return nil, fmt.Errorf("解析路由URL失败 %s: %v", route, err)
 			}
 			routeURLs[i] = u
 		}
@@ -73,7 +73,7 @@ func (cm *ClusterManager) CreateNode(name string, clientPort int, clusterPort in
 	}
 	srv, err := server.NewServer(opts)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("创建NATS服务器失败: %v", err)
 	}
 
 	node := &RouteNode{
@@ -84,7 +84,7 @@ func (cm *ClusterManager) CreateNode(name string, clientPort int, clusterPort in
 		Routes:      routes,
 	}
 	cm.nodes[name] = node
-	return node
+	return node, nil
 }
 
 // 启动节点
@@ -128,22 +128,33 @@ func (cm *ClusterManager) CheckClusterConnectivity() {
 }
 
 // 连接NATS客户端
-func (cm *ClusterManager) ConnectClient(node *RouteNode, clientName string) *nats.Conn {
+func (cm *ClusterManager) ConnectClient(node *RouteNode, clientName string) (*nats.Conn, error) {
 	url := fmt.Sprintf("nats://%s:%d", cm.config.Host, node.Port)
 	nc, err := nats.Connect(url, nats.Name(clientName))
 	if err != nil {
-		panic(fmt.Sprintf("Failed to connect client %s to %s: %v", clientName, node.ID, err))
+		return nil, fmt.Errorf("连接NATS客户端失败 %s 到 %s: %v", clientName, node.ID, err)
 	}
-	return nc
+	return nc, nil
 }
 
 // 测试消息路由
-func (cm *ClusterManager) TestMessageRouting(nodeA, nodeB, nodeC *RouteNode) {
-	clientA := cm.ConnectClient(nodeA, "ClientA")
+func (cm *ClusterManager) TestMessageRouting(nodeA, nodeB, nodeC *RouteNode) error {
+	clientA, err := cm.ConnectClient(nodeA, "ClientA")
+	if err != nil {
+		return fmt.Errorf("连接ClientA失败: %v", err)
+	}
 	defer clientA.Close()
-	clientB := cm.ConnectClient(nodeB, "ClientB")
+
+	clientB, err := cm.ConnectClient(nodeB, "ClientB")
+	if err != nil {
+		return fmt.Errorf("连接ClientB失败: %v", err)
+	}
 	defer clientB.Close()
-	clientC := cm.ConnectClient(nodeC, "ClientC")
+
+	clientC, err := cm.ConnectClient(nodeC, "ClientC")
+	if err != nil {
+		return fmt.Errorf("连接ClientC失败: %v", err)
+	}
 	defer clientC.Close()
 
 	msgChan := make(chan string, 10)
@@ -151,37 +162,35 @@ func (cm *ClusterManager) TestMessageRouting(nodeA, nodeB, nodeC *RouteNode) {
 		msgChan <- fmt.Sprintf("NodeC收到: %s", string(msg.Data))
 	})
 	if err != nil {
-		fmt.Printf("订阅失败: %v\n", err)
-		return
+		return fmt.Errorf("订阅失败: %v", err)
 	}
 	defer sub.Unsubscribe()
 	time.Sleep(200 * time.Millisecond)
 	testMsg := "Hello from NodeA!"
 	err = clientA.Publish("test.routes", []byte(testMsg))
 	if err != nil {
-		fmt.Printf("发送失败: %v\n", err)
-		return
+		return fmt.Errorf("发送失败: %v", err)
 	}
 	select {
 	case msg := <-msgChan:
 		fmt.Printf("消息路由成功: %s\n", msg)
 		fmt.Printf("   路径: NodeA → Routes网络 → NodeC\n")
+		return nil
 	case <-time.After(2 * time.Second):
-		fmt.Printf("消息路由失败: 超时未收到消息\n")
+		return fmt.Errorf("消息路由失败: 超时未收到消息")
 	}
 }
 
 // 动态加入节点
-func (cm *ClusterManager) DynamicJoin(newNodeName string, newNodePort int, newNodeClusterPort int, existingNodeClusterPort int) *RouteNode {
+func (cm *ClusterManager) DynamicJoin(newNodeName string, newNodePort int, newNodeClusterPort int, existingNodeClusterPort int) (*RouteNode, error) {
 	seedRoute := fmt.Sprintf("nats://%s:%d", cm.config.Host, existingNodeClusterPort)
-	node := cm.CreateNode(newNodeName, newNodePort, newNodeClusterPort, []string{seedRoute})
-	if node == nil {
-		return nil
+	node, err := cm.CreateNode(newNodeName, newNodePort, newNodeClusterPort, []string{seedRoute})
+	if err != nil {
+		return nil, fmt.Errorf("创建节点失败: %v", err)
 	}
 	if err := cm.StartNode(node); err != nil {
-		fmt.Printf("启动节点失败: %v\n", err)
-		return nil
+		return nil, fmt.Errorf("启动节点失败: %v", err)
 	}
 	time.Sleep(2 * time.Second)
-	return node
+	return node, nil
 }
