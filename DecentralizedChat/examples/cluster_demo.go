@@ -20,18 +20,23 @@ func main() {
 		return
 	}
 
-	// 启用Routes集群
-	cfg.EnableRoutes("127.0.0.1", 4222, []string{})
+	// 启用Routes集群，使用自动检测的本地IP
+	cfg.EnableRoutes(cfg.Network.LocalIP, 4222, 6222, []string{})
 
 	// 2. 创建集群管理器配置
 	clusterConfig := &routes.ClusterConfig{
-		Host:              cfg.Routes.Host,
-		ClusterPortOffset: cfg.Routes.ClusterPortOffset,
+		Host: cfg.Routes.Host,
 	}
 
 	// 创建集群管理器
-	cm := routes.NewClusterManager(cfg.Routes.ClusterName, clusterConfig) // 3. 创建并启动节点A（种子节点）
-	nodeA := cm.CreateNode("NodeA", 4222, []string{})
+	cm := routes.NewClusterManager(cfg.Routes.ClusterName, clusterConfig)
+	if cm == nil {
+		fmt.Println("创建集群管理器失败")
+		return
+	}
+
+	// 3. 创建并启动节点A（种子节点）
+	nodeA := cm.CreateNode("NodeA", 4222, 6222, []string{})
 	if nodeA == nil {
 		fmt.Println("创建NodeA失败")
 		return
@@ -45,8 +50,7 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// 4. 创建并启动节点B
-	clusterPortA := 4222 + cfg.Routes.ClusterPortOffset
-	nodeB := cm.CreateNode("NodeB", 4223, []string{fmt.Sprintf("nats://%s:%d", cfg.Routes.Host, clusterPortA)})
+	nodeB := cm.CreateNode("NodeB", 4223, 6223, []string{fmt.Sprintf("nats://%s:6222", cfg.Routes.Host)})
 	if nodeB == nil {
 		fmt.Println("创建NodeB失败")
 		return
@@ -65,7 +69,7 @@ func main() {
 
 	// 6. 创建NATS客户端
 	clientCfg := nats.ClientConfig{
-		URL:  fmt.Sprintf("nats://%s:%d", cfg.Routes.Host, cfg.Routes.ClientPort),
+		URL:  cfg.NATS.URL,
 		Name: "DemoClient",
 	}
 
@@ -77,6 +81,8 @@ func main() {
 	defer client.Close()
 
 	fmt.Printf("\n✅ 客户端连接状态: %v\n", client.IsConnected())
+	fmt.Printf("✅ 连接地址: %s\n", cfg.NATS.URL)
+	fmt.Printf("✅ 本地IP: %s\n", cfg.Network.LocalIP)
 
 	// 7. 测试JSON消息
 	testData := map[string]interface{}{
@@ -92,7 +98,17 @@ func main() {
 		fmt.Println("✅ JSON消息发送成功")
 	}
 
-	// 8. 显示统计信息
+	// 8. 测试动态节点加入
+	fmt.Println("\n=== 测试动态节点加入 ===")
+	nodeD := cm.DynamicJoin("NodeD", 4225, 6225, 6223) // 连接到NodeB的集群端口
+	if nodeD != nil {
+		defer nodeD.Server.Shutdown()
+		fmt.Println("✅ 动态节点加入成功")
+
+		// 再次检查集群连通性
+		fmt.Println("\n=== 动态加入后的集群状态 ===")
+		cm.CheckClusterConnectivity()
+	} // 9. 显示统计信息
 	stats := client.GetStats()
 	fmt.Printf("\n=== 客户端统计 ===\n")
 	for key, value := range stats {

@@ -101,3 +101,30 @@ go mod tidy
 - **框架**: Wails v2
 - **网络**: NATS Routes集群 + Tailscale VPN
 - **构建**: Vite + Go build
+
+## 开发记录
+
+### 5. ClusterPortOffset移除重构 (2024-12-28 14:45)
+
+#### 执行步骤：
+```bash
+# 1. 移除ClusterPortOffset概念
+grep -r "ClusterPortOffset" DecentralizedChat/  # 检查所有引用
+
+# 2. 更新方法签名和配置结构
+go build ./...  # 验证编译无错误
+
+# 3. 测试集群功能完整性
+go run examples/cluster_demo.go  # 验证集群演示正常运行
+```
+
+#### 实现内容：
+- **配置简化**：完全移除ClusterPortOffset字段和相关逻辑
+- **方法重构**：CreateNode、DynamicJoin等方法改为显式传递端口参数
+- **结构优化**：RouteNode增加ClusterPort字段，直接存储集群端口
+- **API清理**：移除所有基于offset的端口计算逻辑
+
+#### 技术特点：
+- 显式配置：所有端口配置明确指定，无隐式计算
+- 方法简化：减少参数依赖，提高代码可读性
+- 类型安全：避免端口计算错误，增强系统稳定性

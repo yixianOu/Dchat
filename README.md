@@ -1,4 +1,4 @@
-# 2025-08-06
+# 2025-08-06 重大重构
 - 完善 internal/routes/routes.go，支持链式集群、动态节点加入、集群连通性检查、消息路由测试等功能，参考cmd/routes/main.go。
 - 重构 internal/nats/service.go，仅保留NATS客户端功能，支持鉴权连接，去除服务端嵌入式启动。
 - 新增 ClusterManager 类型，提供集群管理功能，支持节点创建、启动、停止、连通性检查。
@@ -7,12 +7,25 @@
 - 创建 examples/cluster_demo.go 演示新设计的使用方法。
 - **优化设计**：重命名 ClusterManager.network → clusterName，移除硬编码，新增 ClusterConfig 结构体支持可配置的主机地址和端口偏移量。
 - **增强配置**：Routes 配置新增 Host 和 ClusterPortOffset 字段，支持更灵活的部署环境。
+- **🔥 彻底清理硬编码**：
+  - 移除所有硬编码的 IP 地址和端口
+  - 移除向后兼容的旧 API，只保留最新设计
+  - 新增 `GetLocalIP()` 自动检测本地 IP 地址
+  - 新增 `ValidateAndSetDefaults()` 自动验证和设置配置默认值
+  - 强制用户提供配置，避免隐式默认值
+- **API 简化**：ClusterManager 现在要求明确的配置参数，增强了代码的可预测性和可维护性。
 
 ## 运行演示
 ```bash
 cd DecentralizedChat
 go run examples/cluster_demo.go
 ```
+
+## 新 API 特点
+- 零硬编码：所有网络配置都通过参数传入
+- 自动配置：自动检测本地 IP，自动生成 NATS URL
+- 强类型：配置验证确保运行时安全
+- 简洁API：移除冗余的向后兼容接口
 # 去中心化聊天室 - DChat
 
 ## 项目概述
