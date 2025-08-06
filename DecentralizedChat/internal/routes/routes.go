@@ -17,27 +17,47 @@ type RouteNode struct {
 }
 
 type ClusterManager struct {
-	nodes   map[string]*RouteNode
-	network string
+	nodes       map[string]*RouteNode
+	clusterName string
+	config      ClusterConfig
 }
 
-func NewClusterManager(network string) *ClusterManager {
-	return &ClusterManager{
-		nodes:   make(map[string]*RouteNode),
-		network: network,
+type ClusterConfig struct {
+	Host              string // 主机地址，默认 "127.0.0.1"
+	ClusterPortOffset int    // 集群端口偏移量，默认 2000
+}
+
+func NewClusterManager(clusterName string, config *ClusterConfig) *ClusterManager {
+	// 设置默认配置
+	if config == nil {
+		config = &ClusterConfig{
+			Host:              "127.0.0.1",
+			ClusterPortOffset: 2000,
+		}
 	}
+
+	return &ClusterManager{
+		nodes:       make(map[string]*RouteNode),
+		clusterName: clusterName,
+		config:      *config,
+	}
+}
+
+// 简化构造函数，使用默认配置
+func NewDefaultClusterManager(clusterName string) *ClusterManager {
+	return NewClusterManager(clusterName, nil)
 }
 
 // 创建NATS节点
 func (cm *ClusterManager) CreateNode(name string, clientPort int, routes []string) *RouteNode {
-	clusterPort := clientPort + 2000
+	clusterPort := clientPort + cm.config.ClusterPortOffset
 	opts := &server.Options{
 		ServerName: name,
-		Host:       "127.0.0.1",
+		Host:       cm.config.Host,
 		Port:       clientPort,
 		Cluster: server.ClusterOpts{
-			Name: cm.network,
-			Host: "127.0.0.1",
+			Name: cm.clusterName,
+			Host: cm.config.Host,
 			Port: clusterPort,
 		},
 	}
@@ -73,8 +93,9 @@ func (cm *ClusterManager) StartNode(node *RouteNode) error {
 	if !node.Server.ReadyForConnections(5 * time.Second) {
 		return fmt.Errorf("node %s failed to start", node.ID)
 	}
-	fmt.Printf("✅ 节点 %s 启动成功 (Client: %d, Cluster: %d)\n",
-		node.ID, node.Port, node.Port+2000)
+	clusterPort := node.Port + cm.config.ClusterPortOffset
+	fmt.Printf("✅ 节点 %s 启动成功 (Client: %s:%d, Cluster: %s:%d)\n",
+		node.ID, cm.config.Host, node.Port, cm.config.Host, clusterPort)
 	return nil
 }
 
@@ -109,14 +130,19 @@ func (cm *ClusterManager) CheckClusterConnectivity() {
 
 // 创建NATS节点 (兼容旧版API)
 func CreateNode(name string, clientPort int, routes []string) *RouteNode {
-	clusterPort := clientPort + 2000
+	return CreateNodeWithConfig(name, clientPort, routes, "127.0.0.1", 2000, "decentralized_chat")
+}
+
+// 创建NATS节点 (支持配置)
+func CreateNodeWithConfig(name string, clientPort int, routes []string, host string, clusterPortOffset int, clusterName string) *RouteNode {
+	clusterPort := clientPort + clusterPortOffset
 	opts := &server.Options{
 		ServerName: name,
-		Host:       "127.0.0.1",
+		Host:       host,
 		Port:       clientPort,
 		Cluster: server.ClusterOpts{
-			Name: "decentralized_chat",
-			Host: "127.0.0.1",
+			Name: clusterName,
+			Host: host,
 			Port: clusterPort,
 		},
 	}

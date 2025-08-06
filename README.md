@@ -5,6 +5,8 @@
 - 完善 NATS 客户端，新增 JSON 序列化/反序列化、请求-响应模式、增强连接配置。
 - 重构 config.go，分离 NATS 客户端配置和 Routes 集群配置，新增配置辅助方法。
 - 创建 examples/cluster_demo.go 演示新设计的使用方法。
+- **优化设计**：重命名 ClusterManager.network → clusterName，移除硬编码，新增 ClusterConfig 结构体支持可配置的主机地址和端口偏移量。
+- **增强配置**：Routes 配置新增 Host 和 ClusterPortOffset 字段，支持更灵活的部署环境。
 
 ## 运行演示
 ```bash

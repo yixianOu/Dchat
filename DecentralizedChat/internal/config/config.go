@@ -40,12 +40,14 @@ type NATSConfig struct {
 }
 
 type RoutesConfig struct {
-	Enabled     bool     `json:"enabled"`      // 是否启用Routes集群
-	ClientPort  int      `json:"client_port"`  // 客户端端口
-	ClusterPort int      `json:"cluster_port"` // 集群端口
-	ClusterName string   `json:"cluster_name"` // 集群名称
-	SeedRoutes  []string `json:"seed_routes"`  // 种子路由
-	NodeName    string   `json:"node_name"`    // 节点名称
+	Enabled           bool     `json:"enabled"`             // 是否启用Routes集群
+	Host              string   `json:"host"`                // 主机地址
+	ClientPort        int      `json:"client_port"`         // 客户端端口
+	ClusterPort       int      `json:"cluster_port"`        // 集群端口
+	ClusterPortOffset int      `json:"cluster_port_offset"` // 集群端口偏移量
+	ClusterName       string   `json:"cluster_name"`        // 集群名称
+	SeedRoutes        []string `json:"seed_routes"`         // 种子路由
+	NodeName          string   `json:"node_name"`           // 节点名称
 }
 
 type UIConfig struct {
@@ -75,12 +77,14 @@ var defaultConfig = Config{
 		ReconnectWait: time.Second,
 	},
 	Routes: RoutesConfig{
-		Enabled:     false,
-		ClientPort:  4222,
-		ClusterPort: 6222,
-		ClusterName: "dchat_network",
-		SeedRoutes:  []string{},
-		NodeName:    "dchat_node",
+		Enabled:           false,
+		Host:              "127.0.0.1",
+		ClientPort:        4222,
+		ClusterPort:       6222,
+		ClusterPortOffset: 2000,
+		ClusterName:       "dchat_network",
+		SeedRoutes:        []string{},
+		NodeName:          "dchat_node",
 	},
 	UI: UIConfig{
 		Theme:    "dark",
@@ -170,12 +174,22 @@ func (c *Config) GetNATSClientConfig() map[string]interface{} {
 // GetRoutesConfig 获取Routes集群配置
 func (c *Config) GetRoutesConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":      c.Routes.Enabled,
-		"client_port":  c.Routes.ClientPort,
-		"cluster_port": c.Routes.ClusterPort,
-		"cluster_name": c.Routes.ClusterName,
-		"seed_routes":  c.Routes.SeedRoutes,
-		"node_name":    c.Routes.NodeName,
+		"enabled":             c.Routes.Enabled,
+		"host":                c.Routes.Host,
+		"client_port":         c.Routes.ClientPort,
+		"cluster_port":        c.Routes.ClusterPort,
+		"cluster_port_offset": c.Routes.ClusterPortOffset,
+		"cluster_name":        c.Routes.ClusterName,
+		"seed_routes":         c.Routes.SeedRoutes,
+		"node_name":           c.Routes.NodeName,
+	}
+}
+
+// GetClusterConfig 获取集群配置用于ClusterManager
+func (c *Config) GetClusterConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"host":                c.Routes.Host,
+		"cluster_port_offset": c.Routes.ClusterPortOffset,
 	}
 }
 
@@ -191,9 +205,10 @@ func (c *Config) UpdateUserInfo(nickname, avatar string) {
 }
 
 // EnableRoutes 启用Routes集群
-func (c *Config) EnableRoutes(clientPort int, seedRoutes []string) {
+func (c *Config) EnableRoutes(host string, clientPort int, seedRoutes []string) {
 	c.Routes.Enabled = true
+	c.Routes.Host = host
 	c.Routes.ClientPort = clientPort
-	c.Routes.ClusterPort = clientPort + 2000
+	c.Routes.ClusterPort = clientPort + c.Routes.ClusterPortOffset
 	c.Routes.SeedRoutes = seedRoutes
 }

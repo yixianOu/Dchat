@@ -21,12 +21,16 @@ func main() {
 	}
 
 	// 启用Routes集群
-	cfg.EnableRoutes(4222, []string{})
+	cfg.EnableRoutes("127.0.0.1", 4222, []string{})
 
-	// 2. 创建集群管理器
-	cm := routes.NewClusterManager(cfg.Routes.ClusterName)
+	// 2. 创建集群管理器配置
+	clusterConfig := &routes.ClusterConfig{
+		Host:              cfg.Routes.Host,
+		ClusterPortOffset: cfg.Routes.ClusterPortOffset,
+	}
 
-	// 3. 创建并启动节点A（种子节点）
+	// 创建集群管理器
+	cm := routes.NewClusterManager(cfg.Routes.ClusterName, clusterConfig) // 3. 创建并启动节点A（种子节点）
 	nodeA := cm.CreateNode("NodeA", 4222, []string{})
 	if nodeA == nil {
 		fmt.Println("创建NodeA失败")
@@ -41,7 +45,8 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// 4. 创建并启动节点B
-	nodeB := cm.CreateNode("NodeB", 4223, []string{"nats://127.0.0.1:6222"})
+	clusterPortA := 4222 + cfg.Routes.ClusterPortOffset
+	nodeB := cm.CreateNode("NodeB", 4223, []string{fmt.Sprintf("nats://%s:%d", cfg.Routes.Host, clusterPortA)})
 	if nodeB == nil {
 		fmt.Println("创建NodeB失败")
 		return
@@ -60,7 +65,7 @@ func main() {
 
 	// 6. 创建NATS客户端
 	clientCfg := nats.ClientConfig{
-		URL:  "nats://127.0.0.1:4222",
+		URL:  fmt.Sprintf("nats://%s:%d", cfg.Routes.Host, cfg.Routes.ClientPort),
 		Name: "DemoClient",
 	}
 
