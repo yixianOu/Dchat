@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Config struct {
 	User    UserConfig    `json:"user"`
 	Network NetworkConfig `json:"network"`
 	NATS    NATSConfig    `json:"nats"`
+	Routes  RoutesConfig  `json:"routes"`
 	UI      UIConfig      `json:"ui"`
 }
 
@@ -24,12 +26,26 @@ type NetworkConfig struct {
 	TailscaleEnabled bool     `json:"tailscale_enabled"`
 	AutoDiscovery    bool     `json:"auto_discovery"`
 	SeedNodes        []string `json:"seed_nodes"`
+	LocalIP          string   `json:"local_ip"`
 }
 
 type NATSConfig struct {
-	ClientPort  int    `json:"client_port"`
-	ClusterPort int    `json:"cluster_port"`
-	ClusterName string `json:"cluster_name"`
+	URL           string        `json:"url"`            // NATS服务器URL
+	User          string        `json:"user"`           // 用户名
+	Password      string        `json:"password"`       // 密码
+	Token         string        `json:"token"`          // 令牌
+	Timeout       time.Duration `json:"timeout"`        // 连接超时
+	MaxReconnect  int           `json:"max_reconnect"`  // 最大重连次数
+	ReconnectWait time.Duration `json:"reconnect_wait"` // 重连等待时间
+}
+
+type RoutesConfig struct {
+	Enabled     bool     `json:"enabled"`      // 是否启用Routes集群
+	ClientPort  int      `json:"client_port"`  // 客户端端口
+	ClusterPort int      `json:"cluster_port"` // 集群端口
+	ClusterName string   `json:"cluster_name"` // 集群名称
+	SeedRoutes  []string `json:"seed_routes"`  // 种子路由
+	NodeName    string   `json:"node_name"`    // 节点名称
 }
 
 type UIConfig struct {
@@ -47,11 +63,24 @@ var defaultConfig = Config{
 		TailscaleEnabled: true,
 		AutoDiscovery:    true,
 		SeedNodes:        []string{},
+		LocalIP:          "127.0.0.1",
 	},
 	NATS: NATSConfig{
+		URL:           "nats://127.0.0.1:4222",
+		User:          "",
+		Password:      "",
+		Token:         "",
+		Timeout:       5 * time.Second,
+		MaxReconnect:  -1,
+		ReconnectWait: time.Second,
+	},
+	Routes: RoutesConfig{
+		Enabled:     false,
 		ClientPort:  4222,
 		ClusterPort: 6222,
 		ClusterName: "dchat_network",
+		SeedRoutes:  []string{},
+		NodeName:    "dchat_node",
 	},
 	UI: UIConfig{
 		Theme:    "dark",
@@ -122,4 +151,49 @@ func SaveConfig(config *Config) error {
 
 func GetDefaultConfig() Config {
 	return defaultConfig
+}
+
+// GetNATSClientConfig 获取NATS客户端配置
+func (c *Config) GetNATSClientConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"url":            c.NATS.URL,
+		"user":           c.NATS.User,
+		"password":       c.NATS.Password,
+		"token":          c.NATS.Token,
+		"name":           c.User.Nickname,
+		"timeout":        c.NATS.Timeout,
+		"max_reconnect":  c.NATS.MaxReconnect,
+		"reconnect_wait": c.NATS.ReconnectWait,
+	}
+}
+
+// GetRoutesConfig 获取Routes集群配置
+func (c *Config) GetRoutesConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"enabled":      c.Routes.Enabled,
+		"client_port":  c.Routes.ClientPort,
+		"cluster_port": c.Routes.ClusterPort,
+		"cluster_name": c.Routes.ClusterName,
+		"seed_routes":  c.Routes.SeedRoutes,
+		"node_name":    c.Routes.NodeName,
+	}
+}
+
+// UpdateNATSURL 更新NATS连接URL
+func (c *Config) UpdateNATSURL(url string) {
+	c.NATS.URL = url
+}
+
+// UpdateUserInfo 更新用户信息
+func (c *Config) UpdateUserInfo(nickname, avatar string) {
+	c.User.Nickname = nickname
+	c.User.Avatar = avatar
+}
+
+// EnableRoutes 启用Routes集群
+func (c *Config) EnableRoutes(clientPort int, seedRoutes []string) {
+	c.Routes.Enabled = true
+	c.Routes.ClientPort = clientPort
+	c.Routes.ClusterPort = clientPort + 2000
+	c.Routes.SeedRoutes = seedRoutes
 }

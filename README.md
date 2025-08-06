@@ -1,6 +1,16 @@
 # 2025-08-06
 - 完善 internal/routes/routes.go，支持链式集群、动态节点加入、集群连通性检查、消息路由测试等功能，参考cmd/routes/main.go。
 - 重构 internal/nats/service.go，仅保留NATS客户端功能，支持鉴权连接，去除服务端嵌入式启动。
+- 新增 ClusterManager 类型，提供集群管理功能，支持节点创建、启动、停止、连通性检查。
+- 完善 NATS 客户端，新增 JSON 序列化/反序列化、请求-响应模式、增强连接配置。
+- 重构 config.go，分离 NATS 客户端配置和 Routes 集群配置，新增配置辅助方法。
+- 创建 examples/cluster_demo.go 演示新设计的使用方法。
+
+## 运行演示
+```bash
+cd DecentralizedChat
+go run examples/cluster_demo.go
+```
 # 去中心化聊天室 - DChat
 
 ## 项目概述
