@@ -8,14 +8,16 @@ import (
 	"DecentralizedChat/internal/chat"
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/network"
+	"DecentralizedChat/internal/routes"
 )
 
 // App struct
 type App struct {
-	ctx       context.Context
-	chatSvc   *chat.Service
-	natsSvc   *nats.Service
-	tailscale *network.TailscaleManager
+	ctx         context.Context
+	chatSvc     *chat.Service
+	natsSvc     *nats.Service
+	tailscale   *network.TailscaleManager
+	nodeManager *routes.NodeManager
 }
 
 // TailscaleStatus 返回给前端的网络状态
@@ -40,13 +42,28 @@ func (a *App) OnStartup(ctx context.Context) {
 	// 获取本机Tailscale IP
 	localIP, err := a.tailscale.GetLocalIP()
 	if err != nil {
-		log.Printf("Warning: Failed to get Tailscale IP: %v", err)
-		panic("")
+		log.Printf("Warning: Failed to get Tailscale IP, using localhost: %v", err)
+		localIP = "127.0.0.1"
 	}
 
-	// 初始化NATS服务
+	// 初始化节点管理器
+	a.nodeManager = routes.NewNodeManager("dchat-network", localIP)
+
+	// 启动本地NATS节点
+	nodeID := fmt.Sprintf("dchat-%s", localIP)
+	clientPort := 4222
+	clusterPort := 6222
+	var seedRoutes []string // TODO: 从Tailscale网络发现其他节点
+
+	err = a.nodeManager.StartLocalNode(nodeID, clientPort, clusterPort, seedRoutes)
+	if err != nil {
+		log.Printf("Failed to start local NATS node: %v", err)
+		return
+	}
+
+	// 初始化NATS客户端服务
 	natsConfig := nats.ClientConfig{
-		URL:  fmt.Sprintf("nats://%s:4222", localIP),
+		URL:  a.nodeManager.GetClientURL(),
 		Name: "DChatClient",
 	}
 
@@ -145,9 +162,14 @@ func (a *App) GetNetworkStats() map[string]interface{} {
 		}
 	}
 
-	// NATS状态
+	// NATS节点状态
+	if a.nodeManager != nil {
+		stats["nats_node"] = a.nodeManager.GetClusterInfo()
+	}
+
+	// NATS客户端状态
 	if a.natsSvc != nil {
-		stats["nats"] = a.natsSvc.GetStats()
+		stats["nats_client"] = a.natsSvc.GetStats()
 	}
 
 	return stats

@@ -144,8 +144,33 @@ go run examples/cluster_demo.go  # 测试错误处理功能
 - **TestMessageRouting函数**：改为返回error，所有内部错误都正确传播
 - **DynamicJoin函数**：改为返回(*RouteNode, error)，节点创建和启动失败时返回详细错误信息
 
+### 7. 架构重构：单节点管理设计 (2024-12-28 15:35)
+
+#### 执行步骤：
+```bash
+# 1. 分析原有ClusterManager设计问题
+grep -r "nodes.*map" internal/routes/  # 检查多节点管理代码
+
+# 2. 重构为单节点管理器
+go build ./...  # 验证编译无错误
+
+# 3. 更新主应用和演示代码
+go run examples/cluster_demo.go  # 测试新的单节点设计
+```
+
+#### 重构原因：
+- **设计误区**：原ClusterManager假设一个应用管理多个节点，不符合去中心化场景
+- **实际需求**：每个DChat应用只启动一个本地节点，通过Tailscale连接其他节点
+- **概念澄清**：去中心化≠集中管理多节点，而是分布式单节点网络
+
+#### 实现内容：
+- **NodeManager替代ClusterManager**：管理单个本地NATS节点
+- **移除nodes map**：不再维护多节点映射表，符合单体应用特性
+- **简化API**：StartLocalNode、StopLocalNode、GetClusterInfo等单节点操作
+- **集成app.go**：主应用直接使用NodeManager启动本地节点
+
 #### 技术特点：
-- 错误传播：所有内部错误都正确向上传播，不再静默失败
-- 错误信息：提供详细的中文错误描述，便于调试和排错
-- 调用安全：移除panic调用，改为优雅的错误返回
-- 接口一致：所有可能失败的函数都遵循Go的错误处理惯例
+- 概念一致：每个应用实例=一个NATS节点+一个NATS客户端
+- 架构清晰：节点管理与客户端服务职责分离
+- 符合实际：匹配去中心化单体应用的部署模式
+- API简洁：专注单节点生命周期管理，移除复杂的多节点逻辑
