@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"DecentralizedChat/internal/config"
+	natsSvc "DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/routes"
 
 	"github.com/nats-io/nats.go"
@@ -60,14 +61,14 @@ func testPermissions(nodeManager *routes.NodeManager, nodeID string, subscribePe
 	fmt.Printf("节点: %s, 订阅权限: %v\n", nodeID, subscribePermissions)
 
 	// 创建客户端
-	clientCfg := nats.ClientConfig{
+	clientCfg := natsSvc.ClientConfig{
 		URL:      nodeManager.GetClientURL(),
 		User:     username,
 		Password: password,
 		Name:     "PermissionTestClient",
 	}
 
-	client, err := nats.NewService(clientCfg)
+	client, err := natsSvc.NewService(clientCfg)
 	if err != nil {
 		fmt.Printf("创建客户端失败: %v\n", err)
 		return

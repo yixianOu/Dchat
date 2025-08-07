@@ -199,3 +199,38 @@ go run examples/cluster_demo.go  # 验证权限在服务器端生效
 - 配置灵活：支持细粒度的主题权限控制
 - 默认安全：采用白名单模式，订阅权限需明确授权
 - 架构清晰：权限配置与业务逻辑分离，遵循NATS安全模型
+
+### 9. 演示程序重构与测试 (2025-08-07 14:20)
+
+#### 执行步骤：
+```bash
+# 1. 修正演示文件的包导入和main函数冲突
+rm examples/permission_demo.go  # 移除冲突文件
+
+# 2. 重新创建权限演示程序
+go build -o demo/permission_demo demo/permission_demo.go
+
+# 3. 测试权限控制效果
+./demo/permission_demo
+
+# 4. 验证集群演示程序
+go build -o examples/cluster_demo examples/cluster_demo.go
+./examples/cluster_demo
+```
+
+#### 问题解决：
+- **main函数冲突**：将权限演示移到独立的demo/目录，避免与examples/cluster_demo.go冲突
+- **包导入错误**：修正nats包导入，使用internal/nats服务而非官方nats包
+- **接口匹配**：更新客户端配置调用，使用natsSvc.ClientConfig和natsSvc.NewService
+
+#### 实现内容：
+- **权限演示程序**：创建demo/permission_demo.go，展示不同权限配置的效果
+- **演示文档**：创建demo/README.md，详细说明权限系统设计和使用方法
+- **测试验证**：通过实际运行验证服务器端权限控制正常工作
+- **代码清理**：移除重复文件，确保项目结构清晰
+
+#### 演示效果：
+- 测试1显示默认拒绝所有订阅权限
+- 测试2展示chat.*通配符权限匹配
+- 测试3验证精确主题权限控制
+- 权限违规会在服务器端记录并拒绝操作
