@@ -38,6 +38,19 @@ type NATSConfig struct {
 	Timeout       time.Duration `json:"timeout"`        // 连接超时
 	MaxReconnect  int           `json:"max_reconnect"`  // 最大重连次数
 	ReconnectWait time.Duration `json:"reconnect_wait"` // 重连等待时间
+	Permissions   Permissions   `json:"permissions"`    // 主题权限配置
+}
+
+// Permissions NATS主题权限配置
+type Permissions struct {
+	Publish   PermissionRules `json:"publish"`   // 发布权限
+	Subscribe PermissionRules `json:"subscribe"` // 订阅权限
+}
+
+// PermissionRules 权限规则
+type PermissionRules struct {
+	Allow []string `json:"allow"` // 允许的主题列表
+	Deny  []string `json:"deny"`  // 拒绝的主题列表
 }
 
 type RoutesConfig struct {
@@ -75,6 +88,16 @@ var defaultConfig = Config{
 		Timeout:       5 * time.Second,
 		MaxReconnect:  -1,
 		ReconnectWait: time.Second,
+		Permissions: Permissions{
+			Publish: PermissionRules{
+				Allow: []string{"*"}, // 默认允许发布到所有主题
+				Deny:  []string{},
+			},
+			Subscribe: PermissionRules{
+				Allow: []string{}, // 默认拒绝订阅所有主题
+				Deny:  []string{"*"},
+			},
+		},
 	},
 	Routes: RoutesConfig{
 		Enabled:     false,
@@ -259,5 +282,105 @@ func (c *Config) ValidateAndSetDefaults() error {
 		c.NATS.URL = fmt.Sprintf("nats://%s:%d", c.Routes.Host, c.Routes.ClientPort)
 	}
 
+	// 确保权限配置完整
+	c.ensurePermissionsDefaults()
+
 	return nil
+}
+
+// ensurePermissionsDefaults 确保权限配置有默认值
+func (c *Config) ensurePermissionsDefaults() {
+	if len(c.NATS.Permissions.Publish.Allow) == 0 && len(c.NATS.Permissions.Publish.Deny) == 0 {
+		c.NATS.Permissions.Publish.Allow = []string{"*"}
+	}
+	if len(c.NATS.Permissions.Subscribe.Allow) == 0 && len(c.NATS.Permissions.Subscribe.Deny) == 0 {
+		c.NATS.Permissions.Subscribe.Deny = []string{"*"}
+	}
+}
+
+// AddSubscribePermission 添加订阅权限
+func (c *Config) AddSubscribePermission(subject string) {
+	// 检查是否已存在
+	for _, allowed := range c.NATS.Permissions.Subscribe.Allow {
+		if allowed == subject {
+			return
+		}
+	}
+
+	// 添加到允许列表
+	c.NATS.Permissions.Subscribe.Allow = append(c.NATS.Permissions.Subscribe.Allow, subject)
+
+	// 从拒绝列表中移除（如果存在）
+	c.removeFromDenyList(subject)
+}
+
+// RemoveSubscribePermission 移除订阅权限
+func (c *Config) RemoveSubscribePermission(subject string) {
+	// 从允许列表中移除
+	var newAllow []string
+	for _, allowed := range c.NATS.Permissions.Subscribe.Allow {
+		if allowed != subject {
+			newAllow = append(newAllow, allowed)
+		}
+	}
+	c.NATS.Permissions.Subscribe.Allow = newAllow
+}
+
+// removeFromDenyList 从拒绝列表中移除主题
+func (c *Config) removeFromDenyList(subject string) {
+	var newDeny []string
+	for _, denied := range c.NATS.Permissions.Subscribe.Deny {
+		if denied != subject {
+			newDeny = append(newDeny, denied)
+		}
+	}
+	c.NATS.Permissions.Subscribe.Deny = newDeny
+}
+
+// CanPublish 检查是否可以发布到指定主题
+func (c *Config) CanPublish(subject string) bool {
+	return c.checkPermission(subject, c.NATS.Permissions.Publish)
+}
+
+// CanSubscribe 检查是否可以订阅指定主题
+func (c *Config) CanSubscribe(subject string) bool {
+	return c.checkPermission(subject, c.NATS.Permissions.Subscribe)
+}
+
+// checkPermission 检查主题权限
+func (c *Config) checkPermission(subject string, rules PermissionRules) bool {
+	// 如果在拒绝列表中，直接返回false
+	for _, deny := range rules.Deny {
+		if c.matchSubject(subject, deny) {
+			return false
+		}
+	}
+
+	// 如果在允许列表中，返回true
+	for _, allow := range rules.Allow {
+		if c.matchSubject(subject, allow) {
+			return true
+		}
+	}
+
+	// 默认拒绝
+	return false
+}
+
+// matchSubject 匹配主题模式（支持通配符）
+func (c *Config) matchSubject(subject, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+	if pattern == subject {
+		return true
+	}
+
+	// 简单的通配符匹配（可以扩展为更复杂的模式匹配）
+	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
+		prefix := pattern[:len(pattern)-1]
+		return len(subject) >= len(prefix) && subject[:len(prefix)] == prefix
+	}
+
+	return false
 }

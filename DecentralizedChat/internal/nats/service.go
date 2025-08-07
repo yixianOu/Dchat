@@ -82,18 +82,11 @@ func NewService(cfg ClientConfig) (*Service, error) {
 
 func (s *Service) Subscribe(subject string, handler func(msg *nats.Msg)) error {
 	_, err := s.conn.Subscribe(subject, handler)
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to %s: %w", subject, err)
-	}
-	return nil
+	return err
 }
 
 func (s *Service) Publish(subject string, data []byte) error {
-	err := s.conn.Publish(subject, data)
-	if err != nil {
-		return fmt.Errorf("failed to publish to %s: %w", subject, err)
-	}
-	return nil
+	return s.conn.Publish(subject, data)
 }
 
 func (s *Service) PublishJSON(subject string, data interface{}) error {

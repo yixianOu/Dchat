@@ -48,10 +48,13 @@ func main() {
 		fmt.Printf("%s: %v\n", key, value)
 	}
 
-	// 5. 创建NATS客户端
+	// 5. 创建NATS客户端（使用服务器配置的凭据）
+	username, password := nodeManager.GetNodeCredentials()
 	clientCfg := nats.ClientConfig{
-		URL:  nodeManager.GetClientURL(),
-		Name: "DemoClient",
+		URL:      nodeManager.GetClientURL(),
+		User:     username,
+		Password: password,
+		Name:     "DemoClient",
 	}
 
 	client, err := nats.NewService(clientCfg)

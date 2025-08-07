@@ -25,6 +25,26 @@ type NodeManager struct {
 	host        string
 }
 
+// NodeConfig NATS节点配置
+type NodeConfig struct {
+	NodeID      string
+	ClientPort  int
+	ClusterPort int
+	SeedRoutes  []string
+	UserConfig  *UserPermissionConfig // 用户权限配置
+}
+
+// UserPermissionConfig 用户权限配置
+type UserPermissionConfig struct {
+	Username       string
+	Password       string
+	PublishAllow   []string
+	PublishDeny    []string
+	SubscribeAllow []string
+	SubscribeDeny  []string
+	AllowResponses bool
+}
+
 // NewNodeManager 创建节点管理器
 func NewNodeManager(clusterName string, host string) *NodeManager {
 	return &NodeManager{
@@ -35,26 +55,71 @@ func NewNodeManager(clusterName string, host string) *NodeManager {
 
 // StartLocalNode 启动本地NATS节点
 func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort int, seedRoutes []string) error {
+	config := &NodeConfig{
+		NodeID:      nodeID,
+		ClientPort:  clientPort,
+		ClusterPort: clusterPort,
+		SeedRoutes:  seedRoutes,
+		UserConfig: &UserPermissionConfig{
+			Username:       "dchat_user",
+			Password:       "dchat_pass",
+			PublishAllow:   []string{"*"}, // 默认允许发布所有主题
+			PublishDeny:    []string{},    // 无发布限制
+			SubscribeAllow: []string{},    // 默认无订阅权限
+			SubscribeDeny:  []string{"*"}, // 拒绝订阅所有主题
+			AllowResponses: true,          // 允许响应消息
+		},
+	}
+	return nm.StartLocalNodeWithConfig(config)
+}
+
+// StartLocalNodeWithConfig 使用配置启动本地NATS节点
+func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	// 检查是否已有节点运行
 	if nm.node != nil {
 		return fmt.Errorf("本地节点已启动: %s", nm.node.ID)
 	}
 
-	opts := &server.Options{
-		ServerName: nodeID,
-		Host:       nm.host,
-		Port:       clientPort,
-		Cluster: server.ClusterOpts{
-			Name: nm.clusterName,
-			Host: nm.host,
-			Port: clusterPort,
+	// 创建用户权限配置
+	userPerms := &server.Permissions{
+		Publish: &server.SubjectPermission{
+			Allow: config.UserConfig.PublishAllow,
+			Deny:  config.UserConfig.PublishDeny,
+		},
+		Subscribe: &server.SubjectPermission{
+			Allow: config.UserConfig.SubscribeAllow,
+			Deny:  config.UserConfig.SubscribeDeny,
+		},
+		Response: &server.ResponsePermission{
+			MaxMsgs: server.DEFAULT_ALLOW_RESPONSE_MAX_MSGS,
+			Expires: server.DEFAULT_ALLOW_RESPONSE_EXPIRATION,
 		},
 	}
 
+	// 创建用户
+	user := &server.User{
+		Username:    config.UserConfig.Username,
+		Password:    config.UserConfig.Password,
+		Permissions: userPerms,
+	}
+
+	// 创建服务器选项
+	opts := &server.Options{
+		ServerName: config.NodeID,
+		Host:       nm.host,
+		Port:       config.ClientPort,
+		Cluster: server.ClusterOpts{
+			Name: nm.clusterName,
+			Host: nm.host,
+			Port: config.ClusterPort,
+		},
+		Users: []*server.User{user}, // 直接设置用户列表
+	}
+
 	// 配置种子路由（连接到其他节点）
-	if len(seedRoutes) > 0 {
-		routeURLs := make([]*url.URL, len(seedRoutes))
-		for i, route := range seedRoutes {
+	if len(config.SeedRoutes) > 0 {
+		routeURLs := make([]*url.URL, len(config.SeedRoutes))
+		for i, route := range config.SeedRoutes {
 			u, err := url.Parse(route)
 			if err != nil {
 				return fmt.Errorf("解析种子路由URL失败 %s: %v", route, err)
@@ -72,20 +137,22 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 	// 启动服务器
 	go srv.Start()
 	if !srv.ReadyForConnections(5 * time.Second) {
-		return fmt.Errorf("节点 %s 启动超时", nodeID)
+		return fmt.Errorf("节点 %s 启动超时", config.NodeID)
 	}
 
 	nm.node = &LocalNode{
-		ID:          nodeID,
+		ID:          config.NodeID,
 		Server:      srv,
-		ClientPort:  clientPort,
-		ClusterPort: clusterPort,
+		ClientPort:  config.ClientPort,
+		ClusterPort: config.ClusterPort,
 		Host:        nm.host,
 		ClusterName: nm.clusterName,
 	}
 
 	fmt.Printf("✅ 本地节点启动成功: %s (Client: %s:%d, Cluster: %s:%d)\n",
-		nodeID, nm.host, clientPort, nm.host, clusterPort)
+		config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
+	fmt.Printf("   用户: %s, 发布权限: %v, 订阅权限: %v\n",
+		config.UserConfig.Username, config.UserConfig.PublishAllow, config.UserConfig.SubscribeAllow)
 	return nil
 }
 
@@ -137,5 +204,38 @@ func (nm *NodeManager) GetClusterInfo() map[string]interface{} {
 		"cluster_port": nm.node.ClusterPort,
 		"connections":  nm.node.Server.NumRoutes(),
 		"cluster_name": nm.node.ClusterName,
+	}
+}
+
+// AddSubscribePermission 动态添加订阅权限（需要重启节点生效）
+func (nm *NodeManager) AddSubscribePermission(subject string) error {
+	if nm.node == nil {
+		return fmt.Errorf("节点未启动")
+	}
+	// 注意：NATS服务器运行时无法动态修改权限，需要重启节点
+	return fmt.Errorf("动态权限修改需要重启节点才能生效")
+}
+
+// GetNodeCredentials 获取节点连接凭据
+func (nm *NodeManager) GetNodeCredentials() (string, string) {
+	return "dchat_user", "dchat_pass"
+}
+
+// CreateNodeConfigWithPermissions 创建带权限的节点配置
+func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string) *NodeConfig {
+	return &NodeConfig{
+		NodeID:      nodeID,
+		ClientPort:  clientPort,
+		ClusterPort: clusterPort,
+		SeedRoutes:  seedRoutes,
+		UserConfig: &UserPermissionConfig{
+			Username:       "dchat_user",
+			Password:       "dchat_pass",
+			PublishAllow:   []string{"*"}, // 允许发布所有主题
+			PublishDeny:    []string{},
+			SubscribeAllow: subscribePermissions, // 用户指定的订阅权限
+			SubscribeDeny:  []string{},           // 如果有allow，则不设置deny
+			AllowResponses: true,
+		},
 	}
 }
