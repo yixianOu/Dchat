@@ -31,18 +31,38 @@ type NodeConfig struct {
 	ClientPort  int
 	ClusterPort int
 	SeedRoutes  []string
-	UserConfig  *UserPermissionConfig // 用户权限配置
+	NodeConfig  *NodePermissionConfig // 节点权限配置
 }
 
-// UserPermissionConfig 用户权限配置
-type UserPermissionConfig struct {
-	Username       string
-	Password       string
-	PublishAllow   []string
-	PublishDeny    []string
-	SubscribeAllow []string
-	SubscribeDeny  []string
-	AllowResponses bool
+// SubjectPermission 主题权限配置
+type SubjectPermission struct {
+	Allow []string `json:"allow,omitempty"`
+	Deny  []string `json:"deny,omitempty"`
+}
+
+// ResponsePermission 响应权限配置
+type ResponsePermission struct {
+	MaxMsgs int           `json:"max"`
+	Expires time.Duration `json:"ttl"`
+}
+
+// RoutePermissions 路由权限配置（用于去中心化节点间通信）
+type RoutePermissions struct {
+	Import *SubjectPermission `json:"import"`
+	Export *SubjectPermission `json:"export"`
+}
+
+// NodePermissions 节点权限配置（替代用户权限）
+type NodePermissions struct {
+	Routes   *RoutePermissions   `json:"routes"`
+	Response *ResponsePermission `json:"responses,omitempty"`
+}
+
+// NodePermissionConfig 节点权限配置
+type NodePermissionConfig struct {
+	NodeName    string           `json:"node_name"`
+	Credentials string           `json:"credentials"`
+	Permissions *NodePermissions `json:"permissions"`
 }
 
 // NewNodeManager 创建节点管理器
@@ -60,14 +80,25 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 		ClientPort:  clientPort,
 		ClusterPort: clusterPort,
 		SeedRoutes:  seedRoutes,
-		UserConfig: &UserPermissionConfig{
-			Username:       "dchat_user",
-			Password:       "dchat_pass",
-			PublishAllow:   []string{"*"}, // 默认允许发布所有主题
-			PublishDeny:    []string{},    // 无发布限制
-			SubscribeAllow: []string{},    // 默认无订阅权限
-			SubscribeDeny:  []string{"*"}, // 拒绝订阅所有主题
-			AllowResponses: true,          // 允许响应消息
+		NodeConfig: &NodePermissionConfig{
+			NodeName:    nodeID,
+			Credentials: "dchat_node_credentials",
+			Permissions: &NodePermissions{
+				Routes: &RoutePermissions{
+					Import: &SubjectPermission{
+						Allow: []string{"*"}, // 默认允许导入所有主题
+						Deny:  []string{},
+					},
+					Export: &SubjectPermission{
+						Allow: []string{"*"}, // 默认允许导出所有主题
+						Deny:  []string{},
+					},
+				},
+				Response: &ResponsePermission{
+					MaxMsgs: 1000,        // 允许响应消息
+					Expires: time.Minute, // 响应过期时间
+				},
+			},
 		},
 	}
 	return nm.StartLocalNodeWithConfig(config)
@@ -80,30 +111,7 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		return fmt.Errorf("本地节点已启动: %s", nm.node.ID)
 	}
 
-	// 创建用户权限配置
-	userPerms := &server.Permissions{
-		Publish: &server.SubjectPermission{
-			Allow: config.UserConfig.PublishAllow,
-			Deny:  config.UserConfig.PublishDeny,
-		},
-		Subscribe: &server.SubjectPermission{
-			Allow: config.UserConfig.SubscribeAllow,
-			Deny:  config.UserConfig.SubscribeDeny,
-		},
-		Response: &server.ResponsePermission{
-			MaxMsgs: server.DEFAULT_ALLOW_RESPONSE_MAX_MSGS,
-			Expires: server.DEFAULT_ALLOW_RESPONSE_EXPIRATION,
-		},
-	}
-
-	// 创建用户
-	user := &server.User{
-		Username:    config.UserConfig.Username,
-		Password:    config.UserConfig.Password,
-		Permissions: userPerms,
-	}
-
-	// 创建服务器选项
+	// 创建服务器选项，重点配置路由权限
 	opts := &server.Options{
 		ServerName: config.NodeID,
 		Host:       nm.host,
@@ -112,8 +120,21 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 			Name: nm.clusterName,
 			Host: nm.host,
 			Port: config.ClusterPort,
+			// 配置路由权限
+			Permissions: &server.RoutePermissions{
+				Import: &server.SubjectPermission{
+					Allow: config.NodeConfig.Permissions.Routes.Import.Allow,
+					Deny:  config.NodeConfig.Permissions.Routes.Import.Deny,
+				},
+				Export: &server.SubjectPermission{
+					Allow: config.NodeConfig.Permissions.Routes.Export.Allow,
+					Deny:  config.NodeConfig.Permissions.Routes.Export.Deny,
+				},
+			},
 		},
-		Users: []*server.User{user}, // 直接设置用户列表
+		// 为本地客户端创建简单的用户认证
+		Username: "dchat_client",
+		Password: "dchat_pass",
 	}
 
 	// 配置种子路由（连接到其他节点）
@@ -151,8 +172,8 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 
 	fmt.Printf("✅ 本地节点启动成功: %s (Client: %s:%d, Cluster: %s:%d)\n",
 		config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
-	fmt.Printf("   用户: %s, 发布权限: %v, 订阅权限: %v\n",
-		config.UserConfig.Username, config.UserConfig.PublishAllow, config.UserConfig.SubscribeAllow)
+	fmt.Printf("   节点: %s, 导入权限: %v, 导出权限: %v\n",
+		config.NodeConfig.NodeName, config.NodeConfig.Permissions.Routes.Import.Allow, config.NodeConfig.Permissions.Routes.Export.Allow)
 	return nil
 }
 
@@ -216,26 +237,43 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 	return fmt.Errorf("动态权限修改需要重启节点才能生效")
 }
 
-// GetNodeCredentials 获取节点连接凭据
+// GetNodeCredentials 获取节点连接凭据（客户端用）
 func (nm *NodeManager) GetNodeCredentials() (string, string) {
-	return "dchat_user", "dchat_pass"
+	return "dchat_client", "dchat_pass"
 }
 
 // CreateNodeConfigWithPermissions 创建带权限的节点配置
 func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string) *NodeConfig {
+	// 将订阅权限转换为导入权限（去中心化节点接收其他节点的消息）
+	importPermissions := subscribePermissions
+	if len(importPermissions) == 0 {
+		importPermissions = []string{} // 空数组表示拒绝所有导入
+	}
+
 	return &NodeConfig{
 		NodeID:      nodeID,
 		ClientPort:  clientPort,
 		ClusterPort: clusterPort,
 		SeedRoutes:  seedRoutes,
-		UserConfig: &UserPermissionConfig{
-			Username:       "dchat_user",
-			Password:       "dchat_pass",
-			PublishAllow:   []string{"*"}, // 允许发布所有主题
-			PublishDeny:    []string{},
-			SubscribeAllow: subscribePermissions, // 用户指定的订阅权限
-			SubscribeDeny:  []string{},           // 如果有allow，则不设置deny
-			AllowResponses: true,
+		NodeConfig: &NodePermissionConfig{
+			NodeName:    nodeID,
+			Credentials: "dchat_node_credentials",
+			Permissions: &NodePermissions{
+				Routes: &RoutePermissions{
+					Import: &SubjectPermission{
+						Allow: importPermissions, // 根据用户配置允许导入特定主题
+						Deny:  []string{},
+					},
+					Export: &SubjectPermission{
+						Allow: []string{"*"}, // 允许导出所有主题到其他节点
+						Deny:  []string{},
+					},
+				},
+				Response: &ResponsePermission{
+					MaxMsgs: 1000,
+					Expires: time.Minute,
+				},
+			},
 		},
 	}
 }

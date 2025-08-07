@@ -234,3 +234,40 @@ go build -o examples/cluster_demo examples/cluster_demo.go
 - 测试2展示chat.*通配符权限匹配
 - 测试3验证精确主题权限控制
 - 权限违规会在服务器端记录并拒绝操作
+
+### 10. 去中心化架构优化：RoutePermissions重构 (2025-08-07 15:10)
+
+#### 执行步骤：
+```bash
+# 1. 重构权限架构，从用户级改为节点级
+# 使用RoutePermissions替代UserPermissions，更符合去中心化设计
+
+# 2. 更新权限配置结构
+go build -o demo/permission_demo demo/permission_demo.go
+go build -o examples/cluster_demo examples/cluster_demo.go
+
+# 3. 验证节点间路由权限控制
+./demo/permission_demo     # 测试路由权限效果
+./examples/cluster_demo    # 验证集群节点启动
+```
+
+#### 重构原因：
+- **架构层次错误**：之前使用客户端级的server.Permissions，不适合去中心化节点间通信
+- **权限级别混淆**：应该在节点级别控制消息路由，而非客户端级别控制订阅
+- **去中心化本质**：节点间通过RoutePermissions控制Import/Export，实现真正的分布式权限管理
+
+#### 实现内容：
+- **RoutePermissions架构**：使用Import/Export权限控制节点间消息流向
+- **NodePermissionConfig**：节点级权限配置，替代用户级权限
+- **集群路由权限**：在server.ClusterOpts中配置RoutePermissions
+- **权限语义转换**：订阅权限→导入权限，发布权限→导出权限
+
+#### 技术特点：
+- 节点自治：每个节点独立配置Import/Export权限
+- 去中心化安全：权限在节点级别执行，无需中央权限服务器
+- 路由控制：精确控制哪些主题可以在节点间传播
+- 架构清晰：权限与网络拓扑分离，易于扩展和维护
+
+#### 架构对比：
+- **重构前**: 客户端→服务器端用户权限→单节点权限控制
+- **重构后**: 节点→节点路由权限→去中心化权限网络
