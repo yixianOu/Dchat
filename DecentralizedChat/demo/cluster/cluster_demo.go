@@ -6,6 +6,7 @@ import (
 
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/nats"
+	"DecentralizedChat/internal/nscsetup"
 	"DecentralizedChat/internal/routes"
 )
 
@@ -22,6 +23,12 @@ func main() {
 
 	// 启用Routes集群，使用自动检测的本地IP
 	cfg.EnableRoutes(cfg.Network.LocalIP, 4222, 6222, []string{})
+
+	// 首次运行：通过 nsc 初始化 SYS 账户与 resolver.conf，并将路径写入配置
+	if err := nscsetup.EnsureSysAccountSetup(cfg); err != nil {
+		fmt.Printf("初始化 NSC/SYS 失败: %v\n", err)
+		return
+	}
 
 	// 2. 创建节点管理器
 	nodeManager := routes.NewNodeManager(cfg.Routes.ClusterName, cfg.Routes.Host)

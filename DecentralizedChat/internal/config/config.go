@@ -15,6 +15,7 @@ type Config struct {
 	NATS    NATSConfig    `json:"nats"`
 	Routes  RoutesConfig  `json:"routes"`
 	UI      UIConfig      `json:"ui"`
+	NSC     NSCConfig     `json:"nsc"`
 }
 
 type UserConfig struct {
@@ -70,6 +71,16 @@ type UIConfig struct {
 	Language string `json:"language"`
 }
 
+// NSCConfig 用于持久化 nsc 生成的关键文件路径
+type NSCConfig struct {
+	Operator      string `json:"operator"`      // 如 local
+	StoreDir      string `json:"store_dir"`     // nsc 存储目录
+	KeysDir       string `json:"keys_dir"`      // nsc 密钥目录
+	SysAccountJWT string `json:"sys_jwt_path"`  // SYS 账户 JWT 文件路径
+	SysPubPath    string `json:"sys_pub_path"`  // SYS 公钥文件路径（本程序写入）
+	SysSeedPath   string `json:"sys_seed_path"` // SYS 种子私钥路径（若可获取）
+}
+
 var defaultConfig = Config{
 	User: UserConfig{
 		ID:       "",
@@ -115,6 +126,14 @@ var defaultConfig = Config{
 	UI: UIConfig{
 		Theme:    "dark",
 		Language: "zh-CN",
+	},
+	NSC: NSCConfig{
+		Operator:      "",
+		StoreDir:      "",
+		KeysDir:       "",
+		SysAccountJWT: "",
+		SysPubPath:    "",
+		SysSeedPath:   "",
 	},
 }
 

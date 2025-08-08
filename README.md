@@ -15,6 +15,30 @@
   - 强制用户提供配置，避免隐式默认值
 - **API 简化**：ClusterManager 现在要求明确的配置参数，增强了代码的可预测性和可维护性。
 
+## 2025-08-08 记录：引入 NSC/JWT 凭据与首次初始化
+- 客户端优先使用 NSC 生成的 .creds（JWT/公私钥）进行鉴权（internal/nats/service.go）。
+- 配置新增字段：
+  - nats.creds_file；routes.resolver_config；nsc 子配置（operator/store_dir/keys_dir/sys_jwt_path/sys_pub_path/sys_seed_path）。
+- 新增 internal/nscsetup/setup.go：首次运行时通过 nsc 创建/初始化 operator(SYS)、生成 resolver.conf，写入 ~/.dchat；并把路径持久化到 ~/.dchat/config.json。
+- 内置节点（internal/routes/routes.go）支持加载 resolver.conf，去除用户名/密码。
+- demo/cluster 改为使用 creds 连接，并在启动前调用首启初始化。
+
+实际执行步骤（zsh）：
+```bash
+# 构建（可选）
+cd /home/orician/workspace/learn/nats/Dchat
+go build ./...
+
+# 运行 demo（首次会自动执行 nsc 初始化并生成 ~/.dchat/resolver.conf）
+go run DecentralizedChat/demo/cluster/cluster_demo.go
+```
+备注：nsc 调用包含如下动作（由程序自动执行）：
+- nsc add operator --generate-signing-key --sys --name local
+- nsc edit operator --require-signing-keys --account-jwt-server-url nats://<host>:<port>
+- nsc edit account SYS --sk generate
+- nsc generate config --nats-resolver --sys-account SYS > ~/.dchat/resolver.conf
+```
+
 ## 运行演示
 ```bash
 cd DecentralizedChat
