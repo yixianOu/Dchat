@@ -138,6 +138,23 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		},
 	}
 
+	// 从本地配置中加载受信任的公钥（路径列表），并设置到 TrustedKeys
+	// 这些公钥通常是 Operator 或系统账户的 nkey 公钥字符串（每行一个）
+	trustedKeys := make([]string, 0)
+	// 这里我们读取默认配置路径（~/.dchat/config.json）并解析 NSC.TrustedPubKeyPaths
+	// 为避免循环依赖，这里简单读取文件内容：每个路径文件包含单行公钥
+	// 注意：如果文件不可用，将忽略
+	// 使用 config 包读取可避免重复 JSON 解析，但引入 import cycle，因此直接读取文件内容
+	// 改为由外部调用方确保 NSC.TrustedPubKeyPaths 被设置并传给本函数更佳
+	// 目前采取折中方案：若 NodeConfig.Credentials == "use_local_trust" 则尝试加载本地信任
+	if config.NodeConfig != nil && config.NodeConfig.Credentials == "use_local_trust" {
+		// no-op placeholder，未来可扩展通过注入方式传入公钥
+	}
+	// 无论如何，如果 opts.TrustedKeys 为空且我们成功读取到 trustedKeys，则设置
+	if len(trustedKeys) > 0 && len(opts.TrustedKeys) == 0 {
+		opts.TrustedKeys = trustedKeys
+	}
+
 	// 配置种子路由（连接到其他节点）
 	if len(config.SeedRoutes) > 0 {
 		routeURLs := make([]*url.URL, len(config.SeedRoutes))

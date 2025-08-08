@@ -73,12 +73,13 @@ type UIConfig struct {
 
 // NSCConfig 用于持久化 nsc 生成的关键文件路径
 type NSCConfig struct {
-	Operator      string `json:"operator"`      // 如 local
-	StoreDir      string `json:"store_dir"`     // nsc 存储目录
-	KeysDir       string `json:"keys_dir"`      // nsc 密钥目录
-	SysAccountJWT string `json:"sys_jwt_path"`  // SYS 账户 JWT 文件路径
-	SysPubPath    string `json:"sys_pub_path"`  // SYS 公钥文件路径（本程序写入）
-	SysSeedPath   string `json:"sys_seed_path"` // SYS 种子私钥路径（若可获取）
+	Operator           string   `json:"operator"`             // 如 local
+	StoreDir           string   `json:"store_dir"`            // nsc 存储目录
+	KeysDir            string   `json:"keys_dir"`             // nsc 密钥目录
+	SysAccountJWT      string   `json:"sys_jwt_path"`         // SYS 账户 JWT 文件路径
+	SysPubPath         string   `json:"sys_pub_path"`         // SYS 公钥文件路径（本程序写入）
+	SysSeedPath        string   `json:"sys_seed_path"`        // SYS 种子私钥路径（若可获取）
+	TrustedPubKeyPaths []string `json:"trusted_pubkey_paths"` // 受信任的公钥文件路径列表
 }
 
 var defaultConfig = Config{
@@ -128,12 +129,13 @@ var defaultConfig = Config{
 		Language: "zh-CN",
 	},
 	NSC: NSCConfig{
-		Operator:      "",
-		StoreDir:      "",
-		KeysDir:       "",
-		SysAccountJWT: "",
-		SysPubPath:    "",
-		SysSeedPath:   "",
+		Operator:           "",
+		StoreDir:           "",
+		KeysDir:            "",
+		SysAccountJWT:      "",
+		SysPubPath:         "",
+		SysSeedPath:        "",
+		TrustedPubKeyPaths: []string{},
 	},
 }
 
@@ -339,6 +341,12 @@ func (c *Config) AddSubscribePermission(subject string) {
 	c.removeFromDenyList(subject)
 }
 
+// AddSubscribePermissionAndSave 添加订阅权限并持久化到本地配置文件
+func (c *Config) AddSubscribePermissionAndSave(subject string) error {
+	c.AddSubscribePermission(subject)
+	return SaveConfig(c)
+}
+
 // RemoveSubscribePermission 移除订阅权限
 func (c *Config) RemoveSubscribePermission(subject string) {
 	// 从允许列表中移除
@@ -349,6 +357,32 @@ func (c *Config) RemoveSubscribePermission(subject string) {
 		}
 	}
 	c.NATS.Permissions.Subscribe.Allow = newAllow
+}
+
+// RemoveSubscribePermissionAndSave 移除订阅权限并持久化到本地配置文件
+func (c *Config) RemoveSubscribePermissionAndSave(subject string) error {
+	c.RemoveSubscribePermission(subject)
+	return SaveConfig(c)
+}
+
+// AddTrustedPubKeyPath 添加受信任公钥路径（去重）并可选持久化
+func (c *Config) AddTrustedPubKeyPath(path string, persist bool) error {
+	if path == "" {
+		return nil
+	}
+	for _, p := range c.NSC.TrustedPubKeyPaths {
+		if p == path {
+			if persist {
+				return SaveConfig(c)
+			}
+			return nil
+		}
+	}
+	c.NSC.TrustedPubKeyPaths = append(c.NSC.TrustedPubKeyPaths, path)
+	if persist {
+		return SaveConfig(c)
+	}
+	return nil
 }
 
 // removeFromDenyList 从拒绝列表中移除主题
