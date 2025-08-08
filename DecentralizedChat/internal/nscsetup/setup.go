@@ -100,7 +100,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		}
 	}
 
-	// 将公钥写入文件，便于“路径”持久化
+	// 将公钥写入文件，便于"路径"持久化
 	var sysPubPath string
 	if sysPubKey != "" {
 		sysPubPath = filepath.Join(confDir, "sys.pub")

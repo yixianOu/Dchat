@@ -543,7 +543,7 @@ TODO:
 6. 完善React组件的TypeScript类型定义
 7. 添加React状态管理（Context或Redux）
 8. 实现React组件的单元测试
-9. 因为每个nats是消息队列,每个节点通过subject与集群通信,每个节点默认publish subject all-allow,subscribe subject  all-deny.(用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化)
+9. 因为每个nats是消息队列,每个节点通过subject与集群通信,每个节点默认publish-subject: all-allow, subscribe subject: all-deny.
 10. 客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token,通过公私钥加密通信
 11. 用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地存储信任的公钥列表
 12. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具

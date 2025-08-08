@@ -112,33 +112,30 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		return fmt.Errorf("本地节点已启动: %s", nm.node.ID)
 	}
 
-	// 创建服务器选项，重点配置路由权限
-	opts := &server.Options{
-		ServerName: config.NodeID,
-		Host:       nm.host,
-		Port:       config.ClientPort,
-		Cluster: server.ClusterOpts{
-			Name: nm.clusterName,
-			Host: nm.host,
-			Port: config.ClusterPort,
-			// 配置路由权限
-			Permissions: &server.RoutePermissions{
-				Import: &server.SubjectPermission{
-					Allow: config.NodeConfig.Permissions.Routes.Import.Allow,
-					Deny:  config.NodeConfig.Permissions.Routes.Import.Deny,
-				},
-				Export: &server.SubjectPermission{
-					Allow: config.NodeConfig.Permissions.Routes.Export.Allow,
-					Deny:  config.NodeConfig.Permissions.Routes.Export.Deny,
-				},
-			},
-		},
+	// 创建服务器选项；为避免覆盖，先加载 resolver.conf，再设置字段
+	opts := &server.Options{}
+	if config.ResolverConfigPath != "" {
+		if err := opts.ProcessConfigFile(config.ResolverConfigPath); err != nil {
+			return fmt.Errorf("加载 resolver.conf 失败: %v", err)
+		}
 	}
 
-	// 如果提供了 resolver.conf，则加载以启用基于 JWT 的鉴权与账号解析
-	if config.ResolverConfigPath != "" {
-		// 注意：ProcessConfigFile 会在当前 Options 上应用配置
-		_ = opts.ProcessConfigFile(config.ResolverConfigPath)
+	// 之后设置本地覆盖项（不会被配置文件覆盖）
+	opts.ServerName = config.NodeID
+	opts.Host = nm.host
+	opts.Port = config.ClientPort
+	opts.Cluster.Name = nm.clusterName
+	opts.Cluster.Host = nm.host
+	opts.Cluster.Port = config.ClusterPort
+	opts.Cluster.Permissions = &server.RoutePermissions{
+		Import: &server.SubjectPermission{
+			Allow: config.NodeConfig.Permissions.Routes.Import.Allow,
+			Deny:  config.NodeConfig.Permissions.Routes.Import.Deny,
+		},
+		Export: &server.SubjectPermission{
+			Allow: config.NodeConfig.Permissions.Routes.Export.Allow,
+			Deny:  config.NodeConfig.Permissions.Routes.Export.Deny,
+		},
 	}
 
 	// 配置种子路由（连接到其他节点）
