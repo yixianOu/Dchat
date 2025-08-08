@@ -32,9 +32,10 @@ type NetworkConfig struct {
 
 type NATSConfig struct {
 	URL           string        `json:"url"`            // NATS服务器URL
-	User          string        `json:"user"`           // 用户名
-	Password      string        `json:"password"`       // 密码
-	Token         string        `json:"token"`          // 令牌
+	User          string        `json:"user"`           // 用户名（兼容遗留，不推荐）
+	Password      string        `json:"password"`       // 密码（兼容遗留，不推荐）
+	Token         string        `json:"token"`          // 令牌（可选）
+	CredsFile     string        `json:"creds_file"`     // NSC 生成的 .creds 凭据文件路径
 	Timeout       time.Duration `json:"timeout"`        // 连接超时
 	MaxReconnect  int           `json:"max_reconnect"`  // 最大重连次数
 	ReconnectWait time.Duration `json:"reconnect_wait"` // 重连等待时间
@@ -54,13 +55,14 @@ type PermissionRules struct {
 }
 
 type RoutesConfig struct {
-	Enabled     bool     `json:"enabled"`      // 是否启用Routes集群
-	Host        string   `json:"host"`         // 主机地址
-	ClientPort  int      `json:"client_port"`  // 客户端端口
-	ClusterPort int      `json:"cluster_port"` // 集群端口
-	ClusterName string   `json:"cluster_name"` // 集群名称
-	SeedRoutes  []string `json:"seed_routes"`  // 种子路由
-	NodeName    string   `json:"node_name"`    // 节点名称
+	Enabled        bool     `json:"enabled"`         // 是否启用Routes集群
+	Host           string   `json:"host"`            // 主机地址
+	ClientPort     int      `json:"client_port"`     // 客户端端口
+	ClusterPort    int      `json:"cluster_port"`    // 集群端口
+	ClusterName    string   `json:"cluster_name"`    // 集群名称
+	SeedRoutes     []string `json:"seed_routes"`     // 种子路由
+	NodeName       string   `json:"node_name"`       // 节点名称
+	ResolverConfig string   `json:"resolver_config"` // nsc 生成的 resolver.conf 路径（启用基于 JWT 的鉴权）
 }
 
 type UIConfig struct {
@@ -85,6 +87,7 @@ var defaultConfig = Config{
 		User:          "",
 		Password:      "",
 		Token:         "",
+		CredsFile:     "",
 		Timeout:       5 * time.Second,
 		MaxReconnect:  -1,
 		ReconnectWait: time.Second,
@@ -100,13 +103,14 @@ var defaultConfig = Config{
 		},
 	},
 	Routes: RoutesConfig{
-		Enabled:     false,
-		Host:        "", // 需要用户配置
-		ClientPort:  0,  // 需要用户配置
-		ClusterPort: 0,  // 需要用户配置
-		ClusterName: "dchat_network",
-		SeedRoutes:  []string{},
-		NodeName:    "dchat_node",
+		Enabled:        false,
+		Host:           "", // 需要用户配置
+		ClientPort:     0,  // 需要用户配置
+		ClusterPort:    0,  // 需要用户配置
+		ClusterName:    "dchat_network",
+		SeedRoutes:     []string{},
+		NodeName:       "dchat_node",
+		ResolverConfig: "",
 	},
 	UI: UIConfig{
 		Theme:    "dark",
@@ -194,6 +198,7 @@ func (c *Config) GetNATSClientConfig() map[string]interface{} {
 		"user":           c.NATS.User,
 		"password":       c.NATS.Password,
 		"token":          c.NATS.Token,
+		"creds_file":     c.NATS.CredsFile,
 		"name":           c.User.Nickname,
 		"timeout":        c.NATS.Timeout,
 		"max_reconnect":  c.NATS.MaxReconnect,
@@ -204,13 +209,14 @@ func (c *Config) GetNATSClientConfig() map[string]interface{} {
 // GetRoutesConfig 获取Routes集群配置
 func (c *Config) GetRoutesConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":      c.Routes.Enabled,
-		"host":         c.Routes.Host,
-		"client_port":  c.Routes.ClientPort,
-		"cluster_port": c.Routes.ClusterPort,
-		"cluster_name": c.Routes.ClusterName,
-		"seed_routes":  c.Routes.SeedRoutes,
-		"node_name":    c.Routes.NodeName,
+		"enabled":         c.Routes.Enabled,
+		"host":            c.Routes.Host,
+		"client_port":     c.Routes.ClientPort,
+		"cluster_port":    c.Routes.ClusterPort,
+		"cluster_name":    c.Routes.ClusterName,
+		"seed_routes":     c.Routes.SeedRoutes,
+		"node_name":       c.Routes.NodeName,
+		"resolver_config": c.Routes.ResolverConfig,
 	}
 }
 

@@ -14,9 +14,10 @@ type Service struct {
 
 type ClientConfig struct {
 	URL           string        // 例如 nats://127.0.0.1:4222
-	User          string        // 可选
-	Password      string        // 可选
+	User          string        // 可选（不推荐）
+	Password      string        // 可选（不推荐）
 	Token         string        // 可选
+	CredsFile     string        // NSC 生成的 .creds 文件路径（推荐）
 	Name          string        // 客户端名称
 	Timeout       time.Duration // 连接超时
 	MaxReconnect  int           // 最大重连次数，-1为无限重连
@@ -27,12 +28,13 @@ type ClientConfig struct {
 func NewService(cfg ClientConfig) (*Service, error) {
 	var opts []nats.Option
 
-	// 鉴权选项
-	if cfg.User != "" && cfg.Password != "" {
-		opts = append(opts, nats.UserInfo(cfg.User, cfg.Password))
-	}
-	if cfg.Token != "" {
+	// 鉴权选项优先顺序：creds -> token -> user/pass
+	if cfg.CredsFile != "" {
+		opts = append(opts, nats.UserCredentials(cfg.CredsFile))
+	} else if cfg.Token != "" {
 		opts = append(opts, nats.Token(cfg.Token))
+	} else if cfg.User != "" && cfg.Password != "" {
+		opts = append(opts, nats.UserInfo(cfg.User, cfg.Password))
 	}
 
 	// 客户端名称

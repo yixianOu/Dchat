@@ -27,11 +27,12 @@ type NodeManager struct {
 
 // NodeConfig NATS节点配置
 type NodeConfig struct {
-	NodeID      string
-	ClientPort  int
-	ClusterPort int
-	SeedRoutes  []string
-	NodeConfig  *NodePermissionConfig // 节点权限配置
+	NodeID             string
+	ClientPort         int
+	ClusterPort        int
+	SeedRoutes         []string
+	NodeConfig         *NodePermissionConfig // 节点权限配置
+	ResolverConfigPath string                // 可选：resolver.conf 路径，启用基于 JWT 的账户解析
 }
 
 // SubjectPermission 主题权限配置
@@ -132,9 +133,12 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 				},
 			},
 		},
-		// 为本地客户端创建简单的用户认证
-		Username: "dchat_client",
-		Password: "dchat_pass",
+	}
+
+	// 如果提供了 resolver.conf，则加载以启用基于 JWT 的鉴权与账号解析
+	if config.ResolverConfigPath != "" {
+		// 注意：ProcessConfigFile 会在当前 Options 上应用配置
+		_ = opts.ProcessConfigFile(config.ResolverConfigPath)
 	}
 
 	// 配置种子路由（连接到其他节点）
@@ -239,7 +243,8 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 
 // GetNodeCredentials 获取节点连接凭据（客户端用）
 func (nm *NodeManager) GetNodeCredentials() (string, string) {
-	return "dchat_client", "dchat_pass"
+	// 使用 JWT/creds 时，客户端侧不再提供用户名/密码
+	return "", ""
 }
 
 // CreateNodeConfigWithPermissions 创建带权限的节点配置

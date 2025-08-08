@@ -28,7 +28,10 @@ func main() {
 
 	// 3. 启动本地节点
 	nodeID := fmt.Sprintf("demo-node-%s", cfg.Routes.Host)
-	err = nodeManager.StartLocalNode(nodeID, 4222, 6222, []string{})
+	// 如果配置了 resolver.conf，则在本地节点启用 JWT 账户解析
+	startCfg := nodeManager.CreateNodeConfigWithPermissions(nodeID, 4222, 6222, []string{}, cfg.NATS.Permissions.Subscribe.Allow)
+	startCfg.ResolverConfigPath = cfg.Routes.ResolverConfig
+	err = nodeManager.StartLocalNodeWithConfig(startCfg)
 	if err != nil {
 		fmt.Printf("启动本地节点失败: %v\n", err)
 		return
@@ -48,13 +51,11 @@ func main() {
 		fmt.Printf("%s: %v\n", key, value)
 	}
 
-	// 5. 创建NATS客户端（使用服务器配置的凭据）
-	username, password := nodeManager.GetNodeCredentials()
+	// 5. 创建NATS客户端（使用 NSC 生成的 creds 文件）
 	clientCfg := nats.ClientConfig{
-		URL:      nodeManager.GetClientURL(),
-		User:     username,
-		Password: password,
-		Name:     "DemoClient",
+		URL:       nodeManager.GetClientURL(),
+		CredsFile: cfg.NATS.CredsFile,
+		Name:      "DemoClient",
 	}
 
 	client, err := nats.NewService(clientCfg)
