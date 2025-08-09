@@ -17,6 +17,10 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
+const (
+	DefaultClientPort = 4222
+)
+
 // EnsureSysAccountSetup performs first-run initialization:
 // 1) Initialize local nsc operator (with SYS) enabling signing keys & account resolver URL
 // 2) Generate resolver.conf -> ~/.dchat/resolver.conf and persist path into config
@@ -42,7 +46,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 			host = cfg.Network.LocalIP
 		}
 		if cfg.Routes.ClientPort == 0 {
-			cfg.Routes.ClientPort = 4222
+			cfg.Routes.ClientPort = DefaultClientPort
 		}
 		natsURL = fmt.Sprintf("nats://%s:%d", host, cfg.Routes.ClientPort)
 		cfg.NATS.URL = natsURL

@@ -12,6 +12,11 @@ import (
 	gonats "github.com/nats-io/nats.go"
 )
 
+const (
+	DefaultClientPort  = 4222
+	DefaultClusterPort = 6222
+)
+
 func main() {
 	// 演示新的单节点管理设计
 	fmt.Println("=== DecentralizedChat 节点演示 ===")
@@ -24,7 +29,7 @@ func main() {
 	}
 
 	// 启用Routes集群，使用自动检测的本地IP
-	cfg.EnableRoutes(cfg.Network.LocalIP, 4222, 6222, []string{})
+	cfg.EnableRoutes(cfg.Network.LocalIP, DefaultClientPort, DefaultClusterPort, []string{})
 
 	// 首次运行：通过 nsc 初始化 SYS 账户与 resolver.conf，并将路径写入配置
 	if err := nscsetup.EnsureSysAccountSetup(cfg); err != nil {
@@ -38,7 +43,7 @@ func main() {
 	// 3. 启动本地节点
 	nodeID := fmt.Sprintf("demo-node-%s", cfg.Routes.Host)
 	// 如果配置了 resolver.conf，则在本地节点启用 JWT 账户解析
-	startCfg := nodeManager.CreateNodeConfigWithPermissions(nodeID, 4222, 6222, []string{}, cfg.NATS.Permissions.Subscribe.Allow)
+	startCfg := nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, []string{}, cfg.NATS.Permissions.Subscribe.Allow)
 	startCfg.ResolverConfigPath = cfg.Routes.ResolverConfig
 	err = nodeManager.StartLocalNodeWithConfig(startCfg)
 	if err != nil {

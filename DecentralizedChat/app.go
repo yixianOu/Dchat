@@ -35,6 +35,11 @@ func NewApp() *App {
 
 // OnStartup is called when the app starts. The context is saved
 // so we can call the runtime methods
+const (
+	DefaultClientPort  = 4222
+	DefaultClusterPort = 6222
+)
+
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
 
@@ -58,15 +63,15 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// Update network info in config
 	a.config.Network.LocalIP = localIP
-	a.config.EnableRoutes(localIP, 4222, 6222, []string{})
+	a.config.EnableRoutes(localIP, DefaultClientPort, DefaultClusterPort, []string{})
 
 	// Initialize node manager
 	a.nodeManager = routes.NewNodeManager("dchat-network", localIP)
 
 	// Start local NATS node
 	nodeID := fmt.Sprintf("dchat-%s", localIP)
-	clientPort := 4222
-	clusterPort := 6222
+	clientPort := DefaultClientPort
+	clusterPort := DefaultClusterPort
 	var seedRoutes []string // TODO: discover other nodes via Tailscale network
 
 	// Default allowed subscribe subjects
@@ -239,7 +244,7 @@ func (a *App) RestartNodeWithPermissions(subscribePermissions []string) error {
 
 	// Build new permission config
 	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
-		nodeID, 4222, 6222, []string{}, subscribePermissions)
+		nodeID, DefaultClientPort, DefaultClusterPort, []string{}, subscribePermissions)
 
 	// Start node
 	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {

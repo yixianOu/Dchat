@@ -11,6 +11,11 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+const (
+	DefaultClientPort  = 4222
+	DefaultClusterPort = 6222
+)
+
 func main() {
 	fmt.Println("=== NATS权限控制演示 ===")
 
@@ -21,7 +26,7 @@ func main() {
 		return
 	}
 
-	cfg.EnableRoutes(cfg.Network.LocalIP, 4222, 6222, []string{})
+	cfg.EnableRoutes(cfg.Network.LocalIP, DefaultClientPort, DefaultClusterPort, []string{})
 
 	// 2. 创建节点管理器
 	nodeManager := routes.NewNodeManager(cfg.Routes.ClusterName, cfg.Routes.Host)
@@ -42,7 +47,7 @@ func main() {
 func testPermissions(nodeManager *routes.NodeManager, nodeID string, subscribePermissions []string) {
 	// 创建带权限的节点配置
 	nodeConfig := nodeManager.CreateNodeConfigWithPermissions(
-		nodeID, 4222, 6222, []string{}, subscribePermissions)
+		nodeID, DefaultClientPort, DefaultClusterPort, []string{}, subscribePermissions)
 
 	// 启动节点
 	err := nodeManager.StartLocalNodeWithConfig(nodeConfig)
