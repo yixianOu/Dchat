@@ -29,10 +29,12 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		return nil
 	}
 
-	confDir, err := resolveConfigDir()
+	// inline resolveConfigDir
+	confPath, err := config.GetConfigPath()
 	if err != nil {
 		return err
 	}
+	confDir := filepath.Dir(confPath)
 
 	natsURL := ensureNATSURL(cfg)
 
@@ -75,14 +77,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	return nil
 }
 
-// resolveConfigDir determines the runtime config directory path
-func resolveConfigDir() (string, error) {
-	confPath, err := config.GetConfigPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Dir(confPath), nil
-}
+// removed resolveConfigDir: logic inlined in EnsureSysAccountSetup
 
 // ensureNATSURL builds and persists the NATS URL if empty; returns the URL
 func ensureNATSURL(cfg *config.Config) string {
