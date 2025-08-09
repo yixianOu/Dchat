@@ -57,6 +57,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 - 更新 README 增加本节说明
  - 重构 internal/nscsetup/setup.go：引入 execCommand 统一 run 与 runOut 的公共逻辑，消除重复代码（DRY）。
  - 合并 seed 导出与 creds 查找：exportUserSeed/exportAccountSeed 合并为 exportSeed；findUserCredsFile/findAccountCredsFile 合并为 findCredsFile，减少重复。
+ - 移除 run / runOut 包装函数，直接使用 execCommand，进一步简化命令执行路径。
 ```
 
 ## 运行演示

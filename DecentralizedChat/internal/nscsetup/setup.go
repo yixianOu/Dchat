@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,8 +42,8 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	}
 
 	// ensure default user before resolver (creds may be used by clients immediately)
-	_ = run("nsc", "add", "user", "--account", "SYS", "--name", "sys")
-	_ = run("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS") // warm-up
+	_, _, _ = execCommand("nsc", "add", "user", "--account", "SYS", "--name", "sys")
+	_, _, _ = execCommand("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS") // warm-up
 	if err := generateResolverConfig(confDir, cfg); err != nil {
 		return err
 	}
@@ -77,8 +76,6 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	return nil
 }
 
-// removed resolveConfigDir: logic inlined in EnsureSysAccountSetup
-
 // ensureNATSURL builds and persists the NATS URL if empty; returns the URL
 func ensureNATSURL(cfg *config.Config) string {
 	if cfg.NATS.URL != "" {
@@ -97,22 +94,23 @@ func ensureNATSURL(cfg *config.Config) string {
 
 // initNSCOperatorAndSys performs idempotent operator/SYS initialization
 func initNSCOperatorAndSys(natsURL string) error {
-	_ = run("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", "local")
-	if err := run("nsc", "edit", "operator", "--require-signing-keys", "--account-jwt-server-url", natsURL); err != nil {
-		return err
+	_, _, _ = execCommand("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", "local")
+	_, errb, err := execCommand("nsc", "edit", "operator", "--require-signing-keys", "--account-jwt-server-url", natsURL)
+	if err != nil {
+		return fmt.Errorf("edit operator failed: %s", strings.TrimSpace(errb.String()))
 	}
-	_ = run("nsc", "edit", "account", "SYS", "--sk", "generate")
+	_, _, _ = execCommand("nsc", "edit", "account", "SYS", "--sk", "generate")
 	return nil
 }
 
 // generateResolverConfig writes resolver.conf and updates cfg.Routes.ResolverConfig
 func generateResolverConfig(confDir string, cfg *config.Config) error {
-	resolverOut, err := runOut("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS")
+	out, errb, err := execCommand("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS")
 	if err != nil {
-		return fmt.Errorf("nsc generate config failed: %w", err)
+		return fmt.Errorf("nsc generate config failed: %s", strings.TrimSpace(errb.String()))
 	}
 	resolverPath := filepath.Join(confDir, "resolver.conf")
-	if err := os.WriteFile(resolverPath, resolverOut, 0644); err != nil {
+	if err := os.WriteFile(resolverPath, out.Bytes(), 0644); err != nil {
 		return fmt.Errorf("write resolver.conf failed: %w", err)
 	}
 	cfg.Routes.ResolverConfig = resolverPath
@@ -139,9 +137,9 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 	userName := "sys"
 	// Confirm user exists (best-effort create earlier). Try json describe to get pub key
 	var userPubKey string
-	if b, err := runOut("nsc", "describe", "user", userName, "--account", accountName, "--json"); err == nil {
+	if out, errb, err := execCommand("nsc", "describe", "user", userName, "--account", accountName, "--json"); err == nil {
 		var desc map[string]any
-		if json.Unmarshal(b, &desc) == nil {
+		if json.Unmarshal(out.Bytes(), &desc) == nil {
 			if pk, ok := desc["sub"].(string); ok {
 				userPubKey = pk
 			}
@@ -149,6 +147,8 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 				userName = nm
 			}
 		}
+	} else {
+		_ = errb
 	}
 	userCredsPath := findCredsFile(keysDir, cfg.NSC.Operator, accountName, userName)
 	var userSeedPath string
@@ -166,13 +166,15 @@ func collectAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Conf
 		accountName = "SYS"
 	}
 	var acctPubKey string
-	if b, err := runOut("nsc", "describe", "account", accountName, "--json"); err == nil {
+	if out, errb, err := execCommand("nsc", "describe", "account", accountName, "--json"); err == nil {
 		var desc map[string]any
-		if json.Unmarshal(b, &desc) == nil {
+		if json.Unmarshal(out.Bytes(), &desc) == nil {
 			if pk, ok := desc["sub"].(string); ok {
 				acctPubKey = pk
 			}
 		}
+	} else {
+		_ = errb
 	}
 	var acctSeed string
 	if acctPubKey != "" {
@@ -197,22 +199,14 @@ func execCommand(name string, args ...string) (stdout bytes.Buffer, stderr bytes
 	return
 }
 
-// run wraps execCommand discarding stdout and mapping stderr into error context.
-func run(name string, args ...string) error {
-	_, errb, err := execCommand(name, args...)
-	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
-	}
-	return nil
-}
-
 // readEnvPaths executes `nsc env` (no JSON flag available) and parses key/store directories.
 func readEnvPaths() (keysDir, storeDir string) {
-	out, err := runOut("nsc", "env")
+	out, errb, err := execCommand("nsc", "env")
 	if err != nil {
+		_ = errb
 		return defaultKeysDir(), defaultStoresDir()
 	}
-	scanner := bufio.NewScanner(bytes.NewReader(out))
+	scanner := bufio.NewScanner(bytes.NewReader(out.Bytes()))
 	var rawKeys, rawStore string
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -261,14 +255,6 @@ func defaultStoresDir() string {
 	return ""
 }
 
-func runOut(name string, args ...string) ([]byte, error) {
-	out, errb, err := execCommand(name, args...)
-	if err != nil {
-		return nil, errors.New(strings.TrimSpace(errb.String()))
-	}
-	return out.Bytes(), nil
-}
-
 // Removed JWT path persistence: we intentionally do not record user/account JWT file locations; only creds & seeds retained.
 
 // findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
@@ -299,8 +285,8 @@ func exportSeed(kind, accountName, userName, pubKey, confDir string) (string, er
 		return "", nil
 	}
 	args = append(args, "--dir", tmpDir, "--force")
-	if err := run("nsc", args...); err != nil {
-		return "", err
+	if _, errb, err := execCommand("nsc", args...); err != nil {
+		return "", fmt.Errorf("export keys failed: %s", strings.TrimSpace(errb.String()))
 	}
 	seedFile := filepath.Join(tmpDir, pubKey+".nk")
 	st, err := os.Stat(seedFile)
