@@ -559,7 +559,8 @@ TODO:
 12. 研究nsc key和jwt的关系和功能,探究去中心化鉴权
 13. 节点的import配置能否热重启
 14. 通过nsc支持帐号导出和导入,测试用户公私钥的获取
-15. 读go代码和前端代码,计划修改方案
+15. 群聊方案使用gateway集群,cluster群聊主题要deny-publish,去中心化认证用户
+16. 读go代码和前端代码,计划修改方案
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
