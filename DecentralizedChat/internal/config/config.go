@@ -79,9 +79,14 @@ type NSCConfig struct {
 	Operator           string   `json:"operator"`             // Operator name (e.g. local)
 	StoreDir           string   `json:"store_dir"`            // nsc store directory
 	KeysDir            string   `json:"keys_dir"`             // nsc keys directory
-	SysAccountJWT      string   `json:"sys_jwt_path"`         // SYS account JWT file path
-	SysCredsPath       string   `json:"sys_creds_path"`       // SYS creds file path (contains JWT + user nkey)
-	SysSeedPath        string   `json:"sys_seed_path"`        // SYS seed (private) key path if discoverable
+	UserJWTPath        string   `json:"user_jwt_path"`        // User JWT file path (e.g. stores/<op>/accounts/SYS/users/sys/sys.jwt)
+	UserCredsPath      string   `json:"user_creds_path"`      // User creds file path (.creds)
+	UserSeedPath       string   `json:"user_seed_path"`       // User seed (private) key path if exported
+	Account            string   `json:"account"`              // Owning account name (default SYS)
+	User               string   `json:"user"`                 // User name (default sys)
+	AccountJWTPath     string   `json:"account_jwt_path"`     // Account JWT path (stores/<op>/accounts/<ACC>/<ACC>.jwt)
+	AccountCredsPath   string   `json:"account_creds_path"`   // One representative creds under account (first discovered)
+	AccountSeedPath    string   `json:"account_seed_path"`    // Exported account seed path (if exported)
 	TrustedPubKeyPaths []string `json:"trusted_pubkey_paths"` // Trusted public key file paths list
 }
 
@@ -138,9 +143,14 @@ var defaultConfig = Config{
 		Operator:           "",
 		StoreDir:           "",
 		KeysDir:            "",
-		SysAccountJWT:      "",
-		SysCredsPath:       "",
-		SysSeedPath:        "",
+		UserJWTPath:        "",
+		UserCredsPath:      "",
+		UserSeedPath:       "",
+		Account:            "",
+		User:               "",
+		AccountJWTPath:     "",
+		AccountCredsPath:   "",
+		AccountSeedPath:    "",
 		TrustedPubKeyPaths: []string{},
 	},
 }
