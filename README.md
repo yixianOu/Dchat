@@ -55,6 +55,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 - 修改 internal/config/config.go 移除字段 user_jwt_path/account_jwt_path
 - 修改 internal/nscsetup/setup.go 移除相关赋值与查找函数
 - 更新 README 增加本节说明
+ - 重构 internal/nscsetup/setup.go：引入 execCommand 统一 run 与 runOut 的公共逻辑，消除重复代码（DRY）。
 ```
 
 ## 运行演示

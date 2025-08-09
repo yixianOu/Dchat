@@ -191,17 +191,24 @@ func collectAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Conf
 	return &accountArtifacts{Account: accountName, AccountCredsPath: acctCreds, AccountSeedPath: acctSeed}, nil
 }
 
-func run(name string, args ...string) error {
+// execCommand executes a command with common NSC environment settings and returns stdout/stderr buffers.
+func execCommand(name string, args ...string) (stdout bytes.Buffer, stderr bytes.Buffer, err error) {
 	cmd := exec.Command(name, args...)
-	var out bytes.Buffer
-	var errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "NSC_NO_GITHUB=1")
-	cmd.Env = append(cmd.Env, "NO_COLOR=1")
+	cmd.Env = append(cmd.Env, "NSC_NO_GITHUB=1", "NO_COLOR=1")
 	cmd.WaitDelay = 10 * time.Second
-	if err := cmd.Run(); err != nil {
+	if e := cmd.Run(); e != nil {
+		err = e
+	}
+	return
+}
+
+// run wraps execCommand discarding stdout and mapping stderr into error context.
+func run(name string, args ...string) error {
+	_, errb, err := execCommand(name, args...)
+	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
 	}
 	return nil
@@ -263,16 +270,8 @@ func defaultStoresDir() string {
 }
 
 func runOut(name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
-	var out bytes.Buffer
-	var errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "NSC_NO_GITHUB=1")
-	cmd.Env = append(cmd.Env, "NO_COLOR=1")
-	cmd.WaitDelay = 10 * time.Second
-	if err := cmd.Run(); err != nil {
+	out, errb, err := execCommand(name, args...)
+	if err != nil {
 		return nil, errors.New(strings.TrimSpace(errb.String()))
 	}
 	return out.Bytes(), nil
