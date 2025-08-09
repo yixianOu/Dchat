@@ -535,15 +535,13 @@ Alice (种子) ←→ Bob ←→ Charlie
 **核心特性**：去中心化、链式连接、零配置、企业级安全
 
 TODO:
-1. 广播tailscale内网IP和集群端口到特定主题
-2. route配置是否支持热重载?
-3. 读go代码和前端代码,计划修改方案
-4. 通过手动输入或tailscale cli自动查询ip
-5. tls加密连接,nsc自动生成凭证用于本地连接
-6. 完善React组件的TypeScript类型定义
-7. 添加React状态管理（Context或Redux）
-8. 实现React组件的单元测试
-9. 因为每个nats是消息队列,每个节点通过subject与集群通信,每个节点默认publish-subject: all-allow, subscribe subject: all-deny.
-10. 客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token,通过公私钥加密通信
-11. 用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表
-12. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具
+1. route配置是否支持热重载? (不支持也无需)
+2. 因为每个nats是消息队列,每个节点通过subject与集群通信,每个节点默认publish-subject: all-allow, subscribe subject: all-deny. ok
+3.  客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token,通过公私钥加密通信 ok
+4.  用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表 ok
+5. tls加密连接,nsc自动生成凭证用于本地连接 ok
+6. 完善React组件的TypeScript类型定义,添加React状态管理（Context或Redux）
+7. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题
+8.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具
+9.  公私钥传输和解密每一条消息
+10. 读go代码和前端代码,计划修改方案
