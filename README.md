@@ -546,20 +546,18 @@ Alice (种子) ←→ Bob ←→ Charlie
 **核心特性**：去中心化、链式连接、零配置、企业级安全
 
 TODO:
-1. route配置是否支持热重载? (不支持也无需)
-2. 因为每个nats是消息队列,每个节点通过subject与集群通信,每个节点默认publish-subject: all-allow, subscribe subject: all-deny. ok
-3.  客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token,通过公私钥加密通信 ok
-4.  用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表 ok
-5. tls加密连接,nsc自动生成凭证用于本地连接 ok
-6. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
-7.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
-8.  测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
-9.  通过nsc支持配置导出和导入(等)
-10. 群聊方案使用gateway集群,cluster群聊主题要deny-publish,去中心化认证用户(等)
-11. 配置修改为wire依赖注入(等)
-12. cluster节点的import配置能否热重启
-13. 公私钥传输和解密私聊信息
-14. wails集成前端
+1. 因为每个nats是消息队列,每个节点通过subject与集群通信,每个节点默认publish-subject: all-allow, subscribe subject: all-deny. ok
+2.  客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token ok
+3.  用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表 ok
+4. nsc自动生成凭证用于本地连接 ok
+5. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
+6.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
+7.  测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
+8.  通过nsc支持配置导出和导入(等)
+9.  配置修改为wire依赖注入(等)
+10. cluster节点的import配置能否热重启
+11. tls加密连接,公私钥传输和解密私聊信息
+12. wails集成前端
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
