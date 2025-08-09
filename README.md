@@ -544,4 +544,5 @@ TODO:
 7. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题
 8.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具
 9.  公私钥传输和解密每一条消息
-10. 读go代码和前端代码,计划修改方案
+10. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化
+11. 读go代码和前端代码,计划修改方案

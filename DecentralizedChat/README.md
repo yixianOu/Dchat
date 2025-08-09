@@ -271,3 +271,96 @@ go build -o examples/cluster_demo examples/cluster_demo.go
 #### 架构对比：
 - **重构前**: 客户端→服务器端用户权限→单节点权限控制
 - **重构后**: 节点→节点路由权限→去中心化权限网络
+
+### 11. 身份认证升级：用户名/密码 -> JWT 公私钥机制 (2025-08-08 11:30)
+
+#### 执行步骤：
+```bash
+# 1. 自动初始化(首次运行)生成 Operator + SYS 账户与 resolver.conf
+go run DecentralizedChat/demo/cluster/cluster_demo.go
+
+# 2. 查看生成的配置文件 (默认 ~/.dchat/config.json)
+cat ~/.dchat/config.json | jq '.NSC'
+
+# 3. 使用生成的 creds 连接客户端
+go run DecentralizedChat/demo/cluster/cluster_demo.go
+```
+
+#### 实现内容：
+- 集成 nsc 自动化: 首次启动检测无 Operator/SYS 时自动执行 nsc 命令生成相关目录与 JWT/creds
+- 配置新增: NATS.CredsFile, Routes.ResolverConfigPath, NSCConfig(OperatorDir, AccountsDir, KeysDir, SysCreds, SysJwt, SysPubKey, ResolverConf)
+- 服务端加载 resolver.conf 建立内嵌账户解析器
+- 客户端优先级: creds > token > user/pass
+
+#### 安全收益：
+- 移除明文用户名/密码
+- 采用短生命周期签权 (基于 nsc 生成的用户 JWT)
+- 为后续多账户与签发策略扩展奠定基础
+
+### 12. 动态订阅权限与可信公钥路径持久化 (2025-08-08 12:10)
+
+#### 执行步骤：
+```bash
+# 添加订阅允许主题
+go run cmd/tool/add_sub_allow.go chat.room.1
+
+# 配置写入后再次运行节点演示
+go run DecentralizedChat/demo/cluster/cluster_demo.go
+```
+
+#### 实现内容：
+- 配置新增字段: Routes.SubscribeAllow 动态白名单 + 方法 Add/RemoveSubscribePermissionAndSave
+- 可信公钥列表: NSC.TrustedPubKeyPaths + AddTrustedPubKeyPath (后续将映射到 server.Options.TrustedKeys)
+
+### 13. 引导(bootstrap)公共节点可行性评估与初始实现 (2025-08-09 09:20)
+
+#### 目标问题：
+在完全去中心化 & NAT/Tailscale 混合网络中，首次节点如何发现其他对等节点？
+
+#### 评估方案对比：
+1. 纯 DHT: 需要额外协议与打洞，复杂度高，冷启动慢。
+2. 静态手工列表: 维护成本高，变更需重新分发。
+3. 公共引导节点(少量) + 运行期退场: 简单、延迟低、符合当前阶段最小可行实现。
+
+#### 采纳策略（当前阶段）：
+采取混合式：
+- 启动阶段: 连接 1..N 个 BootstrapServers 获取活动路由视图/对等地址
+- 达到阈值 (BootstrapMinPeers) 后: 可选主动断开公共引导 (DisconnectBootstrap=true)
+- 后续发现: 依赖现有路由传播 + Tailscale/局域广播 (未来扩展空间)
+
+#### 新增配置字段：
+```jsonc
+"Routes": {
+    "BootstrapServers": ["nats://1.2.3.4:4222"],
+    "BootstrapMinPeers": 3,
+    "DisconnectBootstrap": true
+}
+```
+
+#### 初始实现范围：
+- 配置结构与持久化已添加
+- 演示程序尝试连接首个引导节点并输出成功/失败
+- 尚未实现: 自动统计当前集群路由数并在阈值后断开逻辑 (下一步)
+- 尚未实现: 从引导节点拉取对等列表 (可通过系统账号订阅 _sys 命名空间或监控 API, 后续补充)
+
+#### 后续迭代建议：
+1. 实现 Route 连接建立后的对等统计与自动断连
+2. 监听 $SYS.ACCOUNT.*.CONNECT 事件动态收集对等
+3. 将 TrustedPubKeyPaths 解析为 TrustedKeys 注入 server.Options
+4. 如引入多引导节点：并行连接 + 超时快速失败策略
+5. 增加对 Tailscale IP 映射的过滤/优先级 (内网优先, 公网降级)
+
+#### 执行步骤(当前演示)：
+```bash
+# 编辑配置(或首次运行自动生成基础结构后手工添加BootstrapServers)
+$EDITOR ~/.dchat/config.json
+
+# 运行演示 (会尝试连接第一个Bootstrap服务器)
+go run DecentralizedChat/demo/cluster/cluster_demo.go
+```
+
+### 14. 变更记录 (本段文件追加操作日志)
+- 自动化集成 nsc 首次初始化，新增JWT凭据支持
+- 增加动态订阅允许主题与可信公钥路径列表持久化接口
+- 新增引导节点(bootstrap)配置字段与演示初始连接逻辑
+

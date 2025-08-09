@@ -56,14 +56,17 @@ type PermissionRules struct {
 }
 
 type RoutesConfig struct {
-	Enabled        bool     `json:"enabled"`         // 是否启用Routes集群
-	Host           string   `json:"host"`            // 主机地址
-	ClientPort     int      `json:"client_port"`     // 客户端端口
-	ClusterPort    int      `json:"cluster_port"`    // 集群端口
-	ClusterName    string   `json:"cluster_name"`    // 集群名称
-	SeedRoutes     []string `json:"seed_routes"`     // 种子路由
-	NodeName       string   `json:"node_name"`       // 节点名称
-	ResolverConfig string   `json:"resolver_config"` // nsc 生成的 resolver.conf 路径（启用基于 JWT 的鉴权）
+	Enabled             bool     `json:"enabled"`              // 是否启用Routes集群
+	Host                string   `json:"host"`                 // 主机地址
+	ClientPort          int      `json:"client_port"`          // 客户端端口
+	ClusterPort         int      `json:"cluster_port"`         // 集群端口
+	ClusterName         string   `json:"cluster_name"`         // 集群名称
+	SeedRoutes          []string `json:"seed_routes"`          // 种子路由
+	NodeName            string   `json:"node_name"`            // 节点名称
+	ResolverConfig      string   `json:"resolver_config"`      // nsc 生成的 resolver.conf 路径（启用基于 JWT 的鉴权）
+	BootstrapServers    []string `json:"bootstrap_servers"`    // 公网引导节点列表（可选）
+	BootstrapMinPeers   int      `json:"bootstrap_min_peers"`  // 达到此对等数量后可断开引导
+	DisconnectBootstrap bool     `json:"disconnect_bootstrap"` // 达标后是否主动断开引导连接
 }
 
 type UIConfig struct {
@@ -115,14 +118,17 @@ var defaultConfig = Config{
 		},
 	},
 	Routes: RoutesConfig{
-		Enabled:        false,
-		Host:           "", // 需要用户配置
-		ClientPort:     0,  // 需要用户配置
-		ClusterPort:    0,  // 需要用户配置
-		ClusterName:    "dchat_network",
-		SeedRoutes:     []string{},
-		NodeName:       "dchat_node",
-		ResolverConfig: "",
+		Enabled:             false,
+		Host:                "", // 需要用户配置
+		ClientPort:          0,  // 需要用户配置
+		ClusterPort:         0,  // 需要用户配置
+		ClusterName:         "dchat_network",
+		SeedRoutes:          []string{},
+		NodeName:            "dchat_node",
+		ResolverConfig:      "",
+		BootstrapServers:    []string{},
+		BootstrapMinPeers:   4,
+		DisconnectBootstrap: true,
 	},
 	UI: UIConfig{
 		Theme:    "dark",
@@ -230,14 +236,17 @@ func (c *Config) GetNATSClientConfig() map[string]interface{} {
 // GetRoutesConfig 获取Routes集群配置
 func (c *Config) GetRoutesConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":         c.Routes.Enabled,
-		"host":            c.Routes.Host,
-		"client_port":     c.Routes.ClientPort,
-		"cluster_port":    c.Routes.ClusterPort,
-		"cluster_name":    c.Routes.ClusterName,
-		"seed_routes":     c.Routes.SeedRoutes,
-		"node_name":       c.Routes.NodeName,
-		"resolver_config": c.Routes.ResolverConfig,
+		"enabled":              c.Routes.Enabled,
+		"host":                 c.Routes.Host,
+		"client_port":          c.Routes.ClientPort,
+		"cluster_port":         c.Routes.ClusterPort,
+		"cluster_name":         c.Routes.ClusterName,
+		"seed_routes":          c.Routes.SeedRoutes,
+		"node_name":            c.Routes.NodeName,
+		"resolver_config":      c.Routes.ResolverConfig,
+		"bootstrap_servers":    c.Routes.BootstrapServers,
+		"bootstrap_min_peers":  c.Routes.BootstrapMinPeers,
+		"disconnect_bootstrap": c.Routes.DisconnectBootstrap,
 	}
 }
 

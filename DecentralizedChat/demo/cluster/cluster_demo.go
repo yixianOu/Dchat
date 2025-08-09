@@ -8,6 +8,8 @@ import (
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/nscsetup"
 	"DecentralizedChat/internal/routes"
+
+	gonats "github.com/nats-io/nats.go"
 )
 
 func main() {
@@ -77,6 +79,19 @@ func main() {
 	fmt.Printf("✅ 本地IP: %s\n", cfg.Network.LocalIP)
 
 	// 6. 测试JSON消息
+
+	// 如果存在 bootstrap server 配置，尝试连接一个进行可达性演示（仅演示，不做发现扩散）
+	if len(cfg.Routes.BootstrapServers) > 0 && cfg.NATS.CredsFile != "" {
+		bs := cfg.Routes.BootstrapServers[0]
+		fmt.Printf("尝试连接引导节点: %s\n", bs)
+		bsConn, bErr := gonats.Connect(bs, gonats.UserCredentials(cfg.NATS.CredsFile))
+		if bErr != nil {
+			fmt.Printf("引导节点连接失败: %v\n", bErr)
+		} else {
+			fmt.Printf("引导节点连接成功: %s\n", bsConn.ConnectedUrl())
+			defer bsConn.Close()
+		}
+	}
 	testData := map[string]interface{}{
 		"message":   "Hello DecentralizedChat!",
 		"timestamp": time.Now(),
