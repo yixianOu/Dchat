@@ -40,6 +40,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 
 - 简化 SYS JWT 路径解析：移除多次回退 (JSON/文本) 解析逻辑，改为单次通过目录结构推导 `stores/<operator>/accounts/SYS/SYS.jwt`。
 - 种子获取方式变更：不再遍历 keys 目录匹配公钥，改用 `nsc export keys --accounts --account SYS` 导出种子并写入本地配置目录。
+- 清理: 移除未使用的 firstMatch 助手与 regexp 依赖（JWT 路径解析已无需正则）。
 ```
 
 ## 运行演示

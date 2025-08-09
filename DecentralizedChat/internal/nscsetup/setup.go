@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -245,15 +244,6 @@ func runOut(name string, args ...string) ([]byte, error) {
 		return nil, errors.New(strings.TrimSpace(errb.String()))
 	}
 	return out.Bytes(), nil
-}
-
-func firstMatch(s, pattern string) string {
-	re := regexp.MustCompile(pattern)
-	m := re.FindStringSubmatch(s)
-	if len(m) >= 2 {
-		return strings.TrimSpace(m[1])
-	}
-	return ""
 }
 
 // findAccountJWTPath simplified: only support current observed layout
