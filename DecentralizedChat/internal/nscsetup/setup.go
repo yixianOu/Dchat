@@ -65,10 +65,8 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	cfg.NSC.KeysDir = keysDir
 	cfg.NSC.Account = userMeta.Account
 	cfg.NSC.User = userMeta.User
-	cfg.NSC.UserJWTPath = userMeta.UserJWTPath
 	cfg.NSC.UserSeedPath = userMeta.UserSeedPath
 	cfg.NSC.UserCredsPath = userMeta.UserCredsPath
-	cfg.NSC.AccountJWTPath = acctMeta.AccountJWTPath
 	cfg.NSC.AccountCredsPath = acctMeta.AccountCredsPath
 	cfg.NSC.AccountSeedPath = acctMeta.AccountSeedPath
 
@@ -131,7 +129,6 @@ func generateResolverConfig(confDir string, cfg *config.Config) error {
 type userArtifacts struct {
 	Account       string
 	User          string
-	UserJWTPath   string
 	UserCredsPath string
 	UserSeedPath  string
 }
@@ -139,7 +136,6 @@ type userArtifacts struct {
 // accountArtifacts holds account-level artifacts
 type accountArtifacts struct {
 	Account          string
-	AccountJWTPath   string
 	AccountCredsPath string
 	AccountSeedPath  string
 }
@@ -161,7 +157,6 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 			}
 		}
 	}
-	userJWTPath := findUserJWTPath(storeDir, cfg.NSC.Operator, accountName, userName)
 	userCredsPath := findUserCredsFile(keysDir, cfg.NSC.Operator, accountName, userName)
 	var userSeedPath string
 	if userPubKey != "" { // export user key
@@ -169,7 +164,7 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 			userSeedPath = p
 		}
 	}
-	return &userArtifacts{Account: accountName, User: userName, UserJWTPath: userJWTPath, UserCredsPath: userCredsPath, UserSeedPath: userSeedPath}, nil
+	return &userArtifacts{Account: accountName, User: userName, UserCredsPath: userCredsPath, UserSeedPath: userSeedPath}, nil
 }
 
 // collectAccountArtifacts gathers account-level jwt/creds/seed (seed export optional)
@@ -186,7 +181,6 @@ func collectAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Conf
 			}
 		}
 	}
-	acctJWTPath := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, "")
 	acctCreds := findAccountCredsFile(keysDir, cfg.NSC.Operator, accountName)
 	var acctSeed string
 	if acctPubKey != "" {
@@ -194,7 +188,7 @@ func collectAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Conf
 			acctSeed = p
 		}
 	}
-	return &accountArtifacts{Account: accountName, AccountJWTPath: acctJWTPath, AccountCredsPath: acctCreds, AccountSeedPath: acctSeed}, nil
+	return &accountArtifacts{Account: accountName, AccountCredsPath: acctCreds, AccountSeedPath: acctSeed}, nil
 }
 
 func run(name string, args ...string) error {
@@ -284,31 +278,7 @@ func runOut(name string, args ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// findAccountJWTPath simplified: only support current observed layout
-// stores/<operator>/accounts/<ACCOUNT>/<ACCOUNT>.jwt
-// findAccountJWTPath remains for potential future use (account-level ops) - currently unused but retained minimal.
-func findAccountJWTPath(storeDir, operator, accountName, _ string) string { // nolint:unused
-	if storeDir == "" || operator == "" || accountName == "" {
-		return ""
-	}
-	p := filepath.Join(storeDir, operator, "accounts", accountName, accountName+".jwt")
-	if st, err := os.Stat(p); err == nil && !st.IsDir() {
-		return p
-	}
-	return ""
-}
-
-// findUserJWTPath: stores/<operator>/accounts/<ACCOUNT>/users/<user>/<user>.jwt
-func findUserJWTPath(storeDir, operator, accountName, userName string) string {
-	if storeDir == "" || operator == "" || accountName == "" || userName == "" {
-		return ""
-	}
-	p := filepath.Join(storeDir, operator, "accounts", accountName, "users", userName, userName+".jwt")
-	if st, err := os.Stat(p); err == nil && !st.IsDir() {
-		return p
-	}
-	return ""
-}
+// Removed JWT path persistence: we intentionally do not record user/account JWT file locations; only creds & seeds retained.
 
 // findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
 // exportAccountSeed uses `nsc export keys --accounts --account <name>` to obtain the account seed for the identity key.

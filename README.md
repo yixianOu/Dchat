@@ -42,6 +42,19 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 - 种子获取方式变更：不再遍历 keys 目录匹配公钥，改用 `nsc export keys --accounts --account SYS` 导出种子并写入本地配置目录。
 - 清理: 移除未使用的 firstMatch 助手与 regexp 依赖（JWT 路径解析已无需正则）。
 - 配置调整：NSC 配置改为存储用户级 (SYS/sys) 的 JWT/creds/seed（user_jwt_path/user_creds_path/user_seed_path, 增加 account/user 字段），不再持久化账户级 JWT。
+
+## 2025-08-09 调整：停止记录 JWT 路径，仅保留 nkey (seed) 与 creds
+- 移除 NSCConfig 中 user_jwt_path 与 account_jwt_path 字段及默认值。
+- 删除 setup 初始化中对用户与账户 JWT 路径的收集与持久化逻辑，仅保留：
+  - 用户级：user_creds_path, user_seed_path
+  - 账户级：account_creds_path, account_seed_path
+- 移除 findUserJWTPath / findAccountJWTPath 方法，避免不必要的磁盘路径依赖。
+- 目的：运行期只需 creds（含 JWT + 签名身份）与必要的私钥 seed；JWT 原始文件路径不再需要持久化。
+
+操作日志：
+- 修改 internal/config/config.go 移除字段 user_jwt_path/account_jwt_path
+- 修改 internal/nscsetup/setup.go 移除相关赋值与查找函数
+- 更新 README 增加本节说明
 ```
 
 ## 运行演示
