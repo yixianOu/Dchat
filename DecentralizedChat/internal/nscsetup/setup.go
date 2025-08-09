@@ -17,24 +17,24 @@ import (
 	"github.com/nats-io/nkeys"
 )
 
-// EnsureSysAccountSetup 在首次运行时：
-// 1) 初始化本地 nsc operator（带 sys）并启用签名密钥与账号解析 URL
-// 2) 生成 resolver.conf 写入到 ~/.dchat/resolver.conf 并回写到配置
-// 3) 采集并持久化 SYS 账户的 JWT 与密钥路径（将公钥写入 ~/.dchat/sys.pub，以路径形式保存）
+// EnsureSysAccountSetup performs first-run initialization:
+// 1) Initialize local nsc operator (with SYS) enabling signing keys & account resolver URL
+// 2) Generate resolver.conf -> ~/.dchat/resolver.conf and persist path into config
+// 3) Collect & persist SYS account JWT, public key (write ~/.dchat/sys.pub) and seed path if discoverable
 func EnsureSysAccountSetup(cfg *config.Config) error {
-	// 如果已经配置了 resolver.conf，认为已完成初始化
+	// Skip if already initialized
 	if cfg.Routes.ResolverConfig != "" {
 		return nil
 	}
 
-	// 获取配置目录
+	// Determine config directory
 	confPath, err := config.GetConfigPath()
 	if err != nil {
 		return err
 	}
 	confDir := filepath.Dir(confPath)
 
-	// 设置 NATS URL（账号解析 URL）
+	// Ensure NATS URL (for account resolver URL)
 	natsURL := cfg.NATS.URL
 	if natsURL == "" {
 		host := cfg.Routes.Host
@@ -48,23 +48,23 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		cfg.NATS.URL = natsURL
 	}
 
-	// 执行 nsc 初始化流程（幂等）
+	// Idempotent nsc initialization sequence
 	_ = run("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", "local")
 	_ = run("nsc", "edit", "operator", "--require-signing-keys", "--account-jwt-server-url", natsURL)
 	_ = run("nsc", "edit", "account", "SYS", "--sk", "generate")
 
-	// 生成 resolver.conf 内容
+	// Generate resolver.conf content
 	resolverOut, err := runOut("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS")
 	if err != nil {
-		return fmt.Errorf("nsc generate config 失败: %w", err)
+		return fmt.Errorf("nsc generate config failed: %w", err)
 	}
 	resolverPath := filepath.Join(confDir, "resolver.conf")
 	if err := os.WriteFile(resolverPath, resolverOut, 0644); err != nil {
-		return fmt.Errorf("写入 resolver.conf 失败: %w", err)
+		return fmt.Errorf("write resolver.conf failed: %w", err)
 	}
 	cfg.Routes.ResolverConfig = resolverPath
 
-	// 获取 nsc 环境信息（JSON）以获得存储目录
+	// Inspect nsc environment (JSON) to obtain store & keys directories
 	envJSON, _ := runOut("nsc", "env", "-J")
 	var env map[string]any
 	_ = json.Unmarshal(envJSON, &env)
@@ -76,7 +76,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		storeDir = v
 	}
 
-	// 描述 SYS 账户，尽量拿到 JWT 路径与公钥
+	// Describe SYS account to obtain JWT path & public key
 	sysDescJSON, jerr := runOut("nsc", "describe", "account", "SYS", "-J")
 	var sysJWTPath, sysPubKey string
 	if jerr == nil {
@@ -100,14 +100,14 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		}
 	}
 
-	// 将公钥写入文件，便于"路径"持久化
+	// Write public key to file for path persistence
 	var sysPubPath string
 	if sysPubKey != "" {
 		sysPubPath = filepath.Join(confDir, "sys.pub")
 		_ = os.WriteFile(sysPubPath, []byte(sysPubKey+"\n"), 0644)
 	}
 
-	// 尝试定位 SYS 账户的私钥种子文件（在 KeysDir 下扫描并匹配公钥）
+	// Attempt to locate SYS seed file by matching public key under KeysDir
 	var sysSeedPath string
 	if keysDir != "" && sysPubKey != "" {
 		if p, _ := findSeedByPublicKey(keysDir, sysPubKey); p != "" {
@@ -115,7 +115,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		}
 	}
 
-	// 将路径写回配置（NSC 子配置）
+	// Persist collected paths into config
 	cfg.NSC.Operator = "local"
 	cfg.NSC.StoreDir = storeDir
 	cfg.NSC.KeysDir = keysDir
@@ -123,9 +123,9 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	cfg.NSC.SysSeedPath = sysSeedPath
 	cfg.NSC.SysPubPath = sysPubPath
 
-	// 保存配置
+	// Save updated config
 	if err := config.SaveConfig(cfg); err != nil {
-		return fmt.Errorf("保存配置失败: %w", err)
+		return fmt.Errorf("save config failed: %w", err)
 	}
 	return nil
 }
@@ -171,7 +171,7 @@ func firstMatch(s, pattern string) string {
 	return ""
 }
 
-// findSeedByPublicKey 遍历 keysDir 寻找与 pubKey 匹配的种子文件路径。
+// findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
 func findSeedByPublicKey(keysDir, pubKey string) (string, error) {
 	var matched string
 	_ = filepath.WalkDir(keysDir, func(path string, d os.DirEntry, err error) error {

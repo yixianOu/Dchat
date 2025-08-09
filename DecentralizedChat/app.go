@@ -22,7 +22,7 @@ type App struct {
 	config      *config.Config
 }
 
-// TailscaleStatus 返回给前端的网络状态
+// TailscaleStatus returned to frontend representing network status
 type TailscaleStatus struct {
 	Connected bool   `json:"connected"`
 	IP        string `json:"ip"`
@@ -38,7 +38,7 @@ func NewApp() *App {
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
 
-	// 加载配置
+	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Printf("Failed to load config: %v", err)
@@ -46,37 +46,37 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.config = cfg
 
-	// 初始化Tailscale管理器
+	// Initialize Tailscale manager
 	a.tailscale = network.NewTailscaleManager()
 
-	// 获取本机Tailscale IP
+	// Obtain local Tailscale IP
 	localIP, err := a.tailscale.GetLocalIP()
 	if err != nil {
 		log.Printf("Warning: Failed to get Tailscale IP, using localhost: %v", err)
 		localIP = "127.0.0.1"
 	}
 
-	// 更新配置中的网络信息
+	// Update network info in config
 	a.config.Network.LocalIP = localIP
 	a.config.EnableRoutes(localIP, 4222, 6222, []string{})
 
-	// 初始化节点管理器
+	// Initialize node manager
 	a.nodeManager = routes.NewNodeManager("dchat-network", localIP)
 
-	// 启动本地NATS节点
+	// Start local NATS node
 	nodeID := fmt.Sprintf("dchat-%s", localIP)
 	clientPort := 4222
 	clusterPort := 6222
-	var seedRoutes []string // TODO: 从Tailscale网络发现其他节点
+	var seedRoutes []string // TODO: discover other nodes via Tailscale network
 
-	// 默认允许的订阅主题
+	// Default allowed subscribe subjects
 	defaultSubscribePermissions := []string{
-		"chat.*",   // 聊天室主题
-		"_INBOX.*", // 响应主题
-		"system.*", // 系统主题
+		"chat.*",   // chat rooms
+		"_INBOX.*", // inbox responses
+		"system.*", // system topics
 	}
 
-	// 创建带权限配置的节点
+	// Create node config with permissions
 	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
 		nodeID, clientPort, clusterPort, seedRoutes, defaultSubscribePermissions)
 
@@ -86,10 +86,10 @@ func (a *App) OnStartup(ctx context.Context) {
 		return
 	}
 
-	// 获取连接凭据
+	// Get auth credentials (unused with creds/JWT model currently)
 	username, password := a.nodeManager.GetNodeCredentials()
 
-	// 初始化NATS客户端服务（使用服务器配置的用户凭据）
+	// Initialize NATS client service (legacy user/pass path)
 	natsConfig := nats.ClientConfig{
 		URL:      a.nodeManager.GetClientURL(),
 		User:     username,
@@ -102,12 +102,12 @@ func (a *App) OnStartup(ctx context.Context) {
 		log.Printf("Warning: Failed to start NATS service: %v", err)
 	}
 
-	// 初始化聊天服务
+	// Initialize chat service
 	if a.natsSvc != nil {
 		a.chatSvc = chat.NewService(a.natsSvc)
 	}
 
-	// 保存配置
+	// Persist configuration
 	if err := config.SaveConfig(a.config); err != nil {
 		log.Printf("Warning: Failed to save config: %v", err)
 	}
@@ -115,7 +115,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	log.Println("DChat application started successfully")
 }
 
-// GetTailscaleStatus 获取Tailscale连接状态
+// GetTailscaleStatus returns Tailscale connectivity status
 func (a *App) GetTailscaleStatus() TailscaleStatus {
 	if a.tailscale == nil {
 		return TailscaleStatus{Connected: false, IP: ""}
@@ -132,10 +132,10 @@ func (a *App) GetTailscaleStatus() TailscaleStatus {
 	}
 }
 
-// GetConnectedRooms 获取已连接的聊天室列表
+// GetConnectedRooms returns list of joined chat rooms
 func (a *App) GetConnectedRooms() []string {
 	if a.chatSvc == nil {
-		return []string{"general"} // 默认聊天室
+		return []string{"general"} // default room
 	}
 
 	rooms := a.chatSvc.GetRooms()
@@ -146,15 +146,15 @@ func (a *App) GetConnectedRooms() []string {
 	return rooms
 }
 
-// JoinChatRoom 加入聊天室
+// JoinChatRoom joins a chat room
 func (a *App) JoinChatRoom(roomName string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
 	}
 
-	// 聊天室主题权限已在服务器启动时配置（chat.*）
+	// Room subject permissions enforced at server start (chat.*)
 	return a.chatSvc.JoinRoom(roomName)
-} // SendMessage 发送消息
+} // SendMessage sends a message
 func (a *App) SendMessage(roomName, message string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
@@ -163,7 +163,7 @@ func (a *App) SendMessage(roomName, message string) error {
 	return a.chatSvc.SendMessage(roomName, message)
 }
 
-// GetChatHistory 获取聊天历史
+// GetChatHistory returns history of a room
 func (a *App) GetChatHistory(roomName string) ([]*chat.Message, error) {
 	if a.chatSvc == nil {
 		return nil, fmt.Errorf("chat service not initialized")
@@ -172,7 +172,7 @@ func (a *App) GetChatHistory(roomName string) ([]*chat.Message, error) {
 	return a.chatSvc.GetHistory(roomName)
 }
 
-// SetUserInfo 设置用户信息
+// SetUserInfo sets current user metadata
 func (a *App) SetUserInfo(nickname, avatar string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
@@ -182,11 +182,11 @@ func (a *App) SetUserInfo(nickname, avatar string) error {
 	return nil
 }
 
-// GetNetworkStats 获取网络统计信息
+// GetNetworkStats aggregates network statistics
 func (a *App) GetNetworkStats() map[string]interface{} {
 	stats := make(map[string]interface{})
 
-	// Tailscale状态
+	// Tailscale status
 	if a.tailscale != nil {
 		tailscaleStatus, _ := a.tailscale.GetStatus()
 		stats["tailscale"] = map[string]interface{}{
@@ -196,12 +196,12 @@ func (a *App) GetNetworkStats() map[string]interface{} {
 		}
 	}
 
-	// NATS节点状态
+	// NATS node status
 	if a.nodeManager != nil {
 		stats["nats_node"] = a.nodeManager.GetClusterInfo()
 	}
 
-	// NATS客户端状态
+	// NATS client status
 	if a.natsSvc != nil {
 		stats["nats_client"] = a.natsSvc.GetStats()
 	}
@@ -209,7 +209,7 @@ func (a *App) GetNetworkStats() map[string]interface{} {
 	return stats
 }
 
-// GetNodeCredentials 获取NATS连接凭据
+// GetNodeCredentials returns client credentials
 func (a *App) GetNodeCredentials() (string, string) {
 	if a.nodeManager != nil {
 		return a.nodeManager.GetNodeCredentials()
@@ -217,36 +217,36 @@ func (a *App) GetNodeCredentials() (string, string) {
 	return "", ""
 }
 
-// RestartNodeWithPermissions 重启节点并应用新权限
+// RestartNodeWithPermissions restarts node applying new subscribe permissions
 func (a *App) RestartNodeWithPermissions(subscribePermissions []string) error {
 	if a.nodeManager == nil {
-		return fmt.Errorf("节点管理器未初始化")
+		return fmt.Errorf("node manager not initialized")
 	}
 
-	// 停止当前节点
+	// Stop current node
 	if err := a.nodeManager.StopLocalNode(); err != nil {
 		log.Printf("停止节点时出错: %v", err)
 	}
 
-	// 关闭当前NATS连接
+	// Close current NATS connection
 	if a.natsSvc != nil {
 		a.natsSvc.Close()
 	}
 
-	// 获取当前配置信息
+	// Read current config
 	localIP := a.config.Network.LocalIP
 	nodeID := fmt.Sprintf("dchat-%s", localIP)
 
-	// 创建新的权限配置
+	// Build new permission config
 	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
 		nodeID, 4222, 6222, []string{}, subscribePermissions)
 
-	// 启动节点
+	// Start node
 	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {
-		return fmt.Errorf("重启节点失败: %v", err)
+		return fmt.Errorf("restart node failed: %v", err)
 	}
 
-	// 重新初始化NATS客户端
+	// Recreate NATS client
 	username, password := a.nodeManager.GetNodeCredentials()
 	natsConfig := nats.ClientConfig{
 		URL:      a.nodeManager.GetClientURL(),
@@ -258,10 +258,10 @@ func (a *App) RestartNodeWithPermissions(subscribePermissions []string) error {
 	var err error
 	a.natsSvc, err = nats.NewService(natsConfig)
 	if err != nil {
-		return fmt.Errorf("重新连接NATS失败: %v", err)
+		return fmt.Errorf("reconnect NATS failed: %v", err)
 	}
 
-	// 重新初始化聊天服务
+	// Recreate chat service
 	if a.natsSvc != nil {
 		a.chatSvc = chat.NewService(a.natsSvc)
 	}

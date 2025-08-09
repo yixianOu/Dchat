@@ -363,4 +363,5 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 - 自动化集成 nsc 首次初始化，新增JWT凭据支持
 - 增加动态订阅允许主题与可信公钥路径列表持久化接口
 - 新增引导节点(bootstrap)配置字段与演示初始连接逻辑
+- 将 internal/ 下核心 Go 源码文件内中文注释统一翻译为英文（config.go, routes.go, nscsetup/setup.go, nats/service.go, app.go）
 

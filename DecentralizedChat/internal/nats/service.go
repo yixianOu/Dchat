@@ -13,22 +13,22 @@ type Service struct {
 }
 
 type ClientConfig struct {
-	URL           string        // 例如 nats://127.0.0.1:4222
-	User          string        // 可选（不推荐）
-	Password      string        // 可选（不推荐）
-	Token         string        // 可选
-	CredsFile     string        // NSC 生成的 .creds 文件路径（推荐）
-	Name          string        // 客户端名称
-	Timeout       time.Duration // 连接超时
-	MaxReconnect  int           // 最大重连次数，-1为无限重连
-	ReconnectWait time.Duration // 重连等待时间
+	URL           string        // e.g. nats://127.0.0.1:4222
+	User          string        // Optional legacy username (not recommended)
+	Password      string        // Optional legacy password (not recommended)
+	Token         string        // Optional auth token
+	CredsFile     string        // Path to NSC generated .creds file (preferred)
+	Name          string        // Client name
+	Timeout       time.Duration // Connect timeout
+	MaxReconnect  int           // Max reconnect attempts (-1 infinite)
+	ReconnectWait time.Duration // Wait between reconnect attempts
 }
 
-// 新建NATS客户端服务，支持鉴权
+// NewService creates a NATS client service with auth support
 func NewService(cfg ClientConfig) (*Service, error) {
 	var opts []nats.Option
 
-	// 鉴权选项优先顺序：creds -> token -> user/pass
+	// Auth priority: creds -> token -> user/pass
 	if cfg.CredsFile != "" {
 		opts = append(opts, nats.UserCredentials(cfg.CredsFile))
 	} else if cfg.Token != "" {
@@ -37,22 +37,22 @@ func NewService(cfg ClientConfig) (*Service, error) {
 		opts = append(opts, nats.UserInfo(cfg.User, cfg.Password))
 	}
 
-	// 客户端名称
+	// Client name option
 	if cfg.Name != "" {
 		opts = append(opts, nats.Name(cfg.Name))
 	}
 
-	// 连接超时
+	// Timeout option
 	if cfg.Timeout > 0 {
 		opts = append(opts, nats.Timeout(cfg.Timeout))
 	} else {
 		opts = append(opts, nats.Timeout(5*time.Second))
 	}
 
-	// 重连配置
+	// Reconnect settings
 	maxReconnect := cfg.MaxReconnect
 	if maxReconnect == 0 {
-		maxReconnect = -1 // 默认无限重连
+		maxReconnect = -1 // default infinite
 	}
 	opts = append(opts, nats.MaxReconnects(maxReconnect))
 
@@ -62,15 +62,15 @@ func NewService(cfg ClientConfig) (*Service, error) {
 	}
 	opts = append(opts, nats.ReconnectWait(reconnectWait))
 
-	// 连接事件处理
+	// Connection event handlers
 	opts = append(opts,
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
-				fmt.Printf("NATS连接断开: %v\n", err)
+				fmt.Printf("NATS disconnected: %v\n", err)
 			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			fmt.Printf("NATS重新连接到: %s\n", nc.ConnectedUrl())
+			fmt.Printf("NATS reconnected to: %s\n", nc.ConnectedUrl())
 		}),
 	)
 
@@ -104,7 +104,7 @@ func (s *Service) PublishJSON(subject string, data interface{}) error {
 	return nil
 }
 
-// RequestJSON 发送JSON请求并等待响应
+// RequestJSON sends a JSON request and waits for a reply
 func (s *Service) RequestJSON(subject string, data interface{}, timeout time.Duration) (*nats.Msg, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -118,11 +118,11 @@ func (s *Service) RequestJSON(subject string, data interface{}, timeout time.Dur
 	return msg, nil
 }
 
-// SubscribeJSON 订阅JSON消息
+// SubscribeJSON subscribes and forwards raw JSON payload to handler
 func (s *Service) SubscribeJSON(subject string, handler func(data []byte) error) error {
 	_, err := s.conn.Subscribe(subject, func(msg *nats.Msg) {
 		if err := handler(msg.Data); err != nil {
-			fmt.Printf("处理JSON消息失败: %v\n", err)
+			fmt.Printf("failed to process JSON message: %v\n", err)
 		}
 	})
 	if err != nil {

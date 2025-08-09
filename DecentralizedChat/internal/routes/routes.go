@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nats-server/v2/server"
 )
 
-// LocalNode 本地NATS节点
+// LocalNode represents a local embedded NATS server instance
 type LocalNode struct {
 	ID          string
 	Server      *server.Server
@@ -18,55 +18,55 @@ type LocalNode struct {
 	ClusterName string
 }
 
-// NodeManager 单节点管理器（适用于去中心化应用）
+// NodeManager manages a single local node (fits decentralized single-node-per-app model)
 type NodeManager struct {
 	node        *LocalNode
 	clusterName string
 	host        string
 }
 
-// NodeConfig NATS节点配置
+// NodeConfig defines runtime parameters for the local node
 type NodeConfig struct {
 	NodeID             string
 	ClientPort         int
 	ClusterPort        int
 	SeedRoutes         []string
-	NodeConfig         *NodePermissionConfig // 节点权限配置
-	ResolverConfigPath string                // 可选：resolver.conf 路径，启用基于 JWT 的账户解析
+	NodeConfig         *NodePermissionConfig // Node level permission spec
+	ResolverConfigPath string                // Optional: path to resolver.conf enabling JWT account resolver
 }
 
-// SubjectPermission 主题权限配置
+// SubjectPermission subject allow/deny definition
 type SubjectPermission struct {
 	Allow []string `json:"allow,omitempty"`
 	Deny  []string `json:"deny,omitempty"`
 }
 
-// ResponsePermission 响应权限配置
+// ResponsePermission response permission limits
 type ResponsePermission struct {
 	MaxMsgs int           `json:"max"`
 	Expires time.Duration `json:"ttl"`
 }
 
-// RoutePermissions 路由权限配置（用于去中心化节点间通信）
+// RoutePermissions controls import/export between route-connected nodes
 type RoutePermissions struct {
 	Import *SubjectPermission `json:"import"`
 	Export *SubjectPermission `json:"export"`
 }
 
-// NodePermissions 节点权限配置（替代用户权限）
+// NodePermissions encapsulates route and response permissions
 type NodePermissions struct {
 	Routes   *RoutePermissions   `json:"routes"`
 	Response *ResponsePermission `json:"responses,omitempty"`
 }
 
-// NodePermissionConfig 节点权限配置
+// NodePermissionConfig permission wrapper for a node
 type NodePermissionConfig struct {
 	NodeName    string           `json:"node_name"`
 	Credentials string           `json:"credentials"`
 	Permissions *NodePermissions `json:"permissions"`
 }
 
-// NewNodeManager 创建节点管理器
+// NewNodeManager creates a new NodeManager
 func NewNodeManager(clusterName string, host string) *NodeManager {
 	return &NodeManager{
 		clusterName: clusterName,
@@ -74,7 +74,7 @@ func NewNodeManager(clusterName string, host string) *NodeManager {
 	}
 }
 
-// StartLocalNode 启动本地NATS节点
+// StartLocalNode starts a local NATS node with default wide-open import/export
 func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort int, seedRoutes []string) error {
 	config := &NodeConfig{
 		NodeID:      nodeID,
@@ -87,17 +87,17 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 			Permissions: &NodePermissions{
 				Routes: &RoutePermissions{
 					Import: &SubjectPermission{
-						Allow: []string{"*"}, // 默认允许导入所有主题
+						Allow: []string{"*"}, // allow importing all subjects by default
 						Deny:  []string{},
 					},
 					Export: &SubjectPermission{
-						Allow: []string{"*"}, // 默认允许导出所有主题
+						Allow: []string{"*"}, // allow exporting all subjects by default
 						Deny:  []string{},
 					},
 				},
 				Response: &ResponsePermission{
-					MaxMsgs: 1000,        // 允许响应消息
-					Expires: time.Minute, // 响应过期时间
+					MaxMsgs: 1000,        // allow response messages
+					Expires: time.Minute, // response expiration
 				},
 			},
 		},
@@ -105,22 +105,22 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 	return nm.StartLocalNodeWithConfig(config)
 }
 
-// StartLocalNodeWithConfig 使用配置启动本地NATS节点
+// StartLocalNodeWithConfig starts local node with a custom configuration
 func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
-	// 检查是否已有节点运行
+	// Prevent duplicate start
 	if nm.node != nil {
-		return fmt.Errorf("本地节点已启动: %s", nm.node.ID)
+		return fmt.Errorf("local node already started: %s", nm.node.ID)
 	}
 
-	// 创建服务器选项；为避免覆盖，先加载 resolver.conf，再设置字段
+	// Create server options; load resolver.conf first to avoid overwriting later fields
 	opts := &server.Options{}
 	if config.ResolverConfigPath != "" {
 		if err := opts.ProcessConfigFile(config.ResolverConfigPath); err != nil {
-			return fmt.Errorf("加载 resolver.conf 失败: %v", err)
+			return fmt.Errorf("failed loading resolver.conf: %v", err)
 		}
 	}
 
-	// 之后设置本地覆盖项（不会被配置文件覆盖）
+	// Set local override options (these take precedence)
 	opts.ServerName = config.NodeID
 	opts.Host = nm.host
 	opts.Port = config.ClientPort
@@ -138,30 +138,24 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		},
 	}
 
-	// 从本地配置中加载受信任的公钥（路径列表），并设置到 TrustedKeys
-	// 这些公钥通常是 Operator 或系统账户的 nkey 公钥字符串（每行一个）
+	// Load trusted public keys (future extension placeholder)
 	trustedKeys := make([]string, 0)
-	// 这里我们读取默认配置路径（~/.dchat/config.json）并解析 NSC.TrustedPubKeyPaths
-	// 为避免循环依赖，这里简单读取文件内容：每个路径文件包含单行公钥
-	// 注意：如果文件不可用，将忽略
-	// 使用 config 包读取可避免重复 JSON 解析，但引入 import cycle，因此直接读取文件内容
-	// 改为由外部调用方确保 NSC.TrustedPubKeyPaths 被设置并传给本函数更佳
-	// 目前采取折中方案：若 NodeConfig.Credentials == "use_local_trust" 则尝试加载本地信任
+	// If NodeConfig.Credentials == "use_local_trust" we could load keys here (not implemented)
 	if config.NodeConfig != nil && config.NodeConfig.Credentials == "use_local_trust" {
-		// no-op placeholder，未来可扩展通过注入方式传入公钥
+		// no-op placeholder for future injection
 	}
-	// 无论如何，如果 opts.TrustedKeys 为空且我们成功读取到 trustedKeys，则设置
+	// Apply if we actually loaded any and none set yet
 	if len(trustedKeys) > 0 && len(opts.TrustedKeys) == 0 {
 		opts.TrustedKeys = trustedKeys
 	}
 
-	// 配置种子路由（连接到其他节点）
+	// Configure seed routes
 	if len(config.SeedRoutes) > 0 {
 		routeURLs := make([]*url.URL, len(config.SeedRoutes))
 		for i, route := range config.SeedRoutes {
 			u, err := url.Parse(route)
 			if err != nil {
-				return fmt.Errorf("解析种子路由URL失败 %s: %v", route, err)
+				return fmt.Errorf("failed to parse seed route URL %s: %v", route, err)
 			}
 			routeURLs[i] = u
 		}
@@ -170,13 +164,13 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 
 	srv, err := server.NewServer(opts)
 	if err != nil {
-		return fmt.Errorf("创建NATS服务器失败: %v", err)
+		return fmt.Errorf("failed to create NATS server: %v", err)
 	}
 
-	// 启动服务器
+	// Start server
 	go srv.Start()
 	if !srv.ReadyForConnections(5 * time.Second) {
-		return fmt.Errorf("节点 %s 启动超时", config.NodeID)
+		return fmt.Errorf("node %s start timeout", config.NodeID)
 	}
 
 	nm.node = &LocalNode{
@@ -188,39 +182,39 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		ClusterName: nm.clusterName,
 	}
 
-	fmt.Printf("✅ 本地节点启动成功: %s (Client: %s:%d, Cluster: %s:%d)\n",
+	fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d)\n",
 		config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
-	fmt.Printf("   节点: %s, 导入权限: %v, 导出权限: %v\n",
+	fmt.Printf("   Node: %s, Import Allow: %v, Export Allow: %v\n",
 		config.NodeConfig.NodeName, config.NodeConfig.Permissions.Routes.Import.Allow, config.NodeConfig.Permissions.Routes.Export.Allow)
 	return nil
 }
 
-// StopLocalNode 停止本地节点
+// StopLocalNode stops the local node
 func (nm *NodeManager) StopLocalNode() error {
 	if nm.node == nil {
-		return fmt.Errorf("没有运行中的本地节点")
+		return fmt.Errorf("no running local node")
 	}
 
 	if nm.node.Server != nil {
 		nm.node.Server.Shutdown()
 	}
 
-	fmt.Printf("✅ 本地节点已停止: %s\n", nm.node.ID)
+	fmt.Printf("✅ Local node stopped: %s\n", nm.node.ID)
 	nm.node = nil
 	return nil
 }
 
-// GetLocalNode 获取本地节点信息
+// GetLocalNode returns the current local node instance
 func (nm *NodeManager) GetLocalNode() *LocalNode {
 	return nm.node
 }
 
-// IsRunning 检查本地节点是否运行中
+// IsRunning returns true if node is running
 func (nm *NodeManager) IsRunning() bool {
 	return nm.node != nil && nm.node.Server != nil
 }
 
-// GetClientURL 获取客户端连接URL
+// GetClientURL returns URL for clients
 func (nm *NodeManager) GetClientURL() string {
 	if nm.node == nil {
 		return ""
@@ -228,7 +222,7 @@ func (nm *NodeManager) GetClientURL() string {
 	return fmt.Sprintf("nats://%s:%d", nm.node.Host, nm.node.ClientPort)
 }
 
-// GetClusterInfo 获取集群连接信息
+// GetClusterInfo returns basic cluster info
 func (nm *NodeManager) GetClusterInfo() map[string]interface{} {
 	if nm.node == nil || nm.node.Server == nil {
 		return map[string]interface{}{
@@ -246,27 +240,27 @@ func (nm *NodeManager) GetClusterInfo() map[string]interface{} {
 	}
 }
 
-// AddSubscribePermission 动态添加订阅权限（需要重启节点生效）
+// AddSubscribePermission placeholder: dynamic permission changes require restart
 func (nm *NodeManager) AddSubscribePermission(subject string) error {
 	if nm.node == nil {
-		return fmt.Errorf("节点未启动")
+		return fmt.Errorf("node not started")
 	}
-	// 注意：NATS服务器运行时无法动态修改权限，需要重启节点
-	return fmt.Errorf("动态权限修改需要重启节点才能生效")
+	// NATS server permissions can't be mutated live; requires restart
+	return fmt.Errorf("dynamic permission change requires node restart")
 }
 
-// GetNodeCredentials 获取节点连接凭据（客户端用）
+// GetNodeCredentials returns client auth data (empty when using JWT/creds)
 func (nm *NodeManager) GetNodeCredentials() (string, string) {
-	// 使用 JWT/creds 时，客户端侧不再提供用户名/密码
+	// Not used with JWT/creds model
 	return "", ""
 }
 
-// CreateNodeConfigWithPermissions 创建带权限的节点配置
+// CreateNodeConfigWithPermissions creates node config translating subscribe permissions -> import
 func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string) *NodeConfig {
-	// 将订阅权限转换为导入权限（去中心化节点接收其他节点的消息）
+	// Translate user subscribe permissions to route import permissions
 	importPermissions := subscribePermissions
 	if len(importPermissions) == 0 {
-		importPermissions = []string{} // 空数组表示拒绝所有导入
+		importPermissions = []string{} // empty slice => deny all imports
 	}
 
 	return &NodeConfig{
@@ -280,11 +274,11 @@ func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort
 			Permissions: &NodePermissions{
 				Routes: &RoutePermissions{
 					Import: &SubjectPermission{
-						Allow: importPermissions, // 根据用户配置允许导入特定主题
+						Allow: importPermissions, // allow limited imports based on user configuration
 						Deny:  []string{},
 					},
 					Export: &SubjectPermission{
-						Allow: []string{"*"}, // 允许导出所有主题到其他节点
+						Allow: []string{"*"}, // export all subjects
 						Deny:  []string{},
 					},
 				},
