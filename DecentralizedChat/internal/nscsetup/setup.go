@@ -67,7 +67,6 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	cfg.NSC.User = userMeta.User
 	cfg.NSC.UserSeedPath = userMeta.UserSeedPath
 	cfg.NSC.UserCredsPath = userMeta.UserCredsPath
-	cfg.NSC.AccountCredsPath = acctMeta.AccountCredsPath
 	cfg.NSC.AccountSeedPath = acctMeta.AccountSeedPath
 
 	if err := config.SaveConfig(cfg); err != nil {
@@ -135,9 +134,8 @@ type userArtifacts struct {
 
 // accountArtifacts holds account-level artifacts
 type accountArtifacts struct {
-	Account          string
-	AccountCredsPath string
-	AccountSeedPath  string
+	Account         string
+	AccountSeedPath string
 }
 
 // collectUserArtifacts locates user-level JWT/creds/seed under SYS account (default user: sys)
@@ -157,10 +155,10 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 			}
 		}
 	}
-	userCredsPath := findUserCredsFile(keysDir, cfg.NSC.Operator, accountName, userName)
+	userCredsPath := findCredsFile(keysDir, cfg.NSC.Operator, accountName, userName)
 	var userSeedPath string
 	if userPubKey != "" { // export user key
-		if p, err := exportUserSeed(accountName, userName, userPubKey, confDir); err == nil && p != "" {
+		if p, err := exportSeed("user", accountName, userName, userPubKey, confDir); err == nil && p != "" {
 			userSeedPath = p
 		}
 	}
@@ -181,14 +179,13 @@ func collectAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Conf
 			}
 		}
 	}
-	acctCreds := findAccountCredsFile(keysDir, cfg.NSC.Operator, accountName)
 	var acctSeed string
 	if acctPubKey != "" {
-		if p, err := exportAccountSeed(accountName, acctPubKey, confDir); err == nil && p != "" {
+		if p, err := exportSeed("account", accountName, "", acctPubKey, confDir); err == nil && p != "" {
 			acctSeed = p
 		}
 	}
-	return &accountArtifacts{Account: accountName, AccountCredsPath: acctCreds, AccountSeedPath: acctSeed}, nil
+	return &accountArtifacts{Account: accountName, AccountSeedPath: acctSeed}, nil
 }
 
 // execCommand executes a command with common NSC environment settings and returns stdout/stderr buffers.
@@ -282,19 +279,35 @@ func runOut(name string, args ...string) ([]byte, error) {
 // findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
 // exportAccountSeed uses `nsc export keys --accounts --account <name>` to obtain the account seed for the identity key.
 // It writes/updates a stable file under confDir (e.g. sys.seed) with 0600 permission and returns its path.
-func exportUserSeed(accountName, userName, userPubKey, confDir string) (string, error) {
-	if accountName == "" || userName == "" || userPubKey == "" || confDir == "" {
+// exportSeed exports a user or account seed using nsc and writes it under confDir.
+// kind: "user" or "account". For user kind, userName must be provided.
+func exportSeed(kind, accountName, userName, pubKey, confDir string) (string, error) {
+	if accountName == "" || pubKey == "" || confDir == "" {
 		return "", nil
 	}
-	tmpDir, err := os.MkdirTemp("", "nsc-exp-user-*")
+	if kind == "user" && userName == "" { // invalid user invocation
+		return "", nil
+	}
+	prefix := "nsc-exp-" + kind + "-*"
+	tmpDir, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		return "", err
 	}
 	defer os.RemoveAll(tmpDir)
-	if err := run("nsc", "export", "keys", "--users", "--account", accountName, "--user", userName, "--dir", tmpDir, "--force"); err != nil {
+	args := []string{"export", "keys"}
+	switch kind {
+	case "user":
+		args = append(args, "--users", "--account", accountName, "--user", userName)
+	case "account":
+		args = append(args, "--accounts", "--account", accountName)
+	default:
+		return "", nil
+	}
+	args = append(args, "--dir", tmpDir, "--force")
+	if err := run("nsc", args...); err != nil {
 		return "", err
 	}
-	seedFile := filepath.Join(tmpDir, userPubKey+".nk")
+	seedFile := filepath.Join(tmpDir, pubKey+".nk")
 	st, err := os.Stat(seedFile)
 	if err != nil || st.IsDir() {
 		return "", nil
@@ -307,67 +320,19 @@ func exportUserSeed(accountName, userName, userPubKey, confDir string) (string, 
 	if seed == "" || !strings.HasPrefix(seed, "S") {
 		return "", nil
 	}
-	dest := filepath.Join(confDir, fmt.Sprintf("%s_%s.seed", strings.ToLower(accountName), strings.ToLower(userName)))
+	var dest string
+	if kind == "user" {
+		dest = filepath.Join(confDir, fmt.Sprintf("%s_%s.seed", strings.ToLower(accountName), strings.ToLower(userName)))
+	} else {
+		dest = filepath.Join(confDir, fmt.Sprintf("%s_account.seed", strings.ToLower(accountName)))
+	}
 	_ = os.WriteFile(dest, []byte(seed+"\n"), 0600)
 	return dest, nil
 }
 
-// exportAccountSeed parallels user seed export but for account keys
-func exportAccountSeed(accountName, acctPubKey, confDir string) (string, error) {
-	if accountName == "" || acctPubKey == "" || confDir == "" {
-		return "", nil
-	}
-	tmpDir, err := os.MkdirTemp("", "nsc-exp-acct-*")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(tmpDir)
-	if err := run("nsc", "export", "keys", "--accounts", "--account", accountName, "--dir", tmpDir, "--force"); err != nil {
-		return "", err
-	}
-	seedFile := filepath.Join(tmpDir, acctPubKey+".nk")
-	st, err := os.Stat(seedFile)
-	if err != nil || st.IsDir() {
-		return "", nil
-	}
-	data, err := os.ReadFile(seedFile)
-	if err != nil {
-		return "", err
-	}
-	seed := strings.TrimSpace(string(data))
-	if seed == "" || !strings.HasPrefix(seed, "S") {
-		return "", nil
-	}
-	dest := filepath.Join(confDir, fmt.Sprintf("%s_account.seed", strings.ToLower(accountName)))
-	_ = os.WriteFile(dest, []byte(seed+"\n"), 0600)
-	return dest, nil
-}
-
-// findAccountCredsFile locates a creds file for the SYS (or any) account.
-// Expected layout: <keysDir>/creds/<operator>/<ACCOUNT>/<user>.creds (e.g. sys.creds)
-func findUserCredsFile(keysDir, operator, accountName, userName string) string {
-	if keysDir == "" || operator == "" || accountName == "" || userName == "" {
-		return ""
-	}
-	base := filepath.Join(keysDir, "creds", operator, accountName)
-	entries, err := os.ReadDir(base)
-	if err != nil {
-		return ""
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if strings.EqualFold(name, userName+".creds") {
-			return filepath.Join(base, name)
-		}
-	}
-	return "" // not found (maybe no creds generated yet)
-}
-
-// findAccountCredsFile returns first creds file under an account (any user) for reference
-func findAccountCredsFile(keysDir, operator, accountName string) string {
+// findCredsFile locates a creds file. If userName provided, returns that user's creds; otherwise first creds under account.
+// Layout: <keysDir>/creds/<operator>/<ACCOUNT>/<user>.creds
+func findCredsFile(keysDir, operator, accountName, userName string) string {
 	if keysDir == "" || operator == "" || accountName == "" {
 		return ""
 	}
@@ -376,14 +341,25 @@ func findAccountCredsFile(keysDir, operator, accountName string) string {
 	if err != nil {
 		return ""
 	}
+	var first string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		name := e.Name()
-		if strings.HasSuffix(strings.ToLower(name), ".creds") {
-			return filepath.Join(base, name)
+		if !strings.HasSuffix(strings.ToLower(name), ".creds") {
+			continue
+		}
+		if userName != "" {
+			if strings.EqualFold(name, userName+".creds") {
+				return filepath.Join(base, name)
+			}
+		} else if first == "" { // capture first for account-level
+			first = filepath.Join(base, name)
 		}
 	}
-	return ""
+	if userName == "" {
+		return first
+	}
+	return "" // not found
 }
