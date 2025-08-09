@@ -80,7 +80,7 @@ type NSCConfig struct {
 	StoreDir           string   `json:"store_dir"`            // nsc store directory
 	KeysDir            string   `json:"keys_dir"`             // nsc keys directory
 	SysAccountJWT      string   `json:"sys_jwt_path"`         // SYS account JWT file path
-	SysPubPath         string   `json:"sys_pub_path"`         // SYS public key file path (written by app)
+	SysCredsPath       string   `json:"sys_creds_path"`       // SYS creds file path (contains JWT + user nkey)
 	SysSeedPath        string   `json:"sys_seed_path"`        // SYS seed (private) key path if discoverable
 	TrustedPubKeyPaths []string `json:"trusted_pubkey_paths"` // Trusted public key file paths list
 }
@@ -139,7 +139,7 @@ var defaultConfig = Config{
 		StoreDir:           "",
 		KeysDir:            "",
 		SysAccountJWT:      "",
-		SysPubPath:         "",
+		SysCredsPath:       "",
 		SysSeedPath:        "",
 		TrustedPubKeyPaths: []string{},
 	},

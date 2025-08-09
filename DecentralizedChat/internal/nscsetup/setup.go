@@ -14,8 +14,6 @@ import (
 	"time"
 
 	"DecentralizedChat/internal/config"
-
-	"github.com/nats-io/nkeys"
 )
 
 const (
@@ -59,7 +57,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	cfg.NSC.KeysDir = keysDir
 	cfg.NSC.SysAccountJWT = sysMeta.JWTPath
 	cfg.NSC.SysSeedPath = sysMeta.SeedPath
-	cfg.NSC.SysPubPath = sysMeta.PubPath
+	cfg.NSC.SysCredsPath = sysMeta.CredsPath
 
 	if err := config.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("save config failed: %w", err)
@@ -118,16 +116,18 @@ func generateResolverConfig(confDir string, cfg *config.Config) error {
 
 // sysArtifacts holds resolved paths related to SYS account
 type sysArtifacts struct {
-	JWTPath  string
-	PubPath  string
-	SeedPath string
+	JWTPath   string
+	CredsPath string
+	SeedPath  string
 }
 
 // collectSysAccountArtifacts locates JWT/public key/seed for SYS account
 func collectSysAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Config) (*sysArtifacts, error) {
-	var sysJWTPath, sysPubKey, accountName string = "", "", "SYS"
-	sysDescJSON, jerr := runOut("nsc", "describe", "account", "SYS", "--json")
-	if jerr == nil {
+	// 简化策略：仅通过已知目录结构推导 SYS 账户 JWT 路径，不做多轮回退解析。
+	// 仍尝试获取公钥以便后续查找种子文件，但不依赖其来确定 JWT 路径。
+	accountName := "SYS"
+	var sysPubKey string
+	if sysDescJSON, jerr := runOut("nsc", "describe", "account", "SYS", "--json"); jerr == nil { // best-effort
 		var desc map[string]any
 		if err := json.Unmarshal(sysDescJSON, &desc); err == nil {
 			if pk, ok := desc["sub"].(string); ok {
@@ -137,39 +137,27 @@ func collectSysAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.C
 				accountName = nm
 			}
 		}
-		candidate := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
-		if candidate != "" {
-			sysJWTPath = candidate
-		}
 	}
-	if sysJWTPath == "" { // fallback plaintext parsing
-		sysDescText, _ := runOut("nsc", "describe", "account", "SYS")
-		sysJWTPath = firstMatch(string(sysDescText), `JWT\s+file:\s+(.+)`)
-		if sysPubKey == "" {
-			sysPubKey = firstMatch(string(sysDescText), `Public\s+key:\s+([A-Z0-9]+)`)
-		}
-		if sysJWTPath == "" { // final attempt
-			candidate := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
-			if candidate != "" {
-				sysJWTPath = candidate
-			}
+	// 直接推导路径（stores/<operator>/accounts/<ACCOUNT>/<ACCOUNT>.jwt）
+	sysJWTPath := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, "")
+
+	// Locate creds file (keys/creds/<operator>/<ACCOUNT>/*.creds)
+	var sysCredsPath string
+	if keysDir != "" {
+		if p := findAccountCredsFile(keysDir, cfg.NSC.Operator, accountName); p != "" {
+			sysCredsPath = p
 		}
 	}
 
-	var sysPubPath string
-	if sysPubKey != "" {
-		sysPubPath = filepath.Join(confDir, "sys.pub")
-		_ = os.WriteFile(sysPubPath, []byte(sysPubKey+"\n"), 0644)
-	}
-
+	// Export seed via nsc instead of walking filesystem
 	var sysSeedPath string
-	if keysDir != "" && sysPubKey != "" {
-		if p, _ := findSeedByPublicKey(keysDir, sysPubKey); p != "" {
+	if sysPubKey != "" { // best-effort
+		if p, err := exportAccountSeed(accountName, sysPubKey, confDir); err == nil && p != "" {
 			sysSeedPath = p
 		}
 	}
 
-	return &sysArtifacts{JWTPath: sysJWTPath, PubPath: sysPubPath, SeedPath: sysSeedPath}, nil
+	return &sysArtifacts{JWTPath: sysJWTPath, CredsPath: sysCredsPath, SeedPath: sysSeedPath}, nil
 }
 
 func run(name string, args ...string) error {
@@ -282,45 +270,58 @@ func findAccountJWTPath(storeDir, operator, accountName, _ string) string {
 }
 
 // findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
-func findSeedByPublicKey(keysDir, pubKey string) (string, error) {
-	// Purpose: locate the NKey seed file (operator/account/user) whose public key matches pubKey.
-	// Expected layout: <keysDir>/<prefix>/<segments...>/<seedfile>, seed files usually start with 'S' (e.g., SU..., SA..., SO...).
-	// Implementation: full directory walk; no error short-circuit; returns first match.
-	var matched string
-	filepath.WalkDir(keysDir, func(path string, d os.DirEntry, err error) error {
-		if matched != "" { // already found; skip remaining entries
-			return nil
-		}
-		if err != nil || d == nil || d.IsDir() {
-			return nil
-		}
-		base := filepath.Base(path)
-		if !strings.HasPrefix(base, "S") { // seed files start with 'S'
-			return nil
-		}
-		b, rerr := os.ReadFile(path)
-		if rerr != nil {
-			return nil
-		}
-		seed := strings.TrimSpace(string(b))
-		if seed == "" {
-			return nil
-		}
-		kp, kerr := nkeys.FromSeed([]byte(seed))
-		if kerr != nil {
-			return nil
-		}
-		pk, perr := kp.PublicKey()
-		if perr != nil {
-			return nil
-		}
-		if pk == pubKey {
-			matched = path
-		}
-		return nil
-	})
-	if matched != "" {
-		return matched, nil
+// exportAccountSeed uses `nsc export keys --accounts --account <name>` to obtain the account seed for the identity key.
+// It writes/updates a stable file under confDir (e.g. sys.seed) with 0600 permission and returns its path.
+func exportAccountSeed(accountName, pubKey, confDir string) (string, error) {
+	if accountName == "" || pubKey == "" || confDir == "" {
+		return "", nil
 	}
-	return "", nil
+	tmpDir, err := os.MkdirTemp("", "nsc-exp-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmpDir)
+	// Export only account keys of given account
+	if err := run("nsc", "export", "keys", "--accounts", "--account", accountName, "--dir", tmpDir, "--force"); err != nil {
+		return "", err
+	}
+	seedFile := filepath.Join(tmpDir, pubKey+".nk")
+	if st, err := os.Stat(seedFile); err != nil || st.IsDir() {
+		return "", nil // not found (maybe signing key only)
+	}
+	data, err := os.ReadFile(seedFile)
+	if err != nil {
+		return "", err
+	}
+	seed := strings.TrimSpace(string(data))
+	if seed == "" || !strings.HasPrefix(seed, "S") { // basic sanity
+		return "", nil
+	}
+	dest := filepath.Join(confDir, strings.ToLower(accountName)+".seed")
+	// Write idempotently
+	_ = os.WriteFile(dest, []byte(seed+"\n"), 0600)
+	return dest, nil
+}
+
+// findAccountCredsFile locates a creds file for the SYS (or any) account.
+// Expected layout: <keysDir>/creds/<operator>/<ACCOUNT>/<user>.creds (e.g. sys.creds)
+func findAccountCredsFile(keysDir, operator, accountName string) string {
+	if keysDir == "" || operator == "" || accountName == "" {
+		return ""
+	}
+	base := filepath.Join(keysDir, "creds", operator, accountName)
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasSuffix(name, ".creds") { // first creds file is returned
+			return filepath.Join(base, name)
+		}
+	}
+	return ""
 }
