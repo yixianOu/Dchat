@@ -364,4 +364,6 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 - 增加动态订阅允许主题与可信公钥路径列表持久化接口
 - 新增引导节点(bootstrap)配置字段与演示初始连接逻辑
 - 将 internal/ 下核心 Go 源码文件内中文注释统一翻译为英文（config.go, routes.go, nscsetup/setup.go, nats/service.go, app.go）
+- 修正 nsc 环境解析：移除不存在的 -J 标志，改为解析 `nsc env` 文本输出提取 keys/store 目录
+- 修正 nsc describe JSON 解析：使用 sub 字段为账户公钥并推导 account.jwt 路径，移除不存在的 jwt/public_key 字段访问
 

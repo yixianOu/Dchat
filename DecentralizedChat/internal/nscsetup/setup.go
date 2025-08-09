@@ -1,6 +1,7 @@
 package nscsetup
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -68,39 +69,44 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	}
 	cfg.Routes.ResolverConfig = resolverPath
 
-	// Inspect nsc environment (JSON) to obtain store & keys directories
-	envJSON, _ := runOut("nsc", "env", "-J")
-	var env map[string]any
-	_ = json.Unmarshal(envJSON, &env)
-	var keysDir, storeDir string
-	if v, ok := env["KeysDir"].(string); ok {
-		keysDir = v
-	}
-	if v, ok := env["StoreRoot"].(string); ok {
-		storeDir = v
-	}
+	// Inspect nsc environment (text output) to obtain store & keys directories
+	keysDir, storeDir := readEnvPaths()
 
-	// Describe SYS account to obtain JWT path & public key
-	sysDescJSON, jerr := runOut("nsc", "describe", "account", "SYS", "-J")
+	// Describe SYS account JSON; public key in 'sub', account name in 'name'
+	sysDescJSON, jerr := runOut("nsc", "describe", "account", "SYS", "--json")
 	var sysJWTPath, sysPubKey string
+	var accountName string = "SYS"
 	if jerr == nil {
 		var desc map[string]any
 		if err := json.Unmarshal(sysDescJSON, &desc); err == nil {
-			if jwtObj, ok := desc["jwt"].(map[string]any); ok {
-				if p, ok := jwtObj["path"].(string); ok {
-					sysJWTPath = p
-				}
-			}
-			if pk, ok := desc["public_key"].(string); ok {
+			if pk, ok := desc["sub"].(string); ok {
 				sysPubKey = pk
+			}
+			if nm, ok := desc["name"].(string); ok && nm != "" {
+				accountName = nm
+			}
+		}
+		// Derive candidate JWT path (nsc store layout: stores/<op>/accounts/A/C/<account>/account.jwt)
+		if sysPubKey != "" {
+			candidate := deriveAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
+			if candidate != "" {
+				sysJWTPath = candidate
 			}
 		}
 	}
 	if sysJWTPath == "" {
 		sysDescText, _ := runOut("nsc", "describe", "account", "SYS")
 		sysJWTPath = firstMatch(string(sysDescText), `JWT\s+file:\s+(.+)`)
+		// Newer nsc plaintext may show 'Public key:' line (legacy); keep fallback
 		if sysPubKey == "" {
 			sysPubKey = firstMatch(string(sysDescText), `Public\s+key:\s+([A-Z0-9]+)`)
+		}
+		// If still missing path try derived again
+		if sysJWTPath == "" && sysPubKey != "" {
+			candidate := deriveAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
+			if candidate != "" {
+				sysJWTPath = candidate
+			}
 		}
 	}
 
@@ -150,6 +156,61 @@ func run(name string, args ...string) error {
 	return nil
 }
 
+// readEnvPaths executes `nsc env` (no JSON flag available) and parses key/store directories.
+func readEnvPaths() (keysDir, storeDir string) {
+	out, err := runOut("nsc", "env")
+	if err != nil {
+		return defaultKeysDir(), defaultStoresDir()
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	var rawKeys, rawStore string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "Current Store Dir") {
+			// columns separated by '|'
+			parts := strings.Split(line, "|")
+			if len(parts) >= 4 {
+				rawStore = strings.TrimSpace(parts[3])
+			}
+		} else if strings.Contains(line, "NKEYS_PATH") { // deprecated row shows effective default keys dir
+			parts := strings.Split(line, "|")
+			if len(parts) >= 4 {
+				rawKeys = strings.TrimSpace(parts[3])
+			}
+		}
+	}
+	keysDir = expandHomeOrDefault(rawKeys, defaultKeysDir())
+	storeDir = expandHomeOrDefault(rawStore, defaultStoresDir())
+	return
+}
+
+func expandHomeOrDefault(p string, def string) string {
+	if p == "" {
+		return def
+	}
+	if strings.HasPrefix(p, "~") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+		return def
+	}
+	return p
+}
+
+func defaultKeysDir() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".local", "share", "nats", "nsc", "keys")
+	}
+	return ""
+}
+
+func defaultStoresDir() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".local", "share", "nats", "nsc", "stores")
+	}
+	return ""
+}
+
 func runOut(name string, args ...string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	var out bytes.Buffer
@@ -171,6 +232,18 @@ func firstMatch(s, pattern string) string {
 	m := re.FindStringSubmatch(s)
 	if len(m) >= 2 {
 		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+// deriveAccountJWTPath constructs expected JWT path; returns empty if not found
+func deriveAccountJWTPath(storeDir, operator, accountName, pubKey string) string {
+	if storeDir == "" || operator == "" || accountName == "" || len(pubKey) < 2 {
+		return ""
+	}
+	p := filepath.Join(storeDir, operator, "accounts", string(pubKey[0]), string(pubKey[1]), accountName, "account.jwt")
+	if st, err := os.Stat(p); err == nil && !st.IsDir() {
+		return p
 	}
 	return ""
 }
