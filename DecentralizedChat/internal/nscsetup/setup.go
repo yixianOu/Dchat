@@ -27,38 +27,83 @@ const (
 // 2) Generate resolver.conf -> ~/.dchat/resolver.conf and persist path into config
 // 3) Collect & persist SYS account JWT, public key (write ~/.dchat/sys.pub) and seed path if discoverable
 func EnsureSysAccountSetup(cfg *config.Config) error {
-	// Skip if already initialized
-	if cfg.Routes.ResolverConfig != "" {
+	if cfg.Routes.ResolverConfig != "" { // already initialized
 		return nil
 	}
 
-	// Determine config directory
-	confPath, err := config.GetConfigPath()
+	confDir, err := resolveConfigDir()
 	if err != nil {
 		return err
 	}
-	confDir := filepath.Dir(confPath)
 
-	// Ensure NATS URL (for account resolver URL)
-	natsURL := cfg.NATS.URL
-	if natsURL == "" {
-		host := cfg.Routes.Host
-		if host == "" {
-			host = cfg.Network.LocalIP
-		}
-		if cfg.Routes.ClientPort == 0 {
-			cfg.Routes.ClientPort = DefaultClientPort
-		}
-		natsURL = fmt.Sprintf("nats://%s:%d", host, cfg.Routes.ClientPort)
-		cfg.NATS.URL = natsURL
+	natsURL := ensureNATSURL(cfg)
+
+	if err := initNSCOperatorAndSys(natsURL); err != nil { // idempotent
+		return err
 	}
 
-	// Idempotent nsc initialization sequence
-	_ = run("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", "local")
-	_ = run("nsc", "edit", "operator", "--require-signing-keys", "--account-jwt-server-url", natsURL)
-	_ = run("nsc", "edit", "account", "SYS", "--sk", "generate")
+	if err := generateResolverConfig(confDir, cfg); err != nil {
+		return err
+	}
 
-	// Generate resolver.conf content
+	keysDir, storeDir := readEnvPaths() // existing approach
+
+	sysMeta, err := collectSysAccountArtifacts(storeDir, keysDir, confDir, cfg)
+	if err != nil {
+		return err
+	}
+
+	// Persist
+	cfg.NSC.Operator = "local"
+	cfg.NSC.StoreDir = storeDir
+	cfg.NSC.KeysDir = keysDir
+	cfg.NSC.SysAccountJWT = sysMeta.JWTPath
+	cfg.NSC.SysSeedPath = sysMeta.SeedPath
+	cfg.NSC.SysPubPath = sysMeta.PubPath
+
+	if err := config.SaveConfig(cfg); err != nil {
+		return fmt.Errorf("save config failed: %w", err)
+	}
+	return nil
+}
+
+// resolveConfigDir determines the runtime config directory path
+func resolveConfigDir() (string, error) {
+	confPath, err := config.GetConfigPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(confPath), nil
+}
+
+// ensureNATSURL builds and persists the NATS URL if empty; returns the URL
+func ensureNATSURL(cfg *config.Config) string {
+	if cfg.NATS.URL != "" {
+		return cfg.NATS.URL
+	}
+	host := cfg.Routes.Host
+	if host == "" {
+		host = cfg.Network.LocalIP
+	}
+	if cfg.Routes.ClientPort == 0 {
+		cfg.Routes.ClientPort = DefaultClientPort
+	}
+	cfg.NATS.URL = fmt.Sprintf("nats://%s:%d", host, cfg.Routes.ClientPort)
+	return cfg.NATS.URL
+}
+
+// initNSCOperatorAndSys performs idempotent operator/SYS initialization
+func initNSCOperatorAndSys(natsURL string) error {
+	_ = run("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", "local")
+	if err := run("nsc", "edit", "operator", "--require-signing-keys", "--account-jwt-server-url", natsURL); err != nil {
+		return err
+	}
+	_ = run("nsc", "edit", "account", "SYS", "--sk", "generate")
+	return nil
+}
+
+// generateResolverConfig writes resolver.conf and updates cfg.Routes.ResolverConfig
+func generateResolverConfig(confDir string, cfg *config.Config) error {
 	resolverOut, err := runOut("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS")
 	if err != nil {
 		return fmt.Errorf("nsc generate config failed: %w", err)
@@ -68,14 +113,20 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		return fmt.Errorf("write resolver.conf failed: %w", err)
 	}
 	cfg.Routes.ResolverConfig = resolverPath
+	return nil
+}
 
-	// Inspect nsc environment (text output) to obtain store & keys directories
-	keysDir, storeDir := readEnvPaths()
+// sysArtifacts holds resolved paths related to SYS account
+type sysArtifacts struct {
+	JWTPath  string
+	PubPath  string
+	SeedPath string
+}
 
-	// Describe SYS account JSON; public key in 'sub', account name in 'name'
+// collectSysAccountArtifacts locates JWT/public key/seed for SYS account
+func collectSysAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Config) (*sysArtifacts, error) {
+	var sysJWTPath, sysPubKey, accountName string = "", "", "SYS"
 	sysDescJSON, jerr := runOut("nsc", "describe", "account", "SYS", "--json")
-	var sysJWTPath, sysPubKey string
-	var accountName string = "SYS"
 	if jerr == nil {
 		var desc map[string]any
 		if err := json.Unmarshal(sysDescJSON, &desc); err == nil {
@@ -86,21 +137,18 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 				accountName = nm
 			}
 		}
-		// Attempt to locate JWT path (support multiple nsc layouts)
 		candidate := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
 		if candidate != "" {
 			sysJWTPath = candidate
 		}
 	}
-	if sysJWTPath == "" {
+	if sysJWTPath == "" { // fallback plaintext parsing
 		sysDescText, _ := runOut("nsc", "describe", "account", "SYS")
 		sysJWTPath = firstMatch(string(sysDescText), `JWT\s+file:\s+(.+)`)
-		// Newer nsc plaintext may show 'Public key:' line (legacy); keep fallback
 		if sysPubKey == "" {
 			sysPubKey = firstMatch(string(sysDescText), `Public\s+key:\s+([A-Z0-9]+)`)
 		}
-		// If still missing path try search helper again
-		if sysJWTPath == "" {
+		if sysJWTPath == "" { // final attempt
 			candidate := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
 			if candidate != "" {
 				sysJWTPath = candidate
@@ -108,14 +156,12 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		}
 	}
 
-	// Write public key to file for path persistence
 	var sysPubPath string
 	if sysPubKey != "" {
 		sysPubPath = filepath.Join(confDir, "sys.pub")
 		_ = os.WriteFile(sysPubPath, []byte(sysPubKey+"\n"), 0644)
 	}
 
-	// Attempt to locate SYS seed file by matching public key under KeysDir
 	var sysSeedPath string
 	if keysDir != "" && sysPubKey != "" {
 		if p, _ := findSeedByPublicKey(keysDir, sysPubKey); p != "" {
@@ -123,19 +169,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		}
 	}
 
-	// Persist collected paths into config
-	cfg.NSC.Operator = "local"
-	cfg.NSC.StoreDir = storeDir
-	cfg.NSC.KeysDir = keysDir
-	cfg.NSC.SysAccountJWT = sysJWTPath
-	cfg.NSC.SysSeedPath = sysSeedPath
-	cfg.NSC.SysPubPath = sysPubPath
-
-	// Save updated config
-	if err := config.SaveConfig(cfg); err != nil {
-		return fmt.Errorf("save config failed: %w", err)
-	}
-	return nil
+	return &sysArtifacts{JWTPath: sysJWTPath, PubPath: sysPubPath, SeedPath: sysSeedPath}, nil
 }
 
 func run(name string, args ...string) error {
@@ -234,45 +268,15 @@ func firstMatch(s, pattern string) string {
 	return ""
 }
 
-// deriveAccountJWTPath constructs expected JWT path; returns empty if not found
-// findAccountJWTPath attempts multiple known nsc store layouts to locate the account JWT
-// Layouts handled:
-// 1) stores/<op>/accounts/<ACCOUNT>/<ACCOUNT>.jwt (observed current nsc)
-// 2) stores/<op>/accounts/<ACCOUNT>/account.jwt (legacy variant)
-// 3) stores/<op>/accounts/<A>/<B>/<ACCOUNT>/account.jwt (hashed two-letter layout)
-// Plus a fallback directory walk (shallow) matching <ACCOUNT>.jwt
-func findAccountJWTPath(storeDir, operator, accountName, pubKey string) string {
+// findAccountJWTPath simplified: only support current observed layout
+// stores/<operator>/accounts/<ACCOUNT>/<ACCOUNT>.jwt
+func findAccountJWTPath(storeDir, operator, accountName, _ string) string {
 	if storeDir == "" || operator == "" || accountName == "" {
 		return ""
 	}
-	accountsRoot := filepath.Join(storeDir, operator, "accounts")
-	candidates := []string{
-		filepath.Join(accountsRoot, accountName, accountName+".jwt"),
-		filepath.Join(accountsRoot, accountName, "account.jwt"),
-	}
-	if len(pubKey) >= 2 {
-		candidates = append(candidates, filepath.Join(accountsRoot, string(pubKey[0]), string(pubKey[1]), accountName, "account.jwt"))
-	}
-	for _, c := range candidates {
-		if st, err := os.Stat(c); err == nil && !st.IsDir() {
-			return c
-		}
-	}
-	// Fallback shallow walk (max depth 3 under accountsRoot)
-	_ = filepath.WalkDir(accountsRoot, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d == nil || d.IsDir() {
-			return nil
-		}
-		if d.Name() == accountName+".jwt" { // immediate match
-			candidates = []string{path}
-			return errors.New("found")
-		}
-		return nil
-	})
-	if len(candidates) == 1 { // reused slice; if replaced by walk
-		if st, err := os.Stat(candidates[0]); err == nil && !st.IsDir() {
-			return candidates[0]
-		}
+	p := filepath.Join(storeDir, operator, "accounts", accountName, accountName+".jwt")
+	if st, err := os.Stat(p); err == nil && !st.IsDir() {
+		return p
 	}
 	return ""
 }
