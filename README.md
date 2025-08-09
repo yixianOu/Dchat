@@ -558,7 +558,8 @@ TODO:
 11. 配置修改为wire依赖注入
 12. 研究nsc key和jwt的关系和功能,通过nsc支持帐号导出和导入
 13. 节点的import配置能否热重启
-14. 读go代码和前端代码,计划修改方案
+14. 测试用户公私钥的获取,测试去中心化鉴权
+15. 读go代码和前端代码,计划修改方案
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
