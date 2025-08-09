@@ -550,17 +550,15 @@ TODO:
 3.  客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token,通过公私钥加密通信 ok
 4.  用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表 ok
 5. tls加密连接,nsc自动生成凭证用于本地连接 ok
-6. 完善React组件的TypeScript类型定义,添加React状态管理（Context或Redux）
-7. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题
-8.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具
-9.  公私钥传输和解密每一条消息
-10. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化
-11. 配置修改为wire依赖注入
-12. 研究nsc key和jwt的关系和功能,探究去中心化鉴权
-13. 节点的import配置能否热重启
-14. 通过nsc支持帐号导出和导入,测试用户公私钥的获取
-15. 群聊方案使用gateway集群,cluster群聊主题要deny-publish,去中心化认证用户
-16. 读go代码和前端代码,计划修改方案
+6. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
+7.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
+8.  测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
+9.  通过nsc支持配置导出和导入(等)
+10. 群聊方案使用gateway集群,cluster群聊主题要deny-publish,去中心化认证用户(等)
+11. 配置修改为wire依赖注入(等)
+12. cluster节点的import配置能否热重启
+13. 公私钥传输和解密私聊信息
+14. wails集成前端
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
@@ -568,9 +566,9 @@ TODO:
 - 简化 internal/nscsetup/setup.go 的 findAccountJWTPath，只保留单路径判断。
 - 重写 internal/nscsetup/setup.go 的 findSeedByPublicKey，去除利用 errors.New("found") 作为控制流的反模式。
 - 调整 internal/nscsetup/setup.go：collectSysAccountArtifacts 仅记录 findAccountCredsFile 返回的 SYS creds 路径，去除 sys.pub 写入。
-15. 修正 SYS 账户 JWT 路径推断：支持当前 nsc 目录结构 (stores/<op>/accounts/SYS/SYS.jwt) 及旧布局 (account.jwt 与 hash 子目录)，新增 findAccountJWTPath 逻辑。
-16. 重构 EnsureSysAccountSetup：抽取 resolveConfigDir/ensureNATSURL/initNSCOperatorAndSys/generateResolverConfig/collectSysAccountArtifacts，提升内聚与可读性。
-17. 简化 findAccountJWTPath：仅保留当前实际结构 stores/<op>/accounts/SYS/SYS.jwt 解析逻辑，移除多余候选与遍历。
-18. 重写 findSeedByPublicKey：移除通过返回 error 终止遍历的做法，改为正常遍历并在匹配后跳过后续处理逻辑，增强语义清晰度。
-19. SYS 公钥路径改为优先记录 creds 文件路径 (keys/creds/<operator>/SYS/*.creds)，找不到再回退写 sys.pub。
-20. 移除 sys.pub 回退逻辑：仅记录已有 creds 文件路径，不再生成 sys.pub。
+1.  修正 SYS 账户 JWT 路径推断：支持当前 nsc 目录结构 (stores/<op>/accounts/SYS/SYS.jwt) 及旧布局 (account.jwt 与 hash 子目录)，新增 findAccountJWTPath 逻辑。
+2.  重构 EnsureSysAccountSetup：抽取 resolveConfigDir/ensureNATSURL/initNSCOperatorAndSys/generateResolverConfig/collectSysAccountArtifacts，提升内聚与可读性。
+3.  简化 findAccountJWTPath：仅保留当前实际结构 stores/<op>/accounts/SYS/SYS.jwt 解析逻辑，移除多余候选与遍历。
+4.  重写 findSeedByPublicKey：移除通过返回 error 终止遍历的做法，改为正常遍历并在匹配后跳过后续处理逻辑，增强语义清晰度。
+5.  SYS 公钥路径改为优先记录 creds 文件路径 (keys/creds/<operator>/SYS/*.creds)，找不到再回退写 sys.pub。
+6.  移除 sys.pub 回退逻辑：仅记录已有 creds 文件路径，不再生成 sys.pub。
