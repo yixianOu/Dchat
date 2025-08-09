@@ -86,12 +86,10 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 				accountName = nm
 			}
 		}
-		// Derive candidate JWT path (nsc store layout: stores/<op>/accounts/A/C/<account>/account.jwt)
-		if sysPubKey != "" {
-			candidate := deriveAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
-			if candidate != "" {
-				sysJWTPath = candidate
-			}
+		// Attempt to locate JWT path (support multiple nsc layouts)
+		candidate := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
+		if candidate != "" {
+			sysJWTPath = candidate
 		}
 	}
 	if sysJWTPath == "" {
@@ -101,9 +99,9 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		if sysPubKey == "" {
 			sysPubKey = firstMatch(string(sysDescText), `Public\s+key:\s+([A-Z0-9]+)`)
 		}
-		// If still missing path try derived again
-		if sysJWTPath == "" && sysPubKey != "" {
-			candidate := deriveAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
+		// If still missing path try search helper again
+		if sysJWTPath == "" {
+			candidate := findAccountJWTPath(storeDir, cfg.NSC.Operator, accountName, sysPubKey)
 			if candidate != "" {
 				sysJWTPath = candidate
 			}
@@ -237,13 +235,44 @@ func firstMatch(s, pattern string) string {
 }
 
 // deriveAccountJWTPath constructs expected JWT path; returns empty if not found
-func deriveAccountJWTPath(storeDir, operator, accountName, pubKey string) string {
-	if storeDir == "" || operator == "" || accountName == "" || len(pubKey) < 2 {
+// findAccountJWTPath attempts multiple known nsc store layouts to locate the account JWT
+// Layouts handled:
+// 1) stores/<op>/accounts/<ACCOUNT>/<ACCOUNT>.jwt (observed current nsc)
+// 2) stores/<op>/accounts/<ACCOUNT>/account.jwt (legacy variant)
+// 3) stores/<op>/accounts/<A>/<B>/<ACCOUNT>/account.jwt (hashed two-letter layout)
+// Plus a fallback directory walk (shallow) matching <ACCOUNT>.jwt
+func findAccountJWTPath(storeDir, operator, accountName, pubKey string) string {
+	if storeDir == "" || operator == "" || accountName == "" {
 		return ""
 	}
-	p := filepath.Join(storeDir, operator, "accounts", string(pubKey[0]), string(pubKey[1]), accountName, "account.jwt")
-	if st, err := os.Stat(p); err == nil && !st.IsDir() {
-		return p
+	accountsRoot := filepath.Join(storeDir, operator, "accounts")
+	candidates := []string{
+		filepath.Join(accountsRoot, accountName, accountName+".jwt"),
+		filepath.Join(accountsRoot, accountName, "account.jwt"),
+	}
+	if len(pubKey) >= 2 {
+		candidates = append(candidates, filepath.Join(accountsRoot, string(pubKey[0]), string(pubKey[1]), accountName, "account.jwt"))
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && !st.IsDir() {
+			return c
+		}
+	}
+	// Fallback shallow walk (max depth 3 under accountsRoot)
+	_ = filepath.WalkDir(accountsRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() == accountName+".jwt" { // immediate match
+			candidates = []string{path}
+			return errors.New("found")
+		}
+		return nil
+	})
+	if len(candidates) == 1 { // reused slice; if replaced by walk
+		if st, err := os.Stat(candidates[0]); err == nil && !st.IsDir() {
+			return candidates[0]
+		}
 	}
 	return ""
 }
