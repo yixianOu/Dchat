@@ -283,20 +283,21 @@ func findAccountJWTPath(storeDir, operator, accountName, _ string) string {
 
 // findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
 func findSeedByPublicKey(keysDir, pubKey string) (string, error) {
+	// Purpose: locate the NKey seed file (operator/account/user) whose public key matches pubKey.
+	// Expected layout: <keysDir>/<prefix>/<segments...>/<seedfile>, seed files usually start with 'S' (e.g., SU..., SA..., SO...).
+	// Implementation: full directory walk; no error short-circuit; returns first match.
 	var matched string
-	_ = filepath.WalkDir(keysDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d == nil {
+	filepath.WalkDir(keysDir, func(path string, d os.DirEntry, err error) error {
+		if matched != "" { // already found; skip remaining entries
 			return nil
 		}
-		if d.IsDir() {
+		if err != nil || d == nil || d.IsDir() {
 			return nil
 		}
-		// 仅尝试可能的种子文件：文件名以 "S" 开头
 		base := filepath.Base(path)
-		if !strings.HasPrefix(base, "S") {
+		if !strings.HasPrefix(base, "S") { // seed files start with 'S'
 			return nil
 		}
-		// 读取少量内容（种子通常很短）
 		b, rerr := os.ReadFile(path)
 		if rerr != nil {
 			return nil
@@ -305,7 +306,6 @@ func findSeedByPublicKey(keysDir, pubKey string) (string, error) {
 		if seed == "" {
 			return nil
 		}
-		// 解析 seed 并比较公钥
 		kp, kerr := nkeys.FromSeed([]byte(seed))
 		if kerr != nil {
 			return nil
@@ -316,8 +316,6 @@ func findSeedByPublicKey(keysDir, pubKey string) (string, error) {
 		}
 		if pk == pubKey {
 			matched = path
-			// 终止遍历
-			return errors.New("found")
 		}
 		return nil
 	})

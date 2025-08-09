@@ -551,8 +551,10 @@ TODO:
 14. 修正 SYS 账户 JWT 路径推断：支持当前 nsc 目录结构 (stores/<op>/accounts/SYS/SYS.jwt) 及旧布局 (account.jwt 与 hash 子目录)，新增 findAccountJWTPath 逻辑。
 15. 重构 EnsureSysAccountSetup：抽取 resolveConfigDir/ensureNATSURL/initNSCOperatorAndSys/generateResolverConfig/collectSysAccountArtifacts，提升内聚与可读性。
 16. 简化 findAccountJWTPath：仅保留当前实际结构 stores/<op>/accounts/SYS/SYS.jwt 解析逻辑，移除多余候选与遍历。
+17. 重写 findSeedByPublicKey：移除通过返回 error 终止遍历的做法，改为正常遍历并在匹配后跳过后续处理逻辑，增强语义清晰度。
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
 - 重构 internal/nscsetup/setup.go：拆分 EnsureSysAccountSetup 为多个小函数（配置目录解析、NATS URL 生成、NSC 初始化、resolver.conf 生成、SYS 账户工件收集）。
 - 简化 internal/nscsetup/setup.go 的 findAccountJWTPath，只保留单路径判断。
+- 重写 internal/nscsetup/setup.go 的 findSeedByPublicKey，去除利用 errors.New("found") 作为控制流的反模式。
