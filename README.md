@@ -93,6 +93,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
     - 优化 service.go 回调分发代码风格：显式局部变量 + 保护性 defer 注释，提升可读性。
     - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
     - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
+  - 再次优化 internal/chat/service.go 代码风格：拆分长行（Subscribe 回调、结构体字面量、fmt.Sprintf、多参数函数调用），提高可读性与 diff 友好性。
 ```
 
 ## 运行演示

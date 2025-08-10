@@ -157,7 +157,13 @@ func (s *Service) JoinDirect(peerID string) error {
 	}
 	s.mu.RUnlock()
 	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
-	if err := s.nats.Subscribe(subj, func(m *nats.Msg) { s.handleEncrypted(subj, m.Data) }); err != nil {
+	if err := s.nats.Subscribe(
+		subj,
+		func(m *nats.Msg) {
+			// inline handler kept small; delegates to unified decrypt/dispatch
+			s.handleEncrypted(subj, m.Data)
+		},
+	); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -184,7 +190,13 @@ func (s *Service) JoinGroup(gid string) error {
 	}
 	s.mu.RUnlock()
 	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
-	if err := s.nats.Subscribe(subj, func(m *nats.Msg) { s.handleEncrypted(subj, m.Data) }); err != nil {
+	if err := s.nats.Subscribe(
+		subj,
+		func(m *nats.Msg) {
+			// group message handler -> decrypt path
+			s.handleEncrypted(subj, m.Data)
+		},
+	); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -214,9 +226,18 @@ func (s *Service) SendDirect(peerID, content string) error {
 	if err != nil {
 		return err
 	}
-	wire := encWire{CID: cid, Sender: from, Ts: time.Now().Unix(), Nonce: nonceB64, Cipher: cipherB64}
+	wire := encWire{
+		CID:    cid,
+		Sender: from,
+		Ts:     time.Now().Unix(),
+		Nonce:  nonceB64,
+		Cipher: cipherB64,
+	}
 	data, _ := json.Marshal(wire)
-	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
+	subj := fmt.Sprintf(
+		"dchat.dm.%s.msg",
+		cid,
+	)
 	return s.nats.Publish(subj, data)
 }
 
@@ -236,16 +257,28 @@ func (s *Service) SendGroup(gid, content string) error {
 	if err != nil {
 		return err
 	}
-	wire := encWire{CID: gid, Sender: from, Ts: time.Now().Unix(), Nonce: nonceB64, Cipher: cipherB64}
+	wire := encWire{
+		CID:    gid,
+		Sender: from,
+		Ts:     time.Now().Unix(),
+		Nonce:  nonceB64,
+		Cipher: cipherB64,
+	}
 	data, _ := json.Marshal(wire)
-	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
+	subj := fmt.Sprintf(
+		"dchat.grp.%s.msg",
+		gid,
+	)
 	return s.nats.Publish(subj, data)
 }
 
 // handleEncrypted 解密并派发
 func (s *Service) handleEncrypted(subject string, data []byte) {
 	var w encWire
-	if err := json.Unmarshal(data, &w); err != nil {
+	if err := json.Unmarshal(
+		data,
+		&w,
+	); err != nil {
 		return
 	}
 	s.mu.RLock()
@@ -253,7 +286,10 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	peerPub := s.friendPubKeys[w.Sender]
 	sym := s.groupSymKeys[w.CID]
 	selfID := s.user.ID
-	handlers := append([]func(*DecryptedMessage){}, s.handlers...)
+	handlers := append(
+		[]func(*DecryptedMessage){},
+		s.handlers...,
+	)
 	s.mu.RUnlock()
 	if w.Sender == selfID {
 		return
@@ -275,13 +311,21 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	if err != nil {
 		return
 	}
-	msg := &DecryptedMessage{CID: w.CID, Sender: w.Sender, Ts: time.Unix(w.Ts, 0), Plain: string(pt), IsGroup: isGroup, RawWire: w, Subject: subject}
+	msg := &DecryptedMessage{
+		CID:     w.CID,
+		Sender:  w.Sender,
+		Ts:      time.Unix(w.Ts, 0),
+		Plain:   string(pt),
+		IsGroup: isGroup,
+		RawWire: w,
+		Subject: subject,
+	}
 	// 调用所有已注册回调；单个回调 panic 不影响其它回调执行。
 	for _, h := range handlers {
 		cb := h
 		// 保护性执行，避免上层 UI / 外部逻辑 panic 终止解密分发。
 		func() {
-			defer func() { _ = recover() }()
+			defer func() { _ = recover() }() // TODO 优化错误处理
 			cb(msg)
 		}()
 	}
