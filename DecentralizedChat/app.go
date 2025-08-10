@@ -92,14 +92,11 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 
 	// Get auth credentials (unused with creds/JWT model currently)
-	username, password := a.nodeManager.GetNodeCredentials()
 
 	// Initialize NATS client service (legacy user/pass path)
 	natsConfig := nats.ClientConfig{
-		URL:      a.nodeManager.GetClientURL(),
-		User:     username,
-		Password: password,
-		Name:     "DChatClient",
+		URL:  a.nodeManager.GetClientURL(),
+		Name: "DChatClient",
 	}
 
 	a.natsSvc, err = nats.NewService(natsConfig)
@@ -216,9 +213,7 @@ func (a *App) GetNetworkStats() map[string]interface{} {
 
 // GetNodeCredentials returns client credentials
 func (a *App) GetNodeCredentials() (string, string) {
-	if a.nodeManager != nil {
-		return a.nodeManager.GetNodeCredentials()
-	}
+
 	return "", ""
 }
 
@@ -252,12 +247,10 @@ func (a *App) RestartNodeWithPermissions(subscribePermissions []string) error {
 	}
 
 	// Recreate NATS client
-	username, password := a.nodeManager.GetNodeCredentials()
+
 	natsConfig := nats.ClientConfig{
-		URL:      a.nodeManager.GetClientURL(),
-		User:     username,
-		Password: password,
-		Name:     "DChatClient",
+		URL:  a.nodeManager.GetClientURL(),
+		Name: "DChatClient",
 	}
 
 	var err error

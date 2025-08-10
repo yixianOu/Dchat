@@ -62,15 +62,12 @@ func testPermissions(nodeManager *routes.NodeManager, nodeID string, subscribePe
 	}()
 
 	// 获取凭据
-	username, password := nodeManager.GetNodeCredentials()
 	fmt.Printf("节点: %s, 订阅权限: %v\n", nodeID, subscribePermissions)
 
 	// 创建客户端
 	clientCfg := natsSvc.ClientConfig{
-		URL:      nodeManager.GetClientURL(),
-		User:     username,
-		Password: password,
-		Name:     "PermissionTestClient",
+		URL:  nodeManager.GetClientURL(),
+		Name: "PermissionTestClient",
 	}
 
 	client, err := natsSvc.NewService(clientCfg)

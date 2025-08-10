@@ -275,12 +275,6 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 	return fmt.Errorf("dynamic permission change requires node restart")
 }
 
-// GetNodeCredentials returns client auth data (empty when using JWT/creds)
-func (nm *NodeManager) GetNodeCredentials() (string, string) {
-	// Not used with JWT/creds model
-	return "", ""
-}
-
 // CreateNodeConfigWithPermissions creates node config translating subscribe permissions -> import
 func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string) *NodeConfig {
 	// Translate user subscribe permissions to route import permissions
