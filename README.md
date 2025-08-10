@@ -584,14 +584,14 @@ TODO:
 2.  客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token ok
 3.  用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表 ok
 4. nsc自动生成凭证用于本地连接 ok
-5. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
-6.  要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
-7.  测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
-8.  通过nsc支持配置导出和导入(等)
-9.  cluster节点的import配置能否热重启
-10. creds,jwt,nkey的关系 ok
-11. 通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥
-12. tls加密连接,公私钥传输和解密私聊信息
+5.  cluster节点的import配置能否热重启 不能
+6.  研究creds,jwt,nkey的关系和作用 ok
+7.  通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥 ok
+8.  tls加密连接,公私钥传输和解密私聊信息
+9. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
+10. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
+11. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
+12. 通过nsc支持配置导出和导入(等)
 13. wails集成前端
 
 新增操作日志：
@@ -606,3 +606,5 @@ TODO:
 4.  重写 findSeedByPublicKey：移除通过返回 error 终止遍历的做法，改为正常遍历并在匹配后跳过后续处理逻辑，增强语义清晰度。
 5.  SYS 公钥路径改为优先记录 creds 文件路径 (keys/creds/<operator>/SYS/*.creds)，找不到再回退写 sys.pub。
 6.  移除 sys.pub 回退逻辑：仅记录已有 creds 文件路径，不再生成 sys.pub。
+7.  重构 internal/chat/service.go：引入并发安全（RWMutex）、房间订阅幂等、OnMessage 回调机制、LeaveRoom、GetUser、历史快照复制、随机ID生成，新增 Close 释放订阅。
+8.  更新 app.go：移除 tailscale 直接依赖（保留占位网络状态）、精简启动流程、本地 IP 为空回退 127.0.0.1、自动加入 general 房间、新增 LeaveChatRoom、GetNetworkStats 不再引用 tailscale、使用新的 chat Service API。

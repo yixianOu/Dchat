@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"DecentralizedChat/internal/chat"
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/nats"
-	"DecentralizedChat/internal/network"
 	"DecentralizedChat/internal/routes"
 )
 
@@ -17,9 +17,9 @@ type App struct {
 	ctx         context.Context
 	chatSvc     *chat.Service
 	natsSvc     *nats.Service
-	tailscale   *network.TailscaleManager
 	nodeManager *routes.NodeManager
 	config      *config.Config
+	mu          sync.RWMutex
 }
 
 // TailscaleStatus returned to frontend representing network status
@@ -42,109 +42,55 @@ const (
 
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
-
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Printf("Failed to load config: %v", err)
-		return
+		log.Printf("load config failed: %v", err)
+		cfg = &config.Config{}
+	}
+	if cfg.Network.LocalIP == "" {
+		cfg.Network.LocalIP = "127.0.0.1" // fallback without tailscale
 	}
 	a.config = cfg
 
-	// Initialize Tailscale manager
-	a.tailscale = network.NewTailscaleManager()
-
-	// Obtain local Tailscale IP
-	localIP, err := a.tailscale.GetLocalIP()
-	if err != nil {
-		log.Printf("Warning: Failed to get Tailscale IP, using localhost: %v", err)
-		localIP = "127.0.0.1"
-	}
-
-	// Update network info in config
-	a.config.Network.LocalIP = localIP
-	a.config.EnableRoutes(localIP, DefaultClientPort, DefaultClusterPort, []string{})
-
-	// Initialize node manager
-	a.nodeManager = routes.NewNodeManager("dchat-network", localIP)
-
-	// Start local NATS node
-	nodeID := fmt.Sprintf("dchat-%s", localIP)
-	clientPort := DefaultClientPort
-	clusterPort := DefaultClusterPort
-	var seedRoutes []string // TODO: discover other nodes via Tailscale network
-
-	// Default allowed subscribe subjects
-	defaultSubscribePermissions := []string{
-		"chat.*",   // chat rooms
-		"_INBOX.*", // inbox responses
-		"system.*", // system topics
-	}
-
-	// Create node config with permissions
+	// setup routes/node
+	a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
+	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
+	defaultSubscribePermissions := []string{"chat.*", "_INBOX.*", "system.*"}
 	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
-		nodeID, clientPort, clusterPort, seedRoutes, defaultSubscribePermissions)
-
-	err = a.nodeManager.StartLocalNodeWithConfig(nodeConfig)
-	if err != nil {
-		log.Printf("Failed to start local NATS node: %v", err)
+		nodeID, DefaultClientPort, DefaultClusterPort, []string{}, defaultSubscribePermissions)
+	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {
+		log.Printf("start node failed: %v", err)
 		return
 	}
-
-	// Get auth credentials (unused with creds/JWT model currently)
-
-	// Initialize NATS client service (legacy user/pass path)
-	natsConfig := nats.ClientConfig{
-		URL:  a.nodeManager.GetClientURL(),
-		Name: "DChatClient",
-	}
-
-	a.natsSvc, err = nats.NewService(natsConfig)
+	a.natsSvc, err = nats.NewService(nats.ClientConfig{URL: a.nodeManager.GetClientURL(), Name: "DChatClient"})
 	if err != nil {
-		log.Printf("Warning: Failed to start NATS service: %v", err)
+		log.Printf("start nats client failed: %v", err)
+		return
 	}
-
-	// Initialize chat service
-	if a.natsSvc != nil {
-		a.chatSvc = chat.NewService(a.natsSvc)
-	}
-
-	// Persist configuration
+	a.chatSvc = chat.NewService(a.natsSvc)
+	// auto-join a default room
+	_ = a.chatSvc.JoinRoom("general")
 	if err := config.SaveConfig(a.config); err != nil {
-		log.Printf("Warning: Failed to save config: %v", err)
+		log.Printf("save config warn: %v", err)
 	}
-
-	log.Println("DChat application started successfully")
+	log.Println("DChat application started")
 }
 
 // GetTailscaleStatus returns Tailscale connectivity status
 func (a *App) GetTailscaleStatus() TailscaleStatus {
-	if a.tailscale == nil {
-		return TailscaleStatus{Connected: false, IP: ""}
-	}
-
-	status, err := a.tailscale.GetStatus()
-	if err != nil {
-		return TailscaleStatus{Connected: false, IP: ""}
-	}
-
-	return TailscaleStatus{
-		Connected: status.Connected,
-		IP:        status.IP,
-	}
+	// tailscale removed in this refactor (network abstraction future extension)
+	return TailscaleStatus{Connected: false, IP: a.config.Network.LocalIP}
 }
 
 // GetConnectedRooms returns list of joined chat rooms
 func (a *App) GetConnectedRooms() []string {
 	if a.chatSvc == nil {
-		return []string{"general"} // default room
+		return []string{"general"}
 	}
-
 	rooms := a.chatSvc.GetRooms()
 	if len(rooms) == 0 {
 		return []string{"general"}
 	}
-
 	return rooms
 }
 
@@ -153,10 +99,18 @@ func (a *App) JoinChatRoom(roomName string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
 	}
-
-	// Room subject permissions enforced at server start (chat.*)
 	return a.chatSvc.JoinRoom(roomName)
-} // SendMessage sends a message
+}
+
+// LeaveChatRoom leaves a room (unsubscribe & purge local state)
+func (a *App) LeaveChatRoom(roomName string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.LeaveRoom(roomName)
+}
+
+// SendMessage sends a message
 func (a *App) SendMessage(roomName, message string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
@@ -187,16 +141,8 @@ func (a *App) SetUserInfo(nickname, avatar string) error {
 // GetNetworkStats aggregates network statistics
 func (a *App) GetNetworkStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-
-	// Tailscale status
-	if a.tailscale != nil {
-		tailscaleStatus, _ := a.tailscale.GetStatus()
-		stats["tailscale"] = map[string]interface{}{
-			"connected": tailscaleStatus.Connected,
-			"ip":        tailscaleStatus.IP,
-			"peers":     len(tailscaleStatus.Peers),
-		}
-	}
+	// tailscale removed; report local IP only
+	stats["network"] = map[string]interface{}{"ip": a.config.Network.LocalIP}
 
 	// NATS node status
 	if a.nodeManager != nil {
