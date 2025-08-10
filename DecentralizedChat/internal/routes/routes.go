@@ -1,8 +1,10 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
@@ -23,6 +25,7 @@ type NodeManager struct {
 	node        *LocalNode
 	clusterName string
 	host        string
+	lastConfig  *NodeConfig // persist last started config for updates
 }
 
 // NodeConfig defines runtime parameters for the local node
@@ -137,6 +140,9 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		Host:        nm.host,
 		ClusterName: nm.clusterName,
 	}
+
+	// remember config
+	nm.lastConfig = config
 
 	// Logging (kept same detail)
 	fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d)\n",
@@ -271,8 +277,75 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 	if nm.node == nil {
 		return fmt.Errorf("node not started")
 	}
-	// NATS server permissions can't be mutated live; requires restart
-	return fmt.Errorf("dynamic permission change requires node restart")
+	if subject == "" {
+		return fmt.Errorf("subject empty")
+	}
+
+	// Use lastConfig to derive existing permissions
+	var currentAllows []string
+	if nm.lastConfig != nil && nm.lastConfig.NodeConfig != nil && nm.lastConfig.NodeConfig.Permissions != nil && nm.lastConfig.NodeConfig.Permissions.Routes != nil && nm.lastConfig.NodeConfig.Permissions.Routes.Import != nil {
+		currentAllows = append(currentAllows, nm.lastConfig.NodeConfig.Permissions.Routes.Import.Allow...)
+	}
+
+	// Check if already present
+	for _, s := range currentAllows {
+		if s == subject {
+			// Already allowed  nothing to do
+			return nil
+		}
+	}
+	updatedAllows := append(currentAllows, subject)
+
+	// Reuse previous SeedRoutes if available
+	seedRoutes := []string{}
+	if nm.lastConfig != nil {
+		seedRoutes = append(seedRoutes, nm.lastConfig.SeedRoutes...)
+	}
+
+	// Build updated node config mirroring defaults used at start
+	newConfig := &NodeConfig{
+		NodeID:      nm.node.ID,
+		ClientPort:  nm.node.ClientPort,
+		ClusterPort: nm.node.ClusterPort,
+		SeedRoutes:  seedRoutes,
+		ResolverConfigPath: func() string {
+			if nm.lastConfig != nil {
+				return nm.lastConfig.ResolverConfigPath
+			}
+			return ""
+		}(),
+		NodeConfig: &NodePermissionConfig{
+			NodeName:    nm.node.ID,
+			Credentials: "dchat_node_credentials", // same default credential label
+			Permissions: &NodePermissions{
+				Routes: &RoutePermissions{
+					Import: &SubjectPermission{Allow: updatedAllows, Deny: []string{}},
+					Export: &SubjectPermission{Allow: []string{"*"}, Deny: []string{}},
+				},
+				Response: &ResponsePermission{MaxMsgs: 1000, Expires: time.Minute},
+			},
+		},
+	}
+
+	// Persist to file (<nodeID>_node_config.json) for audit / future restarts
+	fileName := fmt.Sprintf("%s_node_config.json", nm.node.ID)
+	data, err := json.MarshalIndent(newConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal updated config failed: %w", err)
+	}
+	if err := os.WriteFile(fileName, data, 0o600); err != nil {
+		return fmt.Errorf("write updated config failed: %w", err)
+	}
+
+	// Restart node to apply new permissions
+	if err := nm.StopLocalNode(); err != nil {
+		return fmt.Errorf("stop node failed: %w", err)
+	}
+	if err := nm.StartLocalNodeWithConfig(newConfig); err != nil {
+		return fmt.Errorf("restart with updated permissions failed: %w", err)
+	}
+	fmt.Printf("✅ Added subscribe permission '%s' and restarted node. Persisted %s\n", subject, fileName)
+	return nil
 }
 
 // CreateNodeConfigWithPermissions creates node config translating subscribe permissions -> import

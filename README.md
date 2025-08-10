@@ -398,6 +398,9 @@ UserA.SendMessage("general", "Hello everyone!")
 ## 部署和使用
 
 ### 1. 环境准备
+ 
+## 操作日志追加
+- 实现 AddSubscribePermission: 支持新增订阅权限，写入 <nodeID>_node_config.json 并自动重启节点应用新权限
 
 **安装依赖：**
 ```bash
