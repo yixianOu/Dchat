@@ -19,8 +19,8 @@
 ### 1. 私聊 (Direct Message) — 精简
 仅保留单一消息 subject：`dchat.dm.{cid}.msg`。
 
-| 功能 | Subject 模板 | 说明 |
-|------|--------------|------|
+| 功能     | Subject 模板       | 说明                                    |
+| -------- | ------------------ | --------------------------------------- |
 | 加密消息 | dchat.dm.{cid}.msg | 所有私聊内容（文本/文件元数据）统一承载 |
 
 简化点：移除 ack / typing / presence / rekey 额外 subject，最小化订阅与实现复杂度。
@@ -35,17 +35,9 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 
 订阅：首次建立会话时订阅 `dchat.dm.{cid}.msg`（幂等）。
 
-消息示例（简化 encWire）：
+消息示例（最终精简 encWire）：
 ```json
-{
-  "ver": 1,
-  "cid": "a1b2c3d4e5f6a7b8",
-  "sender": "user_A",
-  "ts": 1670000000,
-  "nonce": "base64-12B",
-  "cipher": "base64",
-  "alg": "x25519-box"
-}
+{ "cid": "a1b2c3d4e5f6a7b8", "sender": "user_A", "ts": 1670000000, "nonce": "base64-12B", "cipher": "base64" }
 ```
 
 公钥轮换：直接在后续消息使用新的 sender_pub；无需单独 rekey subject。
@@ -57,9 +49,9 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 
 最小 Subject 集合：
 
-| 功能 | Subject 模板 | 说明 |
-|------|--------------|------|
-| 群消息 | dchat.grp.{gid}.msg | 群内所有加密载荷（文本/文件元数据等统一封装）|
+| 功能   | Subject 模板        | 说明                                          |
+| ------ | ------------------- | --------------------------------------------- |
+| 群消息 | dchat.grp.{gid}.msg | 群内所有加密载荷（文本/文件元数据等统一封装） |
 
 删除的高级特性（后续可选扩展）：成员进出广播、踢人、已读回执、群密钥轮换、typing、presence、meta.patch、history.req/rep。
 
@@ -67,39 +59,21 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 
 消息体示例（群同样使用 encWire，cid 复用为 gid）：
 ```json
-{
-  "ver": 1,
-  "cid": "{gid}",
-  "sender": "user_A",
-  "ts": 1670000000,
-  "nonce": "base64-12B",
-  "cipher": "base64",
-  "alg": "aes256-gcm"
-}
+{ "cid": "{gid}", "sender": "user_A", "ts": 1670000000, "nonce": "base64-12B", "cipher": "base64" }
 ```
-
-### 4. JetStream 建议（后续实现）
-| 流 | 绑定 Subjects |
-|----|---------------|
-| DCHAT_DM | dchat.dm.*.msg |
-| DCHAT_GRP | dchat.grp.*.msg |
-| DCHAT_META (可选) | dchat.grp.*.meta.patch |
-| DCHAT_CTRL (可选) | dchat.grp.*.ctrl.* / dchat.dm.*.ctrl.* |
 
 ### 5. 加密与 KV 配合
 - 私聊：从 KV dchat_friends 获取对方 pub（FriendPubKeyRecord）。使用对方公钥加密发送的消息,使用自己的私钥解密接收的消息.
 - 群聊：KV dchat_groups[groupID] 仅存储 {sym}（32 字节对称密钥 base64），暂不支持 rekey；若需要剔除成员可手动生成新 gid 建新群。
-- 消息体结构（示例）：
-  {
-    \"ver\":1,
-    \"sender\":\"uidA\",
-    \"cid\":\"<cid or gid>\",
-    \"ts\":1670000000,
-    \"nonce\":\"base64-12B\",
-    \"cipher\":\"base64\",
-    \"alg\":\"aes256-gcm\",
-    \"sig\":\"base64-ed25519\"
-  }
+- 最终精简统一消息体：{cid,sender,ts,nonce,cipher}；算法通过 subject 前缀推断 (dm -> x25519-box, grp -> aes256-gcm)
+
+### 4. JetStream 建议（后续实现）
+| 流                | 绑定 Subjects                          |
+| ----------------- | -------------------------------------- |
+| DCHAT_DM          | dchat.dm.*.msg                         |
+| DCHAT_GRP         | dchat.grp.*.msg                        |
+| DCHAT_META (可选) | dchat.grp.*.meta.patch                 |
+| DCHAT_CTRL (可选) | dchat.grp.*.ctrl.* / dchat.dm.*.ctrl.* |
 
 ### 6. 权限（Import/Export 或 Subscribe/Publish 控制）
 最小可行 Allow：

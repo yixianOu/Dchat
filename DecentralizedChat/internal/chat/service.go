@@ -226,18 +226,14 @@ func deriveCID(a, b string) string {
 	return hex.EncodeToString(h[:])[:16]
 }
 
-// encWire 为最小化加密消息载荷（私聊/群聊统一）：
-// ver 固定 1；cid 对私聊=cid，对群=gid；sender 发送方 uid；alg 私聊 x25519-box / 群 aes256-gcm
-// sig 预留（Ed25519 签名），当前未实现签名生成/验证可为空省略
+// encWire 最终精简格式：cid(会话/群ID) + sender + ts + nonce + cipher
+// 算法由 subject 前缀推断：dchat.dm.* -> x25519-box, dchat.grp.* -> aes256-gcm
 type encWire struct {
-	Ver    int    `json:"ver"`
 	CID    string `json:"cid"`
 	Sender string `json:"sender"`
 	Ts     int64  `json:"ts"`
 	Nonce  string `json:"nonce"`
 	Cipher string `json:"cipher"`
-	Alg    string `json:"alg"`
-	Sig    string `json:"sig,omitempty"`
 }
 
 // SendDirect sends encrypted direct message to peerID using peer's public key stored in KV
@@ -258,15 +254,7 @@ func (cs *Service) SendDirect(peerID, peerPubB64, content string) error {
 	if err != nil {
 		return err
 	}
-	wire := encWire{
-		Ver:    1,
-		CID:    cid,
-		Sender: fromUID,
-		Ts:     time.Now().Unix(),
-		Nonce:  nonceB64,
-		Cipher: cipherB64,
-		Alg:    "x25519-box",
-	}
+	wire := encWire{CID: cid, Sender: fromUID, Ts: time.Now().Unix(), Nonce: nonceB64, Cipher: cipherB64}
 	data, _ := json.Marshal(wire)
 	subject := fmt.Sprintf("dchat.dm.%s.msg", cid)
 	return cs.nats.Publish(subject, data)
@@ -296,15 +284,7 @@ func (cs *Service) SendGroup(gid, groupKeyB64, content string) error {
 	if err != nil {
 		return err
 	}
-	wire := encWire{
-		Ver:    1,
-		CID:    gid, // 复用 cid 字段表示群 id
-		Sender: fromUID,
-		Ts:     time.Now().Unix(),
-		Nonce:  nonceB64,
-		Cipher: cipherB64,
-		Alg:    "aes256-gcm",
-	}
+	wire := encWire{CID: gid, Sender: fromUID, Ts: time.Now().Unix(), Nonce: nonceB64, Cipher: cipherB64}
 	data, _ := json.Marshal(wire)
 	subject := fmt.Sprintf("dchat.grp.%s.msg", gid)
 	return cs.nats.Publish(subject, data)

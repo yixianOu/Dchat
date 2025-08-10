@@ -88,6 +88,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 启用内置 JetStream：在 NodeManager.prepareServerOptions 中设置 opts.JetStream = true 以支持 KV。
     - 精简 internal/chat 结构体：User 去除 Avatar；Message 去除 Username/Type；Room 去除 Name/Description/Members，仅保留最小字段（ID/Messages/CreatedAt）。同步更新 service.go 相关引用与 SetUser 签名（改为仅接受 nickname）。
     - 统一加密消息载荷结构 encWire(ver,cid,sender,ts,nonce,cipher,alg,sig)；私聊与群聊复用，移除 mid/from/to/gid 等冗余字段。
+    - 再次裁剪 encWire：去除 ver/alg/sig 字段，最终格式 {cid,sender,ts,nonce,cipher}，算法由 subject 推断；更新 service.go 与 internal/chat/README.md 示例。
     - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
     - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
 ```
