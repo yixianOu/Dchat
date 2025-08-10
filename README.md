@@ -83,6 +83,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 修改 demo/cluster/cluster_demo.go 使用 cfg.Server.* 字段
   - 更新 README.md 追加本节说明
   - 精简订阅权限 API：删除 AddSubscribePermission / RemoveSubscribePermission 非持久化方法，只保留 AddSubscribePermissionAndSave / RemoveSubscribePermissionAndSave，确保权限修改即刻落盘。
+  - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群对称密钥。
 ```
 
 ## 运行演示
@@ -586,9 +587,10 @@ TODO:
 7.  测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
 8.  通过nsc支持配置导出和导入(等)
 9.  cluster节点的import配置能否热重启
-10. creds,jwt,nkey的关系,用nats kv存公钥和群密钥
-11. tls加密连接,公私钥传输和解密私聊信息
-12. wails集成前端
+10. creds,jwt,nkey的关系 ok
+11. 通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥
+12. tls加密连接,公私钥传输和解密私聊信息
+13. wails集成前端
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。

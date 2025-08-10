@@ -10,6 +10,8 @@ import (
 
 type Service struct {
 	conn *nats.Conn
+	// lazy-initialized JetStream + KV buckets
+	js nats.JetStreamContext
 }
 
 type ClientConfig struct {
@@ -157,4 +159,111 @@ func (s *Service) GetStats() map[string]interface{} {
 		"messages_in":  stats.InMsgs,
 		"messages_out": stats.OutMsgs,
 	}
+}
+
+// --- JetStream KV for keys ---
+
+const (
+	kvBucketFriends = "dchat_friends" // 存储好友公钥  key: user_pub_key  val: JSON{"pub":"..."}
+	kvBucketGroups  = "dchat_groups"  // 存储群对称密钥  key: group_id val: JSON{"sym":"base64"}
+)
+
+// ensureJS 获取 JetStream 上下文
+func (s *Service) ensureJS() (nats.JetStreamContext, error) {
+	if s.js != nil {
+		return s.js, nil
+	}
+	js, err := s.conn.JetStream()
+	if err != nil {
+		return nil, err
+	}
+	s.js = js
+	return js, nil
+}
+
+// ensureBucket 确保 KV 桶存在
+func (s *Service) ensureBucket(name string) (nats.KeyValue, error) {
+	js, err := s.ensureJS()
+	if err != nil {
+		return nil, err
+	}
+	kv, err := js.KeyValue(name)
+	if err == nil {
+		return kv, nil
+	}
+	// 尝试创建
+	return js.CreateKeyValue(&nats.KeyValueConfig{Bucket: name})
+}
+
+// PutFriendPubKey 存储好友公钥（幂等）
+func (s *Service) PutFriendPubKey(pubKey, raw string) error {
+	if pubKey == "" || raw == "" {
+		return fmt.Errorf("empty pubKey/raw")
+	}
+	kv, err := s.ensureBucket(kvBucketFriends)
+	if err != nil {
+		return err
+	}
+	// 直接覆盖即可
+	val, _ := json.Marshal(map[string]string{"pub": raw})
+	_, err = kv.Put(pubKey, val)
+	return err
+}
+
+// GetFriendPubKey 读取好友公钥
+func (s *Service) GetFriendPubKey(pubKey string) (string, error) {
+	if pubKey == "" {
+		return "", fmt.Errorf("empty key")
+	}
+	kv, err := s.ensureBucket(kvBucketFriends)
+	if err != nil {
+		return "", err
+	}
+	e, err := kv.Get(pubKey)
+	if err != nil {
+		return "", err
+	}
+	var obj map[string]string
+	if json.Unmarshal(e.Value(), &obj) == nil {
+		if v, ok := obj["pub"]; ok {
+			return v, nil
+		}
+	}
+	return "", fmt.Errorf("pub key not found")
+}
+
+// PutGroupSymKey 存储群对称密钥（覆盖）
+func (s *Service) PutGroupSymKey(groupID, keyB64 string) error {
+	if groupID == "" || keyB64 == "" {
+		return fmt.Errorf("empty group/key")
+	}
+	kv, err := s.ensureBucket(kvBucketGroups)
+	if err != nil {
+		return err
+	}
+	val, _ := json.Marshal(map[string]string{"sym": keyB64})
+	_, err = kv.Put(groupID, val)
+	return err
+}
+
+// GetGroupSymKey 读取群对称密钥
+func (s *Service) GetGroupSymKey(groupID string) (string, error) {
+	if groupID == "" {
+		return "", fmt.Errorf("empty group id")
+	}
+	kv, err := s.ensureBucket(kvBucketGroups)
+	if err != nil {
+		return "", err
+	}
+	e, err := kv.Get(groupID)
+	if err != nil {
+		return "", err
+	}
+	var obj map[string]string
+	if json.Unmarshal(e.Value(), &obj) == nil {
+		if v, ok := obj["sym"]; ok {
+			return v, nil
+		}
+	}
+	return "", fmt.Errorf("group key not found")
 }
