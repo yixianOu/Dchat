@@ -190,18 +190,12 @@ func (c *Config) GetNATSClientConfig() map[string]interface{} {
 	}
 }
 
-// GetRoutesConfig 获取Routes集群配置
-// GetRoutesConfig removed (flattened into Server)
-
 // GetClusterConfig returns cluster related config for higher level managers
 func (c *Config) GetClusterConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"host": c.Server.Host,
 	}
 }
-
-// UpdateNATSURL updates the NATS URL
-func (c *Config) UpdateNATSURL(u string) {}
 
 // UpdateUserInfo updates user profile information
 func (c *Config) UpdateUserInfo(nickname, avatar string) {
@@ -248,8 +242,6 @@ func (c *Config) ValidateAndSetDefaults() error {
 		}
 	}
 
-	c.syncServerFlat()
-
 	if c.Server.Host == "" {
 		c.Server.Host = c.Network.LocalIP
 	}
@@ -264,30 +256,25 @@ func (c *Config) ValidateAndSetDefaults() error {
 	return nil
 }
 
-// syncServerFlat 同步嵌套 Routes/NATS 与扁平 Server 结构
-func (c *Config) syncServerFlat() {}
-
-// ensurePermissionsDefaults guarantees permission sections have defaults
-func (c *Config) ensurePermissionsDefaults() {}
-
-// AddSubscribePermission adds a subject to subscribe allow list
-func (c *Config) AddSubscribePermission(subject string) {
+// AddSubscribePermissionAndSave 添加订阅权限并立即持久化
+func (c *Config) AddSubscribePermissionAndSave(subject string) error {
+	if subject == "" {
+		return nil
+	}
 	for _, allowed := range c.Server.ImportAllow { // 已存在
 		if allowed == subject {
-			return
+			return SaveConfig(c)
 		}
 	}
 	c.Server.ImportAllow = append(c.Server.ImportAllow, subject)
-}
-
-// AddSubscribePermissionAndSave adds a subscribe permission and persists config
-func (c *Config) AddSubscribePermissionAndSave(subject string) error {
-	c.AddSubscribePermission(subject)
 	return SaveConfig(c)
 }
 
-// RemoveSubscribePermission removes a subject from subscribe allow list
-func (c *Config) RemoveSubscribePermission(subject string) {
+// RemoveSubscribePermissionAndSave 移除订阅权限并立即持久化
+func (c *Config) RemoveSubscribePermissionAndSave(subject string) error {
+	if subject == "" {
+		return nil
+	}
 	var na []string
 	for _, s := range c.Server.ImportAllow {
 		if s != subject {
@@ -295,11 +282,6 @@ func (c *Config) RemoveSubscribePermission(subject string) {
 		}
 	}
 	c.Server.ImportAllow = na
-}
-
-// RemoveSubscribePermissionAndSave removes a subscribe permission and persists config
-func (c *Config) RemoveSubscribePermissionAndSave(subject string) error {
-	c.RemoveSubscribePermission(subject)
 	return SaveConfig(c)
 }
 
@@ -321,20 +303,6 @@ func (c *Config) AddTrustedPubKeyPath(path string, persist bool) error {
 		return SaveConfig(c)
 	}
 	return nil
-}
-
-// removeFromDenyList removes a subject from the deny list if present
-func (c *Config) removeFromDenyList(subject string) {}
-
-// CanPublish checks publish permission for given subject
-func (c *Config) CanPublish(subject string) bool { return true } // 发布默认放行（依赖服务端 ExportAllow）
-func (c *Config) CanSubscribe(subject string) bool { // 简单基于 ImportAllow 判定
-	for _, s := range c.Server.ImportAllow {
-		if s == "*" || s == subject {
-			return true
-		}
-	}
-	return false
 }
 
 // BuildServerOptions 基于扁平 Server 配置生成 server.Options

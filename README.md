@@ -82,6 +82,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 修改 internal/nscsetup/setup.go 替换 cfg.NATS.URL 访问
   - 修改 demo/cluster/cluster_demo.go 使用 cfg.Server.* 字段
   - 更新 README.md 追加本节说明
+  - 精简订阅权限 API：删除 AddSubscribePermission / RemoveSubscribePermission 非持久化方法，只保留 AddSubscribePermissionAndSave / RemoveSubscribePermissionAndSave，确保权限修改即刻落盘。
 ```
 
 ## 运行演示
