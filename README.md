@@ -608,3 +608,5 @@ TODO:
 6.  移除 sys.pub 回退逻辑：仅记录已有 creds 文件路径，不再生成 sys.pub。
 7.  重构 internal/chat/service.go：引入并发安全（RWMutex）、房间订阅幂等、OnMessage 回调机制、LeaveRoom、GetUser、历史快照复制、随机ID生成，新增 Close 释放订阅。
 8.  更新 app.go：移除 tailscale 直接依赖（保留占位网络状态）、精简启动流程、本地 IP 为空回退 127.0.0.1、自动加入 general 房间、新增 LeaveChatRoom、GetNetworkStats 不再引用 tailscale、使用新的 chat Service API。
+9.  精简 internal/chat/README.md 群聊部分：仅保留 dchat.grp.<gid>.msg 与可选 ctrl.rekey，删除成员/ack/typing/presence/meta/history 等扩展，定位最小去中心化实现，并在文档中解释软权限通过密钥轮换实现。
+10. 精简 internal/chat/README.md 私聊设计：移除 ack/typing/presence/rekey 多余 subject，统一为 dchat.dm.{cid}.msg，说明直接使用对方公钥 + 自己私钥派生共享密钥加密消息。

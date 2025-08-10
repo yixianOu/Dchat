@@ -230,18 +230,6 @@ func (cs *Service) handleMessage(msg []byte) {
 	}
 }
 
-func (cs *Service) getOrCreateRoom(roomName string) *Room {
-	cs.mu.RLock()
-	r := cs.rooms[roomName]
-	cs.mu.RUnlock()
-	if r != nil {
-		return r
-	}
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	return cs.getOrCreateRoomLocked(roomName)
-}
-
 // getOrCreateRoomLocked assumes cs.mu is locked (write) or will be called during write critical section.
 func (cs *Service) getOrCreateRoomLocked(roomName string) *Room {
 	if room, exists := cs.rooms[roomName]; exists {
