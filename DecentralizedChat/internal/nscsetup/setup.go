@@ -35,33 +35,50 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	}
 	confDir := filepath.Dir(confPath)
 
+	// derive names (allow user override via config; fallback to defaults)
+	operatorName := cfg.NSC.Operator
+	if operatorName == "" {
+		operatorName = "local"
+	}
+	sysAccountName := cfg.NSC.Account
+	if sysAccountName == "" {
+		sysAccountName = "SYS"
+	}
+	sysUserName := cfg.NSC.User
+	if sysUserName == "" {
+		sysUserName = "sys"
+	}
+	resolverFileName := fmt.Sprintf("%s_resolver.conf", strings.ToLower(sysAccountName))
+
 	natsURL := ensureNATSURL(cfg)
 
-	if err := initNSCOperatorAndSys(natsURL); err != nil { // idempotent
+	if err := initNSCOperatorAndSys(natsURL, operatorName, sysAccountName); err != nil { // idempotent
 		return err
 	}
 
 	// ensure default user before resolver (creds may be used by clients immediately)
-	_, _, _ = execCommand("nsc", "add", "user", "--account", "SYS", "--name", "sys")
-	_, _, _ = execCommand("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS") // warm-up
-	if err := generateResolverConfig(confDir, cfg); err != nil {
+	_, _, _ = execCommand("nsc", "add", "user", "--account", sysAccountName, "--name", sysUserName)
+	_, _, _ = execCommand("nsc", "generate", "config", "--nats-resolver", "--sys-account", sysAccountName) // warm-up
+	if err := generateResolverConfig(confDir, cfg, sysAccountName, resolverFileName); err != nil {
 		return err
 	}
 
 	keysDir, storeDir := readEnvPaths() // existing approach
 
-	userMeta, err := collectUserArtifacts(storeDir, keysDir, confDir, cfg)
+	// set operator early so artifact discovery uses it
+	cfg.NSC.Operator = operatorName
+	userMeta, err := collectUserArtifacts(keysDir, confDir, operatorName, sysAccountName, sysUserName)
 	if err != nil {
 		return err
 	}
 
-	acctMeta, err := collectAccountArtifacts(storeDir, keysDir, confDir, cfg, userMeta.Account)
+	acctMeta, err := collectAccountArtifacts(confDir, userMeta.Account)
 	if err != nil {
 		return err
 	}
 
 	// Persist
-	cfg.NSC.Operator = "local"
+	cfg.NSC.Operator = operatorName
 	cfg.NSC.StoreDir = storeDir
 	cfg.NSC.KeysDir = keysDir
 	cfg.NSC.Account = userMeta.Account
@@ -93,23 +110,29 @@ func ensureNATSURL(cfg *config.Config) string {
 }
 
 // initNSCOperatorAndSys performs idempotent operator/SYS initialization
-func initNSCOperatorAndSys(natsURL string) error {
-	_, _, _ = execCommand("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", "local")
+func initNSCOperatorAndSys(natsURL, operatorName, sysAccountName string) error {
+	// create operator (idempotent) with provided name and sys account flag
+	_, _, _ = execCommand("nsc", "add", "operator", "--generate-signing-key", "--sys", "--name", operatorName)
+	// set operator context (nsc uses implicit current operator; ensure consistent name not required for edit)
 	_, errb, err := execCommand("nsc", "edit", "operator", "--require-signing-keys", "--account-jwt-server-url", natsURL)
 	if err != nil {
 		return fmt.Errorf("edit operator failed: %s", strings.TrimSpace(errb.String()))
 	}
-	_, _, _ = execCommand("nsc", "edit", "account", "SYS", "--sk", "generate")
+	_, _, _ = execCommand("nsc", "edit", "account", sysAccountName, "--sk", "generate")
 	return nil
 }
 
 // generateResolverConfig writes resolver.conf and updates cfg.Routes.ResolverConfig
-func generateResolverConfig(confDir string, cfg *config.Config) error {
-	out, errb, err := execCommand("nsc", "generate", "config", "--nats-resolver", "--sys-account", "SYS")
+func generateResolverConfig(confDir string, cfg *config.Config, sysAccountName, resolverFileName string) error {
+	out, errb, err := execCommand("nsc", "generate", "config", "--nats-resolver", "--sys-account", sysAccountName)
 	if err != nil {
 		return fmt.Errorf("nsc generate config failed: %s", strings.TrimSpace(errb.String()))
 	}
-	resolverPath := filepath.Join(confDir, "resolver.conf")
+	name := resolverFileName
+	if name == "" {
+		name = "resolver.conf"
+	}
+	resolverPath := filepath.Join(confDir, name)
 	if err := os.WriteFile(resolverPath, out.Bytes(), 0644); err != nil {
 		return fmt.Errorf("write resolver.conf failed: %w", err)
 	}
@@ -132,9 +155,13 @@ type accountArtifacts struct {
 }
 
 // collectUserArtifacts locates user-level JWT/creds/seed under SYS account (default user: sys)
-func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config) (*userArtifacts, error) {
-	accountName := "SYS"
-	userName := "sys"
+func collectUserArtifacts(keysDir, confDir, operatorName, accountName, userName string) (*userArtifacts, error) {
+	if accountName == "" {
+		accountName = "SYS"
+	}
+	if userName == "" {
+		userName = "sys"
+	}
 	// Confirm user exists (best-effort create earlier). Try json describe to get pub key
 	var userPubKey string
 	if out, errb, err := execCommand("nsc", "describe", "user", userName, "--account", accountName, "--json"); err == nil {
@@ -150,7 +177,7 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 	} else {
 		_ = errb
 	}
-	userCredsPath := findCredsFile(keysDir, cfg.NSC.Operator, accountName, userName)
+	userCredsPath := findCredsFile(keysDir, operatorName, accountName, userName)
 	var userSeedPath string
 	if userPubKey != "" { // export user key
 		if p, err := exportSeed("user", accountName, userName, userPubKey, confDir); err == nil && p != "" {
@@ -161,7 +188,7 @@ func collectUserArtifacts(storeDir, keysDir, confDir string, cfg *config.Config)
 }
 
 // collectAccountArtifacts gathers account-level jwt/creds/seed (seed export optional)
-func collectAccountArtifacts(storeDir, keysDir, confDir string, cfg *config.Config, accountName string) (*accountArtifacts, error) {
+func collectAccountArtifacts(confDir string, accountName string) (*accountArtifacts, error) {
 	if accountName == "" {
 		accountName = "SYS"
 	}

@@ -58,6 +58,8 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
  - 重构 internal/nscsetup/setup.go：引入 execCommand 统一 run 与 runOut 的公共逻辑，消除重复代码（DRY）。
  - 合并 seed 导出与 creds 查找：exportUserSeed/exportAccountSeed 合并为 exportSeed；findUserCredsFile/findAccountCredsFile 合并为 findCredsFile，减少重复。
  - 移除 run / runOut 包装函数，直接使用 execCommand，进一步简化命令执行路径。
+  - 去除 setup 中硬编码的 operator/local、SYS、sys、resolver.conf：改为可配置 (operator/account/user 可由配置覆盖，resolver 文件名基于账户动态生成 <account>_resolver.conf)。
+  - 精简 setup：移除 collectUserArtifacts/collectAccountArtifacts 未使用参数 (storeDir/keysDir/cfg)，消除 gopls unusedparams 警告。
 ```
 
 ## 运行演示
