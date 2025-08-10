@@ -561,7 +561,7 @@ TODO:
 9.  配置修改为wire依赖注入(等)
 10. cluster节点的import配置能否热重启
 11. tls加密连接,公私钥传输和解密私聊信息
-12. 用nats kv存密钥
+12. 用nats kv存creds和群密钥
 13. wails集成前端
 
 新增操作日志：
