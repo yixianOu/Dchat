@@ -62,22 +62,11 @@ type Service struct {
 	groupSubs  map[string]*nats.Subscription // gid -> sub
 
 	handlers    []func(*DecryptedMessage)
-	errHandlers []ErrorHandler
+	errHandlers []func(error)
 
 	ctx    context.Context
 	cancel context.CancelFunc
 }
-
-// ErrorEvent 统一错误事件
-type ErrorEvent struct {
-	Err     error    // 原始错误
-	Subject string   // NATS subject
-	Raw     []byte   // 原始消息字节（未解密）
-	Parsed  *encWire // 若已成功反序列化则提供
-}
-
-// ErrorHandler 错误回调签名
-type ErrorHandler func(*ErrorEvent)
 
 // NewService create minimal service
 func NewService(n *natsservice.Service) *Service {
@@ -150,7 +139,8 @@ func (s *Service) OnDecrypted(h func(*DecryptedMessage)) {
 }
 
 // OnError 注册错误回调（解析/密钥缺失/解密失败等）
-func (s *Service) OnError(h ErrorHandler) {
+// OnError 注册简单错误回调（仅 error 对象）
+func (s *Service) OnError(h func(error)) {
 	if h == nil {
 		return
 	}
@@ -256,10 +246,7 @@ func (s *Service) SendDirect(peerID, content string) error {
 		Cipher: cipherB64,
 	}
 	data, _ := json.Marshal(wire)
-	subj := fmt.Sprintf(
-		"dchat.dm.%s.msg",
-		cid,
-	)
+	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
 	return s.nats.Publish(subj, data)
 }
 
@@ -287,19 +274,15 @@ func (s *Service) SendGroup(gid, content string) error {
 		Cipher: cipherB64,
 	}
 	data, _ := json.Marshal(wire)
-	subj := fmt.Sprintf(
-		"dchat.grp.%s.msg",
-		gid,
-	)
+	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
 	return s.nats.Publish(subj, data)
 }
 
 // handleEncrypted 解密并派发
 func (s *Service) handleEncrypted(subject string, data []byte) {
-	// 1) 反序列化
 	var w encWire
 	if err := json.Unmarshal(data, &w); err != nil {
-		s.dispatchError(fmt.Errorf("unmarshal: %w", err), subject, data, nil)
+		s.dispatchError(fmt.Errorf("unmarshal: %w", err))
 		return
 	}
 
@@ -310,10 +293,9 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	selfID := s.user.ID
 	s.mu.RUnlock()
 
-	// 忽略自发回环(非错误，直接返回)
 	if w.Sender == selfID {
 		return
-	}
+	} // 忽略自发回环
 
 	isGroup := strings.HasPrefix(subject, "dchat.grp.")
 	var (
@@ -322,35 +304,27 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	)
 	if isGroup {
 		if sym == "" {
-			s.dispatchError(errors.New("group sym key missing"), subject, data, &w)
+			s.dispatchError(errors.New("group sym key missing"))
 			return
 		}
 		pt, err = decryptGroup(sym, w.Nonce, w.Cipher)
 	} else {
 		if priv == "" {
-			s.dispatchError(errors.New("local priv key missing"), subject, data, &w)
+			s.dispatchError(errors.New("local priv key missing"))
 			return
 		}
 		if peerPub == "" {
-			s.dispatchError(errors.New("peer pub key missing"), subject, data, &w)
+			s.dispatchError(errors.New("peer pub key missing"))
 			return
 		}
 		pt, err = decryptDirect(priv, peerPub, w.Nonce, w.Cipher)
 	}
 	if err != nil {
-		s.dispatchError(fmt.Errorf("decrypt: %w", err), subject, data, &w)
+		s.dispatchError(fmt.Errorf("decrypt: %w", err))
 		return
 	}
 
-	msg := &DecryptedMessage{
-		CID:     w.CID,
-		Sender:  w.Sender,
-		Ts:      time.Unix(w.Ts, 0),
-		Plain:   string(pt),
-		IsGroup: isGroup,
-		RawWire: w,
-		Subject: subject,
-	}
+	msg := &DecryptedMessage{CID: w.CID, Sender: w.Sender, Ts: time.Unix(w.Ts, 0), Plain: string(pt), IsGroup: isGroup, RawWire: w, Subject: subject}
 	s.dispatchDecrypted(msg)
 }
 
@@ -369,23 +343,16 @@ func (s *Service) dispatchDecrypted(msg *DecryptedMessage) {
 }
 
 // dispatchError 分发错误事件（不 panic；不中断后续消息处理）
-func (s *Service) dispatchError(err error, subject string, raw []byte, w *encWire) {
+func (s *Service) dispatchError(err error) {
 	if err == nil {
 		return
 	}
 	s.mu.RLock()
-	handlers := append([]ErrorHandler{}, s.errHandlers...)
+	handlers := append([]func(error){}, s.errHandlers...)
 	s.mu.RUnlock()
-	if len(handlers) == 0 {
-		return
-	}
-	evt := &ErrorEvent{Err: err, Subject: subject, Raw: raw, Parsed: w}
 	for _, h := range handlers {
 		cb := h
-		func() {
-			defer func() { _ = recover() }()
-			cb(evt)
-		}()
+		func() { defer func() { _ = recover() }(); cb(err) }()
 	}
 }
 
