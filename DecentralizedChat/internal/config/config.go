@@ -83,7 +83,6 @@ type NSCConfig struct {
 	UserSeedPath       string   `json:"user_seed_path"`       // User seed (private) key path if exported
 	Account            string   `json:"account"`              // Owning account name (default SYS)
 	User               string   `json:"user"`                 // User name (default sys)
-	AccountSeedPath    string   `json:"account_seed_path"`    // Exported account seed path (if exported)
 	TrustedPubKeyPaths []string `json:"trusted_pubkey_paths"` // Trusted public key file paths list
 }
 
@@ -144,7 +143,6 @@ var defaultConfig = Config{
 		UserSeedPath:       "",
 		Account:            "",
 		User:               "",
-		AccountSeedPath:    "",
 		TrustedPubKeyPaths: []string{},
 	},
 }

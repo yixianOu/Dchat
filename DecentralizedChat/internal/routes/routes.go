@@ -140,17 +140,12 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	}
 
 	// Logging (kept same detail)
-	if config.NodeConfig != nil && config.NodeConfig.Permissions != nil && config.NodeConfig.Permissions.Routes != nil {
-		fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d)\n",
-			config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
-		fmt.Printf("   Node: %s, Import Allow: %v, Export Allow: %v\n",
-			config.NodeConfig.NodeName,
-			config.NodeConfig.Permissions.Routes.Import.Allow,
-			config.NodeConfig.Permissions.Routes.Export.Allow)
-	} else {
-		fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d) [default permissions]\n",
-			config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
-	}
+	fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d)\n",
+		config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
+	fmt.Printf("   Node: %s, Import Allow: %v, Export Allow: %v\n",
+		config.NodeConfig.NodeName,
+		config.NodeConfig.Permissions.Routes.Import.Allow,
+		config.NodeConfig.Permissions.Routes.Export.Allow)
 	return nil
 }
 
@@ -166,7 +161,6 @@ func (nm *NodeManager) prepareServerOptions(config *NodeConfig) (*server.Options
 	if err := config.configureSeedRoutes(opts); err != nil {
 		return nil, err
 	}
-	config.loadTrustedKeysIfRequested(opts)
 	return opts, nil
 }
 
@@ -220,14 +214,6 @@ func (c *NodeConfig) configureSeedRoutes(opts *server.Options) error {
 	}
 	opts.Routes = routeURLs
 	return nil
-}
-
-func (c *NodeConfig) loadTrustedKeysIfRequested(opts *server.Options) {
-	npc := c.NodeConfig
-	if npc == nil || npc.Credentials != "use_local_trust" {
-		return
-	}
-	// Placeholder for future trusted keys integration
 }
 
 // StopLocalNode stopts the local node

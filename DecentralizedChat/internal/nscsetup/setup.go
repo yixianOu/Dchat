@@ -72,11 +72,6 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		return err
 	}
 
-	acctMeta, err := collectAccountArtifacts(confDir, userMeta.Account)
-	if err != nil {
-		return err
-	}
-
 	// Persist
 	cfg.NSC.Operator = operatorName
 	cfg.NSC.StoreDir = storeDir
@@ -85,7 +80,6 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	cfg.NSC.User = userMeta.User
 	cfg.NSC.UserSeedPath = userMeta.UserSeedPath
 	cfg.NSC.UserCredsPath = userMeta.UserCredsPath
-	cfg.NSC.AccountSeedPath = acctMeta.AccountSeedPath
 
 	if err := config.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("save config failed: %w", err)
@@ -148,11 +142,7 @@ type userArtifacts struct {
 	UserSeedPath  string
 }
 
-// accountArtifacts holds account-level artifacts
-type accountArtifacts struct {
-	Account         string
-	AccountSeedPath string
-}
+// accountArtifacts removed (no longer tracking account seed)
 
 // collectUserArtifacts locates user-level JWT/creds/seed under SYS account (default user: sys)
 func collectUserArtifacts(keysDir, confDir, operatorName, accountName, userName string) (*userArtifacts, error) {
@@ -187,30 +177,7 @@ func collectUserArtifacts(keysDir, confDir, operatorName, accountName, userName 
 	return &userArtifacts{Account: accountName, User: userName, UserCredsPath: userCredsPath, UserSeedPath: userSeedPath}, nil
 }
 
-// collectAccountArtifacts gathers account-level jwt/creds/seed (seed export optional)
-func collectAccountArtifacts(confDir string, accountName string) (*accountArtifacts, error) {
-	if accountName == "" {
-		accountName = "SYS"
-	}
-	var acctPubKey string
-	if out, errb, err := execCommand("nsc", "describe", "account", accountName, "--json"); err == nil {
-		var desc map[string]any
-		if json.Unmarshal(out.Bytes(), &desc) == nil {
-			if pk, ok := desc["sub"].(string); ok {
-				acctPubKey = pk
-			}
-		}
-	} else {
-		_ = errb
-	}
-	var acctSeed string
-	if acctPubKey != "" {
-		if p, err := exportSeed("account", accountName, "", acctPubKey, confDir); err == nil && p != "" {
-			acctSeed = p
-		}
-	}
-	return &accountArtifacts{Account: accountName, AccountSeedPath: acctSeed}, nil
-}
+// collectAccountArtifacts removed (account seed no longer exported)
 
 // execCommand executes a command with common NSC environment settings and returns stdout/stderr buffers.
 func execCommand(name string, args ...string) (stdout bytes.Buffer, stderr bytes.Buffer, err error) {
@@ -282,8 +249,6 @@ func defaultStoresDir() string {
 	return ""
 }
 
-// Removed JWT path persistence: we intentionally do not record user/account JWT file locations; only creds & seeds retained.
-
 // findSeedByPublicKey walks keysDir to locate seed file matching the provided public key
 // exportAccountSeed uses `nsc export keys --accounts --account <name>` to obtain the account seed for the identity key.
 // It writes/updates a stable file under confDir (e.g. sys.seed) with 0600 permission and returns its path.
@@ -303,14 +268,10 @@ func exportSeed(kind, accountName, userName, pubKey, confDir string) (string, er
 	}
 	defer os.RemoveAll(tmpDir)
 	args := []string{"export", "keys"}
-	switch kind {
-	case "user":
-		args = append(args, "--users", "--account", accountName, "--user", userName)
-	case "account":
-		args = append(args, "--accounts", "--account", accountName)
-	default:
+	if kind != "user" { // only user seed supported now
 		return "", nil
 	}
+	args = append(args, "--users", "--account", accountName, "--user", userName)
 	args = append(args, "--dir", tmpDir, "--force")
 	if _, errb, err := execCommand("nsc", args...); err != nil {
 		return "", fmt.Errorf("export keys failed: %s", strings.TrimSpace(errb.String()))
@@ -329,11 +290,7 @@ func exportSeed(kind, accountName, userName, pubKey, confDir string) (string, er
 		return "", nil
 	}
 	var dest string
-	if kind == "user" {
-		dest = filepath.Join(confDir, fmt.Sprintf("%s_%s.seed", strings.ToLower(accountName), strings.ToLower(userName)))
-	} else {
-		dest = filepath.Join(confDir, fmt.Sprintf("%s_account.seed", strings.ToLower(accountName)))
-	}
+	dest = filepath.Join(confDir, fmt.Sprintf("%s_%s.seed", strings.ToLower(accountName), strings.ToLower(userName)))
 	_ = os.WriteFile(dest, []byte(seed+"\n"), 0600)
 	return dest, nil
 }

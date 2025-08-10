@@ -61,6 +61,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 去除 setup 中硬编码的 operator/local、SYS、sys、resolver.conf：改为可配置 (operator/account/user 可由配置覆盖，resolver 文件名基于账户动态生成 <account>_resolver.conf)。
   - 精简 setup：移除 collectUserArtifacts/collectAccountArtifacts 未使用参数 (storeDir/keysDir/cfg)，消除 gopls unusedparams 警告。
   - 重构 routes：内联 ensureNotStarted，辅助函数 (loadResolverConfig/applyLocalOverrides/applyRoutePermissions/configureSeedRoutes/loadTrustedKeysIfRequested) 改为 NodeConfig 方法。
+  - 配置精简：移除 account_seed_path 及账户种子导出逻辑，仅保留用户 user_seed_path 与 user_creds_path。
 ```
 
 ## 运行演示
