@@ -85,6 +85,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 精简订阅权限 API：删除 AddSubscribePermission / RemoveSubscribePermission 非持久化方法，只保留 AddSubscribePermissionAndSave / RemoveSubscribePermissionAndSave，确保权限修改即刻落盘。
   - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群聊对称密钥。
   - KV 存储格式改为结构体：FriendPubKeyRecord{pub} / GroupSymKeyRecord{sym}，替换原 map，实现类型安全与易扩展。
+  - 启用内置 JetStream：在 NodeManager.prepareServerOptions 中设置 opts.JetStream = true 以支持 KV。
 ```
 
 ## 运行演示

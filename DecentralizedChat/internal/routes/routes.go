@@ -119,6 +119,8 @@ func (nm *NodeManager) prepareServerOptions(config *NodeConfig) (*server.Options
 	if err := config.configureSeedRoutes(opts); err != nil {
 		return nil, err
 	}
+	// Enable JetStream for KV / stream features
+	opts.JetStream = true
 	return opts, nil
 }
 
