@@ -79,6 +79,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 	cfg.NSC.User = userMeta.User
 	cfg.NSC.UserSeedPath = userMeta.UserSeedPath
 	cfg.NSC.UserCredsPath = userMeta.UserCredsPath
+	cfg.NSC.UserPubKey = userMeta.UserPubKey
 
 	if err := config.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("save config failed: %w", err)
@@ -139,6 +140,7 @@ type userArtifacts struct {
 	User          string
 	UserCredsPath string
 	UserSeedPath  string
+	UserPubKey    string
 }
 
 // accountArtifacts removed (no longer tracking account seed)
@@ -173,7 +175,7 @@ func collectUserArtifacts(keysDir, confDir, operatorName, accountName, userName 
 			userSeedPath = p
 		}
 	}
-	return &userArtifacts{Account: accountName, User: userName, UserCredsPath: userCredsPath, UserSeedPath: userSeedPath}, nil
+	return &userArtifacts{Account: accountName, User: userName, UserCredsPath: userCredsPath, UserSeedPath: userSeedPath, UserPubKey: userPubKey}, nil
 }
 
 // collectAccountArtifacts removed (account seed no longer exported)

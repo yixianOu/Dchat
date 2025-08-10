@@ -80,6 +80,7 @@ type NSCConfig struct {
 	KeysDir            string   `json:"keys_dir"`             // nsc keys directory
 	UserCredsPath      string   `json:"user_creds_path"`      // User creds file path (.creds)
 	UserSeedPath       string   `json:"user_seed_path"`       // User seed (private) key path if exported
+	UserPubKey         string   `json:"user_pub_key"`         // User public NKEY (U...)
 	Account            string   `json:"account"`              // Owning account name (default SYS)
 	User               string   `json:"user"`                 // User name (default sys)
 	TrustedPubKeyPaths []string `json:"trusted_pubkey_paths"` // Trusted public key file paths list
@@ -139,6 +140,7 @@ var defaultConfig = Config{
 		KeysDir:            "",
 		UserCredsPath:      "",
 		UserSeedPath:       "",
+		UserPubKey:         "",
 		Account:            "",
 		User:               "",
 		TrustedPubKeyPaths: []string{},

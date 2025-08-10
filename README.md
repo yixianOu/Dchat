@@ -65,6 +65,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
     - 移除 StoreDir 持久化：不再跟踪 NSC store_dir（JWT 存储目录）路径，仅保留 keys_dir + 用户 creds/seed，进一步最小化配置。
     - 修改 internal/config/config.go 删除 nsc.store_dir 字段；修改 internal/nscsetup/setup.go 去除赋值；README 追加该操作记录。
     - 二次清理：删除 residual StoresDir 相关函数与解析逻辑（readEnvPaths 去掉 storeDir 返回，移除 defaultStoresDir，实现最小依赖）。
+  - 新增 nsc.user_pub_key 字段：在初始化时解析 user JWT 的 sub 保存用户公钥，避免二次调用 nsc 解析。
 ```
 
 ## 运行演示
