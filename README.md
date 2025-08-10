@@ -97,6 +97,8 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 引入错误事件回调：新增 ErrorEvent/ErrorHandler，handleEncrypted 拆分为解析、解密、成功与错误分发，提高内聚与可观察性；避免静默失败。
   - 进一步简化错误回调：移除 ErrorEvent 结构，仅保留 func(error) 形式，减少耦合与调用复杂度；fmt.Sprintf 短行恢复单行表达。
   - 调整 service.go 代码风格：一行一逻辑（GetUser/handleEncrypted/dispatch* 等拆分），去除多语句单行，提升可读性与审查效率。
+  - 更新 app.go：新增 SetKeyPair / OnDecrypted / OnError / GetUser 封装，提供与 service.go 对应外部调用入口。
+  - 精简 app.go：移除房间/历史/统计/权限热重启等非最小聊天能力，仅保留 Direct/Group 相关 API 与启动初始化。
 ```
 
 ## 运行演示

@@ -23,10 +23,7 @@ type App struct {
 }
 
 // TailscaleStatus returned to frontend representing network status
-type TailscaleStatus struct {
-	Connected bool   `json:"connected"`
-	IP        string `json:"ip"`
-}
+// (Tailscale 相关逻辑已移除，后续需要可再扩展)
 
 // NewApp creates a new App application struct
 func NewApp() *App {
@@ -48,16 +45,20 @@ func (a *App) OnStartup(ctx context.Context) {
 		cfg = &config.Config{}
 	}
 	if cfg.Network.LocalIP == "" {
-		cfg.Network.LocalIP = "127.0.0.1" // fallback without tailscale
+		cfg.Network.LocalIP = "127.0.0.1"
 	}
 	a.config = cfg
 
-	// setup routes/node
+	// 启动最小节点（权限策略后续可细化）
 	a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
 	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
-	defaultSubscribePermissions := []string{"chat.*", "_INBOX.*", "system.*"}
 	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
-		nodeID, DefaultClientPort, DefaultClusterPort, []string{}, defaultSubscribePermissions)
+		nodeID,
+		DefaultClientPort,
+		DefaultClusterPort,
+		[]string{},
+		[]string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"},
+	)
 	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {
 		log.Printf("start node failed: %v", err)
 		return
@@ -71,34 +72,11 @@ func (a *App) OnStartup(ctx context.Context) {
 	if err := config.SaveConfig(a.config); err != nil {
 		log.Printf("save config warn: %v", err)
 	}
-	log.Println("DChat application started")
+	log.Println("DChat application started (minimal mode)")
 }
 
 // GetTailscaleStatus returns Tailscale connectivity status
-func (a *App) GetTailscaleStatus() TailscaleStatus {
-	// tailscale removed in this refactor (network abstraction future extension)
-	return TailscaleStatus{Connected: false, IP: a.config.Network.LocalIP}
-}
-
-// GetConnectedRooms returns list of joined chat rooms
-// Deprecated room API placeholders (removed room concept). Return empty slice.
-func (a *App) GetConnectedRooms() []string { return []string{} }
-
-// JoinChatRoom joins a chat room
-func (a *App) JoinChatRoom(_ string) error { return fmt.Errorf("room feature removed") }
-
-// LeaveChatRoom leaves a room (unsubscribe & purge local state)
-func (a *App) LeaveChatRoom(_ string) error { return fmt.Errorf("room feature removed") }
-
-// SendMessage sends a message
-func (a *App) SendMessage(_, _ string) error {
-	return fmt.Errorf("room feature removed; use SendDirect/SendGroup")
-}
-
-// GetChatHistory returns history of a room
-func (a *App) GetChatHistory(_ string) ([]interface{}, error) {
-	return nil, fmt.Errorf("room feature removed")
-}
+// （房间/历史/尾部统计等功能已移除，只保留最小 Direct/Group 能力）
 
 // SetUserInfo sets current user metadata
 func (a *App) SetUserInfo(nickname string) error {
@@ -155,77 +133,40 @@ func (a *App) SendGroup(gid, content string) error {
 	return a.chatSvc.SendGroup(gid, content)
 }
 
-// GetNetworkStats aggregates network statistics
-func (a *App) GetNetworkStats() map[string]interface{} {
-	stats := make(map[string]interface{})
-	// tailscale removed; report local IP only
-	stats["network"] = map[string]interface{}{"ip": a.config.Network.LocalIP}
-
-	// NATS node status
-	if a.nodeManager != nil {
-		stats["nats_node"] = a.nodeManager.GetClusterInfo()
+// SetKeyPair sets local user key pair (base64 encoded)
+func (a *App) SetKeyPair(privB64, pubB64 string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
 	}
-
-	// NATS client status
-	if a.natsSvc != nil {
-		stats["nats_client"] = a.natsSvc.GetStats()
-	}
-
-	return stats
-}
-
-// GetNodeCredentials returns client credentials
-func (a *App) GetNodeCredentials() (string, string) {
-
-	return "", ""
-}
-
-// RestartNodeWithPermissions restarts node applying new subscribe permissions
-func (a *App) RestartNodeWithPermissions(subscribePermissions []string) error {
-	if a.nodeManager == nil {
-		return fmt.Errorf("node manager not initialized")
-	}
-
-	// Stop current node
-	if err := a.nodeManager.StopLocalNode(); err != nil {
-		log.Printf("停止节点时出错: %v", err)
-	}
-
-	// Close current NATS connection
-	if a.natsSvc != nil {
-		a.natsSvc.Close()
-	}
-
-	// Read current config
-	localIP := a.config.Network.LocalIP
-	nodeID := fmt.Sprintf("dchat-%s", localIP)
-
-	// Build new permission config
-	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
-		nodeID, DefaultClientPort, DefaultClusterPort, []string{}, subscribePermissions)
-
-	// Start node
-	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {
-		return fmt.Errorf("restart node failed: %v", err)
-	}
-
-	// Recreate NATS client
-
-	natsConfig := nats.ClientConfig{
-		URL:  a.nodeManager.GetClientURL(),
-		Name: "DChatClient",
-	}
-
-	var err error
-	a.natsSvc, err = nats.NewService(natsConfig)
-	if err != nil {
-		return fmt.Errorf("reconnect NATS failed: %v", err)
-	}
-
-	// Recreate chat service
-	if a.natsSvc != nil {
-		a.chatSvc = chat.NewService(a.natsSvc)
-	}
-
+	a.chatSvc.SetKeyPair(privB64, pubB64)
 	return nil
 }
+
+// OnDecrypted registers decrypted message callback
+func (a *App) OnDecrypted(h func(*chat.DecryptedMessage)) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	a.chatSvc.OnDecrypted(h)
+	return nil
+}
+
+// OnError registers error callback
+func (a *App) OnError(h func(error)) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	a.chatSvc.OnError(h)
+	return nil
+}
+
+// GetUser returns current user info
+func (a *App) GetUser() (chat.User, error) {
+	if a.chatSvc == nil {
+		return chat.User{}, fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.GetUser(), nil
+}
+
+// GetNetworkStats aggregates network statistics
+// （权限热重启、网络统计、凭据导出接口已移除，保持核心最小 API）
