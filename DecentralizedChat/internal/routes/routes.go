@@ -34,39 +34,10 @@ type NodeConfig struct {
 	ClientPort         int
 	ClusterPort        int
 	SeedRoutes         []string
-	NodeConfig         *NodePermissionConfig // Node level permission spec
-	ResolverConfigPath string                // Optional: path to resolver.conf enabling JWT account resolver
-}
-
-// SubjectPermission subject allow/deny definition
-type SubjectPermission struct {
-	Allow []string `json:"allow,omitempty"`
-	Deny  []string `json:"deny,omitempty"`
-}
-
-// ResponsePermission response permission limits
-type ResponsePermission struct {
-	MaxMsgs int           `json:"max"`
-	Expires time.Duration `json:"ttl"`
-}
-
-// RoutePermissions controls import/export between route-connected nodes
-type RoutePermissions struct {
-	Import *SubjectPermission `json:"import"`
-	Export *SubjectPermission `json:"export"`
-}
-
-// NodePermissions encapsulates route and response permissions
-type NodePermissions struct {
-	Routes   *RoutePermissions   `json:"routes"`
-	Response *ResponsePermission `json:"responses,omitempty"`
-}
-
-// NodePermissionConfig permission wrapper for a node
-type NodePermissionConfig struct {
-	NodeName    string           `json:"node_name"`
-	Credentials string           `json:"credentials"`
-	Permissions *NodePermissions `json:"permissions"`
+	ResolverConfigPath string
+	ImportAllow        []string
+	ExportAllow        []string
+	// Future: credentials path if needed
 }
 
 // NewNodeManager creates a new NodeManager
@@ -84,26 +55,8 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 		ClientPort:  clientPort,
 		ClusterPort: clusterPort,
 		SeedRoutes:  seedRoutes,
-		NodeConfig: &NodePermissionConfig{
-			NodeName:    nodeID,
-			Credentials: "dchat_node_credentials",
-			Permissions: &NodePermissions{
-				Routes: &RoutePermissions{
-					Import: &SubjectPermission{
-						Allow: []string{"*"}, // allow importing all subjects by default
-						Deny:  []string{},
-					},
-					Export: &SubjectPermission{
-						Allow: []string{"*"}, // allow exporting all subjects by default
-						Deny:  []string{},
-					},
-				},
-				Response: &ResponsePermission{
-					MaxMsgs: 1000,        // allow response messages
-					Expires: time.Minute, // response expiration
-				},
-			},
-		},
+		ImportAllow: []string{"*"},
+		ExportAllow: []string{"*"},
 	}
 	return nm.StartLocalNodeWithConfig(config)
 }
@@ -148,9 +101,9 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d)\n",
 		config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
 	fmt.Printf("   Node: %s, Import Allow: %v, Export Allow: %v\n",
-		config.NodeConfig.NodeName,
-		config.NodeConfig.Permissions.Routes.Import.Allow,
-		config.NodeConfig.Permissions.Routes.Export.Allow)
+		config.NodeID,
+		config.ImportAllow,
+		config.ExportAllow)
 	return nil
 }
 
@@ -190,18 +143,17 @@ func (c *NodeConfig) applyLocalOverrides(opts *server.Options, nm *NodeManager) 
 }
 
 func (c *NodeConfig) applyRoutePermissions(opts *server.Options) {
-	npc := c.NodeConfig
-	if npc == nil || npc.Permissions == nil || npc.Permissions.Routes == nil {
-		opts.Cluster.Permissions = &server.RoutePermissions{
-			Import: &server.SubjectPermission{Allow: []string{}, Deny: []string{"*"}},
-			Export: &server.SubjectPermission{Allow: []string{}, Deny: []string{"*"}},
-		}
-		return
+	allowImport := c.ImportAllow
+	if len(allowImport) == 0 {
+		allowImport = []string{}
 	}
-	rp := npc.Permissions.Routes
+	allowExport := c.ExportAllow
+	if len(allowExport) == 0 {
+		allowExport = []string{}
+	}
 	opts.Cluster.Permissions = &server.RoutePermissions{
-		Import: &server.SubjectPermission{Allow: rp.Import.Allow, Deny: rp.Import.Deny},
-		Export: &server.SubjectPermission{Allow: rp.Export.Allow, Deny: rp.Export.Deny},
+		Import: &server.SubjectPermission{Allow: allowImport, Deny: []string{}},
+		Export: &server.SubjectPermission{Allow: allowExport, Deny: []string{}},
 	}
 }
 
@@ -281,28 +233,21 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 		return fmt.Errorf("subject empty")
 	}
 
-	// Use lastConfig to derive existing permissions
-	var currentAllows []string
-	if nm.lastConfig != nil && nm.lastConfig.NodeConfig != nil && nm.lastConfig.NodeConfig.Permissions != nil && nm.lastConfig.NodeConfig.Permissions.Routes != nil && nm.lastConfig.NodeConfig.Permissions.Routes.Import != nil {
-		currentAllows = append(currentAllows, nm.lastConfig.NodeConfig.Permissions.Routes.Import.Allow...)
+	// Current allows
+	current := []string{}
+	if nm.lastConfig != nil && len(nm.lastConfig.ImportAllow) > 0 {
+		current = append(current, nm.lastConfig.ImportAllow...)
 	}
-
-	// Check if already present
-	for _, s := range currentAllows {
+	for _, s := range current {
 		if s == subject {
-			// Already allowed  nothing to do
 			return nil
 		}
 	}
-	updatedAllows := append(currentAllows, subject)
-
-	// Reuse previous SeedRoutes if available
+	updated := append(current, subject)
 	seedRoutes := []string{}
 	if nm.lastConfig != nil {
 		seedRoutes = append(seedRoutes, nm.lastConfig.SeedRoutes...)
 	}
-
-	// Build updated node config mirroring defaults used at start
 	newConfig := &NodeConfig{
 		NodeID:      nm.node.ID,
 		ClientPort:  nm.node.ClientPort,
@@ -314,17 +259,13 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 			}
 			return ""
 		}(),
-		NodeConfig: &NodePermissionConfig{
-			NodeName:    nm.node.ID,
-			Credentials: "dchat_node_credentials", // same default credential label
-			Permissions: &NodePermissions{
-				Routes: &RoutePermissions{
-					Import: &SubjectPermission{Allow: updatedAllows, Deny: []string{}},
-					Export: &SubjectPermission{Allow: []string{"*"}, Deny: []string{}},
-				},
-				Response: &ResponsePermission{MaxMsgs: 1000, Expires: time.Minute},
-			},
-		},
+		ImportAllow: updated,
+		ExportAllow: func() []string {
+			if nm.lastConfig != nil && len(nm.lastConfig.ExportAllow) > 0 {
+				return nm.lastConfig.ExportAllow
+			}
+			return []string{"*"}
+		}(),
 	}
 
 	// Persist to file (<nodeID>_node_config.json) for audit / future restarts
@@ -350,36 +291,16 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 
 // CreateNodeConfigWithPermissions creates node config translating subscribe permissions -> import
 func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string) *NodeConfig {
-	// Translate user subscribe permissions to route import permissions
 	importPermissions := subscribePermissions
 	if len(importPermissions) == 0 {
-		importPermissions = []string{} // empty slice => deny all imports
+		importPermissions = []string{}
 	}
-
 	return &NodeConfig{
 		NodeID:      nodeID,
 		ClientPort:  clientPort,
 		ClusterPort: clusterPort,
 		SeedRoutes:  seedRoutes,
-		NodeConfig: &NodePermissionConfig{
-			NodeName:    nodeID,
-			Credentials: "dchat_node_credentials",
-			Permissions: &NodePermissions{
-				Routes: &RoutePermissions{
-					Import: &SubjectPermission{
-						Allow: importPermissions, // allow limited imports based on user configuration
-						Deny:  []string{},
-					},
-					Export: &SubjectPermission{
-						Allow: []string{"*"}, // export all subjects
-						Deny:  []string{},
-					},
-				},
-				Response: &ResponsePermission{
-					MaxMsgs: 1000,
-					Expires: time.Minute,
-				},
-			},
-		},
+		ImportAllow: importPermissions,
+		ExportAllow: []string{"*"},
 	}
 }

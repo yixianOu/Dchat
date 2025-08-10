@@ -403,6 +403,7 @@ UserA.SendMessage("general", "Hello everyone!")
 - 实现 AddSubscribePermission: 支持新增订阅权限，写入 <nodeID>_node_config.json 并自动重启节点应用新权限
 - 重构 config.go：新增扁平 server 配置(ServerOptionsLite)，与原 NATS/Routes 字段同步，提供 BuildServerOptions() 直接生成 server.Options，减少嵌套层级。
 - 二次重构 config：移除 RoutesConfig 与大部分嵌套字段，保留 Server(服务端) + NATS(向后兼容少量字段)；后续将逐步淘汰 NATS/旧权限字段，统一使用 Server + Auth 扁平结构。
+- 精简 routes.NodeConfig：删除多层 Permissions/Routes/SubjectPermission 结构，保留 ImportAllow/ExportAllow 扁平字段，AddSubscribePermission 逻辑同步简化。
 
 **安装依赖：**
 ```bash
