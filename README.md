@@ -587,7 +587,7 @@ TODO:
 5.  cluster节点的import配置能否热重启 不能
 6.  研究creds,jwt,nkey的关系和作用 ok
 7.  通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥 ok
-8.  tls加密连接,公私钥传输和解密私聊信息
+8.  好友公钥和群聊对称公钥需要通过nats KV存储在本地,并且每次发送信息和接受信息是都需要加密解密.
 9. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
 10. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
 11. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
@@ -610,3 +610,4 @@ TODO:
 8.  更新 app.go：移除 tailscale 直接依赖（保留占位网络状态）、精简启动流程、本地 IP 为空回退 127.0.0.1、自动加入 general 房间、新增 LeaveChatRoom、GetNetworkStats 不再引用 tailscale、使用新的 chat Service API。
 9.  精简 internal/chat/README.md 群聊部分：仅保留 dchat.grp.<gid>.msg 与可选 ctrl.rekey，删除成员/ack/typing/presence/meta/history 等扩展，定位最小去中心化实现，并在文档中解释软权限通过密钥轮换实现。
 10. 精简 internal/chat/README.md 私聊设计：移除 ack/typing/presence/rekey 多余 subject，统一为 dchat.dm.{cid}.msg，说明直接使用对方公钥 + 自己私钥派生共享密钥加密消息。
+11. 新增 internal/chat/crypto.go：实现 encryptDirect (NaCl box) 与 encryptGroup (AES-256-GCM)；扩展 chat.Service 提供 SetKeyPair/SendDirect/JoinDirect/SendGroup，消息发送前加密，接收后待后续解密集成。

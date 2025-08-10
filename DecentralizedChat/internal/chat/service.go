@@ -3,8 +3,10 @@ package chat
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -25,6 +27,10 @@ type Service struct {
 	user  *User
 
 	handlers []func(*Message) // on new incoming (remote) message callbacks
+
+	// key material (base64 raw 32 bytes for X25519/Ed25519 private & public; symmetric group keys in KV)
+	userPrivB64 string
+	userPubB64  string
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -202,6 +208,112 @@ func (cs *Service) GetRooms() []string {
 	}
 	cs.mu.RUnlock()
 	return rooms
+}
+
+// --- Direct & Group encrypted messaging helpers ---
+
+// SetKeyPair sets local user key pair (base64 raw 32 bytes each)
+func (cs *Service) SetKeyPair(privB64, pubB64 string) {
+	cs.mu.Lock()
+	cs.userPrivB64 = privB64
+	cs.userPubB64 = pubB64
+	cs.mu.Unlock()
+}
+
+// deriveCID returns deterministic conversation id
+func deriveCID(a, b string) string {
+	if a == b {
+		return a
+	} // self-chat edge
+	if a > b {
+		a, b = b, a
+	}
+	h := sha256.Sum256([]byte(a + ":" + b))
+	return hex.EncodeToString(h[:])[:16]
+}
+
+type directWire struct {
+	CID       string `json:"cid"`
+	MID       string `json:"mid"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Ts        int64  `json:"ts"`
+	Nonce     string `json:"nonce"`
+	Cipher    string `json:"cipher"`
+	Alg       string `json:"alg"`
+	SenderPub string `json:"sender_pub"`
+}
+
+// SendDirect sends encrypted direct message to peerID using peer's public key stored in KV
+func (cs *Service) SendDirect(peerID, peerPubB64, content string) error {
+	if peerID == "" || content == "" {
+		return errors.New("peerID/content empty")
+	}
+	cs.mu.RLock()
+	priv := cs.userPrivB64
+	pub := cs.userPubB64
+	fromUID := cs.user.ID
+	cs.mu.RUnlock()
+	if priv == "" || pub == "" {
+		return errors.New("local key pair not set")
+	}
+	cid := deriveCID(fromUID, peerID)
+	nonceB64, cipherB64, err := encryptDirect(priv, peerPubB64, []byte(content))
+	if err != nil {
+		return err
+	}
+	wire := directWire{
+		CID:       cid,
+		MID:       generateMessageID(),
+		From:      fromUID,
+		To:        peerID,
+		Ts:        time.Now().Unix(),
+		Nonce:     nonceB64,
+		Cipher:    cipherB64,
+		Alg:       "x25519-box",
+		SenderPub: pub,
+	}
+	data, _ := json.Marshal(wire)
+	subject := fmt.Sprintf("dchat.dm.%s.msg", cid)
+	return cs.nats.Publish(subject, data)
+}
+
+// JoinDirect ensures subscription exists for a direct conversation
+func (cs *Service) JoinDirect(peerID string) error {
+	if peerID == "" {
+		return errors.New("peerID empty")
+	}
+	cs.mu.RLock()
+	self := cs.user.ID
+	cs.mu.RUnlock()
+	cid := deriveCID(self, peerID)
+	return cs.JoinRoom("dm-" + cid) // reuse existing logic, but subject mapping differs in handler
+}
+
+// SendGroup publishes encrypted group message using symmetric key
+func (cs *Service) SendGroup(gid, groupKeyB64, content string) error {
+	if gid == "" || groupKeyB64 == "" || content == "" {
+		return errors.New("gid/key/content empty")
+	}
+	cs.mu.RLock()
+	fromUID := cs.user.ID
+	cs.mu.RUnlock()
+	nonceB64, cipherB64, err := encryptGroup(groupKeyB64, []byte(content))
+	if err != nil {
+		return err
+	}
+	wire := map[string]interface{}{
+		"gid":    gid,
+		"mid":    generateMessageID(),
+		"from":   fromUID,
+		"ts":     time.Now().Unix(),
+		"nonce":  nonceB64,
+		"cipher": cipherB64,
+		"alg":    "aes256-gcm",
+	}
+	data, _ := json.Marshal(wire)
+	subject := fmt.Sprintf("dchat.grp.%s.msg", gid)
+	return cs.nats.Publish(subject, data)
 }
 
 func (cs *Service) handleMessage(msg []byte) {

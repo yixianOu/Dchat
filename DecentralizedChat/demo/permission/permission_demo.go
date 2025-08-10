@@ -28,8 +28,8 @@ func main() {
 
 	cfg.EnableRoutes(cfg.Network.LocalIP, DefaultClientPort, DefaultClusterPort, []string{})
 
-	// 2. 创建节点管理器
-	nodeManager := routes.NewNodeManager(cfg.Routes.ClusterName, cfg.Routes.Host)
+	// 2. 创建节点管理器 (使用精简后的 clusterName=固定, host=本地IP)
+	nodeManager := routes.NewNodeManager("dchat-network", cfg.Network.LocalIP)
 
 	// 3. 测试不同权限配置
 	fmt.Println("\n=== 测试1: 默认权限（订阅全部拒绝）===")

@@ -85,13 +85,6 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 }
 ```
 
-### 3. 公共 / 系统
-| 功能 | Subject | 说明 |
-|------|---------|------|
-| 用户全局 Presence（可选） | dchat.presence.user.<uid>.online | 更粗粒度广播 |
-| 服务端公告 | dchat.sys.announce | 未来兼容 |
-| 发现 / 引导（可选） | dchat.discovery.seed | 发布可连接路由信息 |
-
 ### 4. JetStream 建议（可选持久化）
 | 流 | 绑定 Subjects |
 |----|---------------|
@@ -103,7 +96,7 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 （或者按功能拆更细；也可不启用 JS，仅实时）
 
 ### 5. 加密与 KV 配合
-- 私聊：从 KV dchat_friends 获取对方 pub（FriendPubKeyRecord）。使用双方长期 Ed25519 PK 通过 X25519 转换（或引入独立 Curve25519 密钥对）+ HKDF 派生会话密钥；可再做单向 ratchet（后续扩展）。
+- 私聊：从 KV dchat_friends 获取对方 pub（FriendPubKeyRecord）。使用双方长期 Ed25519 PK 通过 X25519 转换（或引入独立 Curve25519 密钥对）+ HKDF 派生会话密钥。
 - 群聊：KV dchat_groups[groupID] 存储 {sym, ver}；rekey 时更新 ver，发布 dchat.grp.{gid}.ctrl.rekey。
 - 消息体结构（示例）：
   {
@@ -119,8 +112,8 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 
 ### 6. 权限（Import/Export 或 Subscribe/Publish 控制）
 最小可行 Allow：
-- 订阅：dchat.dm.{cid}.msg（参与的每个会话） + dchat.grp.*.msg
-- 发布：dchat.dm.{cid}.msg（参与的会话），dchat.grp.{gid}.msg（已加入的群）
+- 订阅：dchat.dm.{cid}.msg（参与的每个会话） + dchat.grp.{gid}.msg（已加入的群）
+- 发布：all-allow
 实现方式：
 - 启动时根据已加入会话/群动态生成 ImportAllow（订阅）+ ExportAllow（发布）列表并重启（当前模型）。
 - 后续可引入服务端签发基于 JWT 的动态权限（减少重启）。
@@ -129,9 +122,7 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 1. 用户选择好友 B（有其 pubKey；否则提示添加）。
 2. 计算 cid（排序 + hash）。
 3. 检查本地是否已有会话；若新建：订阅 dchat.dm.{cid}.msg。
-4. 若无派生密钥：执行密钥派生 -> 会话缓存。
-5. 发送首条（可包含会话握手 meta）。
-6. 对方若未订阅：收到消息后本地自动补订阅（惰性建立）。
+4. 对方若未订阅：收到消息后本地自动补订阅（惰性建立）。
 
 ### 8. 群聊创建 / 加入（精简流程）
 1. 创建者：生成 gid + 随机 32 字节密钥 -> KV dchat_groups[gid] = {sym, ver:1}
@@ -142,17 +133,6 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 ### 9. 历史消息（延后）
 初期不做：需要时将 dchat.grp.*.msg 绑定 JetStream 流以支持回放；或实现简单本地缓存分享。
 
-### 10. Typing / Presence（延后）
-暂不实现，减少额外订阅与状态复杂度。
-
-### 11. 去重与幂等
-- 消息 ID：msg_<random>; 在本地 LRU（大小 N）做重复检测。
-- Ack：只对未显示/未确认的消息更新状态。
-
-### 12. 安全注意
-- 不在 Subject 中放用户/群外的敏感明文（可接受的：uid/gid/cid 短标识）。
-- Rekey 控制消息也需要签名 + 加密（或至少签名）。
-- 不信任客户端回执（可选做双向 ACK 聚合）。
 
 ## 快速对照（实现优先级）
 1. 私聊：dchat.dm.{cid}.msg + KV 公钥
