@@ -63,7 +63,7 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 		return err
 	}
 
-	keysDir, storeDir := readEnvPaths() // existing approach
+	keysDir := readEnvPaths() // storeDir removed
 
 	// set operator early so artifact discovery uses it
 	cfg.NSC.Operator = operatorName
@@ -74,7 +74,6 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 
 	// Persist
 	cfg.NSC.Operator = operatorName
-	cfg.NSC.StoreDir = storeDir
 	cfg.NSC.KeysDir = keysDir
 	cfg.NSC.Account = userMeta.Account
 	cfg.NSC.User = userMeta.User
@@ -193,24 +192,18 @@ func execCommand(name string, args ...string) (stdout bytes.Buffer, stderr bytes
 	return
 }
 
-// readEnvPaths executes `nsc env` (no JSON flag available) and parses key/store directories.
-func readEnvPaths() (keysDir, storeDir string) {
+// readEnvPaths executes `nsc env` (no JSON flag available) and parses keys directory.
+func readEnvPaths() (keysDir string) {
 	out, errb, err := execCommand("nsc", "env")
 	if err != nil {
 		_ = errb
-		return defaultKeysDir(), defaultStoresDir()
+		return defaultKeysDir()
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(out.Bytes()))
-	var rawKeys, rawStore string
+	var rawKeys string
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.Contains(line, "Current Store Dir") {
-			// columns separated by '|'
-			parts := strings.Split(line, "|")
-			if len(parts) >= 4 {
-				rawStore = strings.TrimSpace(parts[3])
-			}
-		} else if strings.Contains(line, "NKEYS_PATH") { // deprecated row shows effective default keys dir
+		if strings.Contains(line, "NKEYS_PATH") { // deprecated row shows effective default keys dir
 			parts := strings.Split(line, "|")
 			if len(parts) >= 4 {
 				rawKeys = strings.TrimSpace(parts[3])
@@ -218,7 +211,6 @@ func readEnvPaths() (keysDir, storeDir string) {
 		}
 	}
 	keysDir = expandHomeOrDefault(rawKeys, defaultKeysDir())
-	storeDir = expandHomeOrDefault(rawStore, defaultStoresDir())
 	return
 }
 
@@ -238,13 +230,6 @@ func expandHomeOrDefault(p string, def string) string {
 func defaultKeysDir() string {
 	if home, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(home, ".local", "share", "nats", "nsc", "keys")
-	}
-	return ""
-}
-
-func defaultStoresDir() string {
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".local", "share", "nats", "nsc", "stores")
 	}
 	return ""
 }

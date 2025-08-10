@@ -62,6 +62,9 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 精简 setup：移除 collectUserArtifacts/collectAccountArtifacts 未使用参数 (storeDir/keysDir/cfg)，消除 gopls unusedparams 警告。
   - 重构 routes：内联 ensureNotStarted，辅助函数 (loadResolverConfig/applyLocalOverrides/applyRoutePermissions/configureSeedRoutes/loadTrustedKeysIfRequested) 改为 NodeConfig 方法。
   - 配置精简：移除 account_seed_path 及账户种子导出逻辑，仅保留用户 user_seed_path 与 user_creds_path。
+    - 移除 StoreDir 持久化：不再跟踪 NSC store_dir（JWT 存储目录）路径，仅保留 keys_dir + 用户 creds/seed，进一步最小化配置。
+    - 修改 internal/config/config.go 删除 nsc.store_dir 字段；修改 internal/nscsetup/setup.go 去除赋值；README 追加该操作记录。
+    - 二次清理：删除 residual StoresDir 相关函数与解析逻辑（readEnvPaths 去掉 storeDir 返回，移除 defaultStoresDir，实现最小依赖）。
 ```
 
 ## 运行演示

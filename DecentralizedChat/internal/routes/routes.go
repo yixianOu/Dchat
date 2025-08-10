@@ -106,7 +106,6 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 }
 
 // StartLocalNodeWithConfig starts local node with a custom configuration
-
 func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	// inline ensureNotStarted logic
 	if nm.node != nil {
