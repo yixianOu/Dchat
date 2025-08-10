@@ -8,8 +8,6 @@ import (
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/nscsetup"
 	"DecentralizedChat/internal/routes"
-
-	gonats "github.com/nats-io/nats.go"
 )
 
 const (
@@ -37,14 +35,14 @@ func main() {
 		return
 	}
 
-	// 2. 创建节点管理器
-	nodeManager := routes.NewNodeManager(cfg.Routes.ClusterName, cfg.Routes.Host)
+	// 2. 创建节点管理器 (使用 ServerOptionsLite)
+	nodeManager := routes.NewNodeManager(cfg.Server.ClusterName, cfg.Server.Host)
 
 	// 3. 启动本地节点
-	nodeID := fmt.Sprintf("demo-node-%s", cfg.Routes.Host)
-	// 如果配置了 resolver.conf，则在本地节点启用 JWT 账户解析
-	startCfg := nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, []string{}, cfg.NATS.Permissions.Subscribe.Allow)
-	startCfg.ResolverConfigPath = cfg.Routes.ResolverConfig
+	nodeID := fmt.Sprintf("demo-node-%s", cfg.Server.Host)
+	// 使用 Server.ImportAllow 作为订阅权限
+	startCfg := nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, []string{}, cfg.Server.ImportAllow)
+	startCfg.ResolverConfigPath = cfg.Server.ResolverConf
 	err = nodeManager.StartLocalNodeWithConfig(startCfg)
 	if err != nil {
 		fmt.Printf("启动本地节点失败: %v\n", err)
@@ -66,11 +64,7 @@ func main() {
 	}
 
 	// 5. 创建NATS客户端（使用 NSC 生成的 creds 文件）
-	clientCfg := nats.ClientConfig{
-		URL:       nodeManager.GetClientURL(),
-		CredsFile: cfg.NATS.CredsFile,
-		Name:      "DemoClient",
-	}
+	clientCfg := nats.ClientConfig{URL: nodeManager.GetClientURL(), CredsFile: cfg.Server.CredsFile, Name: "DemoClient"}
 
 	client, err := nats.NewService(clientCfg)
 	if err != nil {
@@ -85,18 +79,7 @@ func main() {
 
 	// 6. 测试JSON消息
 
-	// 如果存在 bootstrap server 配置，尝试连接一个进行可达性演示（仅演示，不做发现扩散）
-	if len(cfg.Routes.BootstrapServers) > 0 && cfg.NATS.CredsFile != "" {
-		bs := cfg.Routes.BootstrapServers[0]
-		fmt.Printf("尝试连接引导节点: %s\n", bs)
-		bsConn, bErr := gonats.Connect(bs, gonats.UserCredentials(cfg.NATS.CredsFile))
-		if bErr != nil {
-			fmt.Printf("引导节点连接失败: %v\n", bErr)
-		} else {
-			fmt.Printf("引导节点连接成功: %s\n", bsConn.ConnectedUrl())
-			defer bsConn.Close()
-		}
-	}
+	// 引导节点逻辑已移除（RoutesConfig 已删除）
 	testData := map[string]interface{}{
 		"message":   "Hello DecentralizedChat!",
 		"timestamp": time.Now(),

@@ -89,18 +89,13 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 
 // ensureNATSURL builds and persists the NATS URL if empty; returns the URL
 func ensureNATSURL(cfg *config.Config) string {
-	// prefer existing
-	if cfg.NATS.URL != "" {
-		return cfg.NATS.URL
-	}
 	if cfg.Server.Host == "" {
 		cfg.Server.Host = cfg.Network.LocalIP
 	}
 	if cfg.Server.ClientPort == 0 {
 		cfg.Server.ClientPort = DefaultClientPort
 	}
-	cfg.NATS.URL = fmt.Sprintf("nats://%s:%d", cfg.Server.Host, cfg.Server.ClientPort)
-	return cfg.NATS.URL
+	return fmt.Sprintf("nats://%s:%d", cfg.Server.Host, cfg.Server.ClientPort)
 }
 
 // initNSCOperatorAndSys performs idempotent operator/SYS initialization

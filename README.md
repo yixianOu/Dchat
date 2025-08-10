@@ -66,6 +66,22 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
     - 修改 internal/config/config.go 删除 nsc.store_dir 字段；修改 internal/nscsetup/setup.go 去除赋值；README 追加该操作记录。
     - 二次清理：删除 residual StoresDir 相关函数与解析逻辑（readEnvPaths 去掉 storeDir 返回，移除 defaultStoresDir，实现最小依赖）。
   - 新增 nsc.user_pub_key 字段：在初始化时解析 user JWT 的 sub 保存用户公钥，避免二次调用 nsc 解析。
+
+  ## 2025-08-10 重构：移除 NATSConfig 结构，直接使用 server.Options 扁平字段
+  - 删除 internal/config/config.go 中 NATSConfig / Permissions / PermissionRules 结构体。
+  - 所有客户端连接参数改由 ServerOptionsLite + 运行时拼接 URL 提供（Host/ClientPort/CredsFile）。
+  - 订阅/发布权限：移除嵌套 permissions，统一使用 Server.ImportAllow / ExportAllow。
+  - 删除 ensurePermissionsDefaults / syncServerFlat 中与旧结构相关逻辑。
+  - 简化 CanPublish/CanSubscribe：发布默认放行；订阅基于 ImportAllow 简单匹配。
+  - 更新 internal/nscsetup/setup.go 生成 NATS URL 逻辑，移除 cfg.NATS 引用。
+  - 更新 demo/cluster/cluster_demo.go 适配新结构，去除已删除的 Routes/NATS 字段引用。
+  - 构建验证通过。
+
+  操作日志：
+  - 修改 internal/config/config.go 移除 NATSConfig 及权限结构
+  - 修改 internal/nscsetup/setup.go 替换 cfg.NATS.URL 访问
+  - 修改 demo/cluster/cluster_demo.go 使用 cfg.Server.* 字段
+  - 更新 README.md 追加本节说明
 ```
 
 ## 运行演示

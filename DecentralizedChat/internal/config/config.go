@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/nats-io/nats-server/v2/server"
 )
@@ -15,7 +14,6 @@ import (
 type Config struct {
 	User    UserConfig        `json:"user"`
 	Network NetworkConfig     `json:"network"`
-	NATS    NATSConfig        `json:"nats"`
 	UI      UIConfig          `json:"ui"`
 	NSC     NSCConfig         `json:"nsc"`
 	Server  ServerOptionsLite `json:"server"`
@@ -34,29 +32,7 @@ type NetworkConfig struct {
 	LocalIP          string   `json:"local_ip"`
 }
 
-type NATSConfig struct {
-	URL           string        `json:"url"`            // NATS server URL
-	User          string        `json:"user"`           // Username (legacy compatibility, not recommended)
-	Password      string        `json:"password"`       // Password (legacy compatibility, not recommended)
-	Token         string        `json:"token"`          // Auth token (optional)
-	CredsFile     string        `json:"creds_file"`     // Path to NSC generated .creds file
-	Timeout       time.Duration `json:"timeout"`        // Connection timeout
-	MaxReconnect  int           `json:"max_reconnect"`  // Max reconnect attempts
-	ReconnectWait time.Duration `json:"reconnect_wait"` // Wait duration between reconnects
-	Permissions   Permissions   `json:"permissions"`    // Subject permission settings
-}
-
-// Permissions encapsulates NATS subject permissions
-type Permissions struct {
-	Publish   PermissionRules `json:"publish"`   // Publish permissions
-	Subscribe PermissionRules `json:"subscribe"` // Subscribe permissions
-}
-
-// PermissionRules represents allow/deny lists
-type PermissionRules struct {
-	Allow []string `json:"allow"` // Allowed subjects
-	Deny  []string `json:"deny"`  // Denied subjects
-}
+// Legacy NATSConfig/Permissions 结构已移除：直接使用 ServerOptionsLite 提供的 Import/Export 权限。
 
 type UIConfig struct {
 	Theme    string `json:"theme"`
@@ -102,26 +78,7 @@ var defaultConfig = Config{
 		SeedNodes:        []string{},
 		LocalIP:          "", // Will be resolved dynamically or provided by user
 	},
-	NATS: NATSConfig{
-		URL:           "", // To be filled by user or derived
-		User:          "",
-		Password:      "",
-		Token:         "",
-		CredsFile:     "",
-		Timeout:       5 * time.Second,
-		MaxReconnect:  -1,
-		ReconnectWait: time.Second,
-		Permissions: Permissions{
-			Publish: PermissionRules{
-				Allow: []string{"*"}, // Allow publishing to all subjects by default
-				Deny:  []string{},
-			},
-			Subscribe: PermissionRules{
-				Allow: []string{}, // Deny all subscriptions by default (explicit allow required)
-				Deny:  []string{"*"},
-			},
-		},
-	},
+	// NATS 字段已删除
 	UI: UIConfig{
 		Theme:    "dark",
 		Language: "zh-CN",
@@ -227,15 +184,9 @@ func GetDefaultConfig() Config {
 // GetNATSClientConfig 获取NATS客户端配置
 func (c *Config) GetNATSClientConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"url":            c.NATS.URL,
-		"user":           c.NATS.User,
-		"password":       c.NATS.Password,
-		"token":          c.NATS.Token,
-		"creds_file":     c.NATS.CredsFile,
-		"name":           c.User.Nickname,
-		"timeout":        c.NATS.Timeout,
-		"max_reconnect":  c.NATS.MaxReconnect,
-		"reconnect_wait": c.NATS.ReconnectWait,
+		"url":        fmt.Sprintf("nats://%s:%d", c.Server.Host, c.Server.ClientPort),
+		"creds_file": c.Server.CredsFile,
+		"name":       c.User.Nickname,
 	}
 }
 
@@ -250,9 +201,7 @@ func (c *Config) GetClusterConfig() map[string]interface{} {
 }
 
 // UpdateNATSURL updates the NATS URL
-func (c *Config) UpdateNATSURL(url string) {
-	c.NATS.URL = url
-}
+func (c *Config) UpdateNATSURL(u string) {}
 
 // UpdateUserInfo updates user profile information
 func (c *Config) UpdateUserInfo(nickname, avatar string) {
@@ -304,22 +253,9 @@ func (c *Config) ValidateAndSetDefaults() error {
 	if c.Server.Host == "" {
 		c.Server.Host = c.Network.LocalIP
 	}
-	if c.NATS.URL == "" {
-		c.NATS.URL = fmt.Sprintf("nats://%s:%d", c.Server.Host, c.Server.ClientPort)
-	}
-
-	if c.NATS.URL == "" {
-		c.NATS.URL = fmt.Sprintf("nats://%s:%d", c.Server.Host, c.Server.ClientPort)
-	}
-
-	// 确保权限配置完整
-	c.ensurePermissionsDefaults()
-	// 填充扁平权限（仅首次）
-	if len(c.Server.ImportAllow) == 0 && len(c.NATS.Permissions.Subscribe.Allow) > 0 {
-		c.Server.ImportAllow = append([]string{}, c.NATS.Permissions.Subscribe.Allow...)
-	}
-	if len(c.Server.ImportDeny) == 0 && len(c.NATS.Permissions.Subscribe.Deny) > 0 {
-		c.Server.ImportDeny = append([]string{}, c.NATS.Permissions.Subscribe.Deny...)
+	// 默认 URL 由 Server 构造； import/export 权限已直接在 Server 中维护
+	if len(c.Server.ExportAllow) == 0 {
+		c.Server.ExportAllow = []string{"*"}
 	}
 	if len(c.Server.ExportAllow) == 0 {
 		c.Server.ExportAllow = []string{"*"}
@@ -329,47 +265,19 @@ func (c *Config) ValidateAndSetDefaults() error {
 }
 
 // syncServerFlat 同步嵌套 Routes/NATS 与扁平 Server 结构
-func (c *Config) syncServerFlat() {
-	if c.Server.CredsFile == "" {
-		c.Server.CredsFile = c.NATS.CredsFile
-	}
-}
+func (c *Config) syncServerFlat() {}
 
 // ensurePermissionsDefaults guarantees permission sections have defaults
-func (c *Config) ensurePermissionsDefaults() {
-	if len(c.NATS.Permissions.Publish.Allow) == 0 && len(c.NATS.Permissions.Publish.Deny) == 0 {
-		c.NATS.Permissions.Publish.Allow = []string{"*"}
-	}
-	if len(c.NATS.Permissions.Subscribe.Allow) == 0 && len(c.NATS.Permissions.Subscribe.Deny) == 0 {
-		c.NATS.Permissions.Subscribe.Deny = []string{"*"}
-	}
-}
+func (c *Config) ensurePermissionsDefaults() {}
 
 // AddSubscribePermission adds a subject to subscribe allow list
 func (c *Config) AddSubscribePermission(subject string) {
-	// 检查是否已存在
-	for _, allowed := range c.NATS.Permissions.Subscribe.Allow {
+	for _, allowed := range c.Server.ImportAllow { // 已存在
 		if allowed == subject {
 			return
 		}
 	}
-
-	// 添加到允许列表
-	c.NATS.Permissions.Subscribe.Allow = append(c.NATS.Permissions.Subscribe.Allow, subject)
-	// 同步扁平 ImportAllow
-	found := false
-	for _, s := range c.Server.ImportAllow {
-		if s == subject {
-			found = true
-			break
-		}
-	}
-	if !found {
-		c.Server.ImportAllow = append(c.Server.ImportAllow, subject)
-	}
-
-	// 从拒绝列表中移除（如果存在）
-	c.removeFromDenyList(subject)
+	c.Server.ImportAllow = append(c.Server.ImportAllow, subject)
 }
 
 // AddSubscribePermissionAndSave adds a subscribe permission and persists config
@@ -380,15 +288,6 @@ func (c *Config) AddSubscribePermissionAndSave(subject string) error {
 
 // RemoveSubscribePermission removes a subject from subscribe allow list
 func (c *Config) RemoveSubscribePermission(subject string) {
-	// 从允许列表中移除
-	var newAllow []string
-	for _, allowed := range c.NATS.Permissions.Subscribe.Allow {
-		if allowed != subject {
-			newAllow = append(newAllow, allowed)
-		}
-	}
-	c.NATS.Permissions.Subscribe.Allow = newAllow
-	// 同步扁平 ImportAllow
 	var na []string
 	for _, s := range c.Server.ImportAllow {
 		if s != subject {
@@ -425,61 +324,16 @@ func (c *Config) AddTrustedPubKeyPath(path string, persist bool) error {
 }
 
 // removeFromDenyList removes a subject from the deny list if present
-func (c *Config) removeFromDenyList(subject string) {
-	var newDeny []string
-	for _, denied := range c.NATS.Permissions.Subscribe.Deny {
-		if denied != subject {
-			newDeny = append(newDeny, denied)
-		}
-	}
-	c.NATS.Permissions.Subscribe.Deny = newDeny
-}
+func (c *Config) removeFromDenyList(subject string) {}
 
 // CanPublish checks publish permission for given subject
-func (c *Config) CanPublish(subject string) bool {
-	return c.checkPermission(subject, c.NATS.Permissions.Publish)
-}
-
-// CanSubscribe checks subscribe permission for given subject
-func (c *Config) CanSubscribe(subject string) bool {
-	return c.checkPermission(subject, c.NATS.Permissions.Subscribe)
-}
-
-// checkPermission evaluates allow/deny logic for a subject
-func (c *Config) checkPermission(subject string, rules PermissionRules) bool {
-	// 如果在拒绝列表中，直接返回false
-	for _, deny := range rules.Deny {
-		if c.matchSubject(subject, deny) {
-			return false
-		}
-	}
-
-	// 如果在允许列表中，返回true
-	for _, allow := range rules.Allow {
-		if c.matchSubject(subject, allow) {
+func (c *Config) CanPublish(subject string) bool { return true } // 发布默认放行（依赖服务端 ExportAllow）
+func (c *Config) CanSubscribe(subject string) bool { // 简单基于 ImportAllow 判定
+	for _, s := range c.Server.ImportAllow {
+		if s == "*" || s == subject {
 			return true
 		}
 	}
-
-	// 默认拒绝
-	return false
-}
-
-// matchSubject performs simple wildcard subject pattern matching (* suffix)
-func (c *Config) matchSubject(subject, pattern string) bool {
-	if pattern == "*" {
-		return true
-	}
-	if pattern == subject {
-		return true
-	}
-
-	// 简单的通配符匹配（可以扩展为更复杂的模式匹配）
-	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
-		prefix := pattern[:len(pattern)-1]
-		return len(subject) >= len(prefix) && subject[:len(prefix)] == prefix
-	}
-
 	return false
 }
 
