@@ -276,8 +276,14 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 		return
 	}
 	msg := &DecryptedMessage{CID: w.CID, Sender: w.Sender, Ts: time.Unix(w.Ts, 0), Plain: string(pt), IsGroup: isGroup, RawWire: w, Subject: subject}
+	// 调用所有已注册回调；单个回调 panic 不影响其它回调执行。
 	for _, h := range handlers {
-		func(cb func(*DecryptedMessage)) { defer func() { _ = recover() }(); cb(msg) }(h)
+		cb := h
+		// 保护性执行，避免上层 UI / 外部逻辑 panic 终止解密分发。
+		func() {
+			defer func() { _ = recover() }()
+			cb(msg)
+		}()
 	}
 }
 

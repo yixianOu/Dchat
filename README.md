@@ -90,6 +90,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
     - 统一加密消息载荷结构 encWire(ver,cid,sender,ts,nonce,cipher,alg,sig)；私聊与群聊复用，移除 mid/from/to/gid 等冗余字段。
     - 再次裁剪 encWire：去除 ver/alg/sig 字段，最终格式 {cid,sender,ts,nonce,cipher}，算法由 subject 推断；更新 service.go 与 internal/chat/README.md 示例。
     - 重写 internal/chat/service.go：移除房间/历史存储 API，仅保留私聊/群聊加密发送接收 (JoinDirect/JoinGroup/SendDirect/SendGroup)，新增解密回调；调整 app.go 删除房间相关方法并新增 Direct/Group 封装。
+    - 优化 service.go 回调分发代码风格：显式局部变量 + 保护性 defer 注释，提升可读性。
     - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
     - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
 ```
