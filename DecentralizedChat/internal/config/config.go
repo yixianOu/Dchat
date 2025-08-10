@@ -4,18 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/nats-io/nats-server/v2/server"
 )
 
 type Config struct {
-	User    UserConfig    `json:"user"`
-	Network NetworkConfig `json:"network"`
-	NATS    NATSConfig    `json:"nats"`
-	Routes  RoutesConfig  `json:"routes"`
-	UI      UIConfig      `json:"ui"`
-	NSC     NSCConfig     `json:"nsc"`
+	User    UserConfig        `json:"user"`
+	Network NetworkConfig     `json:"network"`
+	NATS    NATSConfig        `json:"nats"`
+	UI      UIConfig          `json:"ui"`
+	NSC     NSCConfig         `json:"nsc"`
+	Server  ServerOptionsLite `json:"server"`
 }
 
 type UserConfig struct {
@@ -55,20 +58,6 @@ type PermissionRules struct {
 	Deny  []string `json:"deny"`  // Denied subjects
 }
 
-type RoutesConfig struct {
-	Enabled             bool     `json:"enabled"`              // Whether to enable embedded routes cluster
-	Host                string   `json:"host"`                 // Host address
-	ClientPort          int      `json:"client_port"`          // Client port
-	ClusterPort         int      `json:"cluster_port"`         // Cluster (route) port
-	ClusterName         string   `json:"cluster_name"`         // Cluster name
-	SeedRoutes          []string `json:"seed_routes"`          // Seed route URLs
-	NodeName            string   `json:"node_name"`            // Local node name
-	ResolverConfig      string   `json:"resolver_config"`      // Path to nsc generated resolver.conf (enables JWT account resolver)
-	BootstrapServers    []string `json:"bootstrap_servers"`    // Optional public bootstrap servers
-	BootstrapMinPeers   int      `json:"bootstrap_min_peers"`  // Disconnect bootstrap after reaching this peer count
-	DisconnectBootstrap bool     `json:"disconnect_bootstrap"` // Whether to disconnect bootstrap servers after threshold
-}
-
 type UIConfig struct {
 	Theme    string `json:"theme"`
 	Language string `json:"language"`
@@ -84,6 +73,21 @@ type NSCConfig struct {
 	Account            string   `json:"account"`              // Owning account name (default SYS)
 	User               string   `json:"user"`                 // User name (default sys)
 	TrustedPubKeyPaths []string `json:"trusted_pubkey_paths"` // Trusted public key file paths list
+}
+
+// ServerOptionsLite 扁平化的服务端配置，减少嵌套 & 贴近 server.Options
+type ServerOptionsLite struct {
+	Host         string   `json:"host"`
+	ClientPort   int      `json:"client_port"`
+	ClusterPort  int      `json:"cluster_port"`
+	ClusterName  string   `json:"cluster_name"`
+	SeedRoutes   []string `json:"seed_routes"`
+	ResolverConf string   `json:"resolver_config"`
+	CredsFile    string   `json:"creds_file"`
+	ImportAllow  []string `json:"import_allow"`
+	ImportDeny   []string `json:"import_deny"`
+	ExportAllow  []string `json:"export_allow"`
+	ExportDeny   []string `json:"export_deny"`
 }
 
 var defaultConfig = Config{
@@ -118,19 +122,6 @@ var defaultConfig = Config{
 			},
 		},
 	},
-	Routes: RoutesConfig{
-		Enabled:             false,
-		Host:                "", // To be set
-		ClientPort:          0,  // To be set
-		ClusterPort:         0,  // To be set
-		ClusterName:         "dchat_network",
-		SeedRoutes:          []string{},
-		NodeName:            "dchat_node",
-		ResolverConfig:      "",
-		BootstrapServers:    []string{},
-		BootstrapMinPeers:   4,
-		DisconnectBootstrap: true,
-	},
 	UI: UIConfig{
 		Theme:    "dark",
 		Language: "zh-CN",
@@ -144,6 +135,19 @@ var defaultConfig = Config{
 		Account:            "",
 		User:               "",
 		TrustedPubKeyPaths: []string{},
+	},
+	Server: ServerOptionsLite{
+		Host:         "",
+		ClientPort:   0,
+		ClusterPort:  0,
+		ClusterName:  "dchat_network",
+		SeedRoutes:   []string{},
+		ResolverConf: "",
+		CredsFile:    "",
+		ImportAllow:  []string{},
+		ImportDeny:   []string{},
+		ExportAllow:  []string{"*"},
+		ExportDeny:   []string{},
 	},
 }
 
@@ -236,26 +240,12 @@ func (c *Config) GetNATSClientConfig() map[string]interface{} {
 }
 
 // GetRoutesConfig 获取Routes集群配置
-func (c *Config) GetRoutesConfig() map[string]interface{} {
-	return map[string]interface{}{
-		"enabled":              c.Routes.Enabled,
-		"host":                 c.Routes.Host,
-		"client_port":          c.Routes.ClientPort,
-		"cluster_port":         c.Routes.ClusterPort,
-		"cluster_name":         c.Routes.ClusterName,
-		"seed_routes":          c.Routes.SeedRoutes,
-		"node_name":            c.Routes.NodeName,
-		"resolver_config":      c.Routes.ResolverConfig,
-		"bootstrap_servers":    c.Routes.BootstrapServers,
-		"bootstrap_min_peers":  c.Routes.BootstrapMinPeers,
-		"disconnect_bootstrap": c.Routes.DisconnectBootstrap,
-	}
-}
+// GetRoutesConfig removed (flattened into Server)
 
 // GetClusterConfig returns cluster related config for higher level managers
 func (c *Config) GetClusterConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"host": c.Routes.Host,
+		"host": c.Server.Host,
 	}
 }
 
@@ -272,11 +262,10 @@ func (c *Config) UpdateUserInfo(nickname, avatar string) {
 
 // EnableRoutes enables embedded routes cluster with provided parameters
 func (c *Config) EnableRoutes(host string, clientPort int, clusterPort int, seedRoutes []string) {
-	c.Routes.Enabled = true
-	c.Routes.Host = host
-	c.Routes.ClientPort = clientPort
-	c.Routes.ClusterPort = clusterPort
-	c.Routes.SeedRoutes = seedRoutes
+	c.Server.Host = host
+	c.Server.ClientPort = clientPort
+	c.Server.ClusterPort = clusterPort
+	c.Server.SeedRoutes = seedRoutes
 }
 
 // GetLocalIP returns first non-loopback IPv4 address
@@ -310,20 +299,40 @@ func (c *Config) ValidateAndSetDefaults() error {
 		}
 	}
 
-	// 设置Routes主机地址
-	if c.Routes.Host == "" {
-		c.Routes.Host = c.Network.LocalIP
+	c.syncServerFlat()
+
+	if c.Server.Host == "" {
+		c.Server.Host = c.Network.LocalIP
+	}
+	if c.NATS.URL == "" {
+		c.NATS.URL = fmt.Sprintf("nats://%s:%d", c.Server.Host, c.Server.ClientPort)
 	}
 
-	// 设置NATS URL
 	if c.NATS.URL == "" {
-		c.NATS.URL = fmt.Sprintf("nats://%s:%d", c.Routes.Host, c.Routes.ClientPort)
+		c.NATS.URL = fmt.Sprintf("nats://%s:%d", c.Server.Host, c.Server.ClientPort)
 	}
 
 	// 确保权限配置完整
 	c.ensurePermissionsDefaults()
+	// 填充扁平权限（仅首次）
+	if len(c.Server.ImportAllow) == 0 && len(c.NATS.Permissions.Subscribe.Allow) > 0 {
+		c.Server.ImportAllow = append([]string{}, c.NATS.Permissions.Subscribe.Allow...)
+	}
+	if len(c.Server.ImportDeny) == 0 && len(c.NATS.Permissions.Subscribe.Deny) > 0 {
+		c.Server.ImportDeny = append([]string{}, c.NATS.Permissions.Subscribe.Deny...)
+	}
+	if len(c.Server.ExportAllow) == 0 {
+		c.Server.ExportAllow = []string{"*"}
+	}
 
 	return nil
+}
+
+// syncServerFlat 同步嵌套 Routes/NATS 与扁平 Server 结构
+func (c *Config) syncServerFlat() {
+	if c.Server.CredsFile == "" {
+		c.Server.CredsFile = c.NATS.CredsFile
+	}
 }
 
 // ensurePermissionsDefaults guarantees permission sections have defaults
@@ -347,6 +356,17 @@ func (c *Config) AddSubscribePermission(subject string) {
 
 	// 添加到允许列表
 	c.NATS.Permissions.Subscribe.Allow = append(c.NATS.Permissions.Subscribe.Allow, subject)
+	// 同步扁平 ImportAllow
+	found := false
+	for _, s := range c.Server.ImportAllow {
+		if s == subject {
+			found = true
+			break
+		}
+	}
+	if !found {
+		c.Server.ImportAllow = append(c.Server.ImportAllow, subject)
+	}
 
 	// 从拒绝列表中移除（如果存在）
 	c.removeFromDenyList(subject)
@@ -368,6 +388,14 @@ func (c *Config) RemoveSubscribePermission(subject string) {
 		}
 	}
 	c.NATS.Permissions.Subscribe.Allow = newAllow
+	// 同步扁平 ImportAllow
+	var na []string
+	for _, s := range c.Server.ImportAllow {
+		if s != subject {
+			na = append(na, s)
+		}
+	}
+	c.Server.ImportAllow = na
 }
 
 // RemoveSubscribePermissionAndSave removes a subscribe permission and persists config
@@ -453,4 +481,35 @@ func (c *Config) matchSubject(subject, pattern string) bool {
 	}
 
 	return false
+}
+
+// BuildServerOptions 基于扁平 Server 配置生成 server.Options
+func (c *Config) BuildServerOptions() (*server.Options, error) {
+	opts := &server.Options{}
+	opts.Host = c.Server.Host
+	opts.Port = c.Server.ClientPort
+	opts.Cluster.Host = c.Server.Host
+	opts.Cluster.Port = c.Server.ClusterPort
+	opts.Cluster.Name = c.Server.ClusterName
+	if len(c.Server.SeedRoutes) > 0 {
+		var routes []*url.URL
+		for _, r := range c.Server.SeedRoutes {
+			u, err := url.Parse(r)
+			if err != nil {
+				return nil, fmt.Errorf("invalid route url %s: %w", r, err)
+			}
+			routes = append(routes, u)
+		}
+		opts.Routes = routes
+	}
+	opts.Cluster.Permissions = &server.RoutePermissions{
+		Import: &server.SubjectPermission{Allow: c.Server.ImportAllow, Deny: c.Server.ImportDeny},
+		Export: &server.SubjectPermission{Allow: c.Server.ExportAllow, Deny: c.Server.ExportDeny},
+	}
+	if c.Server.ResolverConf != "" {
+		if err := opts.ProcessConfigFile(c.Server.ResolverConf); err != nil {
+			return nil, fmt.Errorf("failed to load resolver config: %w", err)
+		}
+	}
+	return opts, nil
 }

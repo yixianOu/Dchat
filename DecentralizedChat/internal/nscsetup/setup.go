@@ -24,7 +24,7 @@ const (
 // 3) Generate resolver.conf -> ~/.dchat/resolver.conf and persist path into config
 // 4) Collect & persist user level artifacts: user JWT, user creds, user seed
 func EnsureSysAccountSetup(cfg *config.Config) error {
-	if cfg.Routes.ResolverConfig != "" { // already initialized
+	if cfg.Server.ResolverConf != "" { // already initialized
 		return nil
 	}
 
@@ -89,17 +89,17 @@ func EnsureSysAccountSetup(cfg *config.Config) error {
 
 // ensureNATSURL builds and persists the NATS URL if empty; returns the URL
 func ensureNATSURL(cfg *config.Config) string {
+	// prefer existing
 	if cfg.NATS.URL != "" {
 		return cfg.NATS.URL
 	}
-	host := cfg.Routes.Host
-	if host == "" {
-		host = cfg.Network.LocalIP
+	if cfg.Server.Host == "" {
+		cfg.Server.Host = cfg.Network.LocalIP
 	}
-	if cfg.Routes.ClientPort == 0 {
-		cfg.Routes.ClientPort = DefaultClientPort
+	if cfg.Server.ClientPort == 0 {
+		cfg.Server.ClientPort = DefaultClientPort
 	}
-	cfg.NATS.URL = fmt.Sprintf("nats://%s:%d", host, cfg.Routes.ClientPort)
+	cfg.NATS.URL = fmt.Sprintf("nats://%s:%d", cfg.Server.Host, cfg.Server.ClientPort)
 	return cfg.NATS.URL
 }
 
@@ -130,7 +130,7 @@ func generateResolverConfig(confDir string, cfg *config.Config, sysAccountName, 
 	if err := os.WriteFile(resolverPath, out.Bytes(), 0644); err != nil {
 		return fmt.Errorf("write resolver.conf failed: %w", err)
 	}
-	cfg.Routes.ResolverConfig = resolverPath
+	cfg.Server.ResolverConf = resolverPath
 	return nil
 }
 
