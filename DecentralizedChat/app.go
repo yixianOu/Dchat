@@ -129,12 +129,12 @@ func (a *App) GetChatHistory(roomName string) ([]*chat.Message, error) {
 }
 
 // SetUserInfo sets current user metadata
-func (a *App) SetUserInfo(nickname, avatar string) error {
+func (a *App) SetUserInfo(nickname string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
 	}
 
-	a.chatSvc.SetUser(nickname, avatar)
+	a.chatSvc.SetUser(nickname)
 	return nil
 }
 

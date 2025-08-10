@@ -36,29 +36,26 @@ type Service struct {
 	cancel context.CancelFunc
 }
 
+// User 最小化：仅保留必要身份与展示昵称
 type User struct {
 	ID       string `json:"id"`
 	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
 }
 
+// Message 最小化：移除冗余 Username / Type，RoomID 与 UserID 足以关联
 type Message struct {
 	ID        string    `json:"id"`
 	RoomID    string    `json:"room_id"`
 	UserID    string    `json:"user_id"`
-	Username  string    `json:"username"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
-	Type      string    `json:"type"` // text, image, file
 }
 
+// Room 最小化：去掉 Name/Description/Members，仅保留 ID/消息/创建时间
 type Room struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Members     []string   `json:"members"`
-	Messages    []*Message `json:"messages"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID        string     `json:"id"`
+	Messages  []*Message `json:"messages"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 func NewService(natsService *natsservice.Service) *Service {
@@ -70,18 +67,17 @@ func NewService(natsService *natsservice.Service) *Service {
 		user: &User{
 			ID:       generateUserID(),
 			Nickname: "Anonymous",
-			Avatar:   "",
 		},
 		ctx:    ctx,
 		cancel: cancel,
 	}
 }
 
-func (cs *Service) SetUser(nickname, avatar string) {
+// SetUser 仅更新昵称（头像字段已移除）
+func (cs *Service) SetUser(nickname string) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	cs.user.Nickname = nickname
-	cs.user.Avatar = avatar
 }
 
 // GetUser returns a copy of current user info.
@@ -167,10 +163,8 @@ func (cs *Service) SendMessage(roomName, content string) error {
 		ID:        generateMessageID(),
 		RoomID:    roomName,
 		UserID:    cs.user.ID,
-		Username:  cs.user.Nickname,
 		Content:   content,
 		Timestamp: time.Now().UTC(),
-		Type:      "text",
 	}
 	room.Messages = append(room.Messages, msg)
 	cs.mu.Unlock()
@@ -232,16 +226,18 @@ func deriveCID(a, b string) string {
 	return hex.EncodeToString(h[:])[:16]
 }
 
-type directWire struct {
-	CID       string `json:"cid"`
-	MID       string `json:"mid"`
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Ts        int64  `json:"ts"`
-	Nonce     string `json:"nonce"`
-	Cipher    string `json:"cipher"`
-	Alg       string `json:"alg"`
-	SenderPub string `json:"sender_pub"`
+// encWire 为最小化加密消息载荷（私聊/群聊统一）：
+// ver 固定 1；cid 对私聊=cid，对群=gid；sender 发送方 uid；alg 私聊 x25519-box / 群 aes256-gcm
+// sig 预留（Ed25519 签名），当前未实现签名生成/验证可为空省略
+type encWire struct {
+	Ver    int    `json:"ver"`
+	CID    string `json:"cid"`
+	Sender string `json:"sender"`
+	Ts     int64  `json:"ts"`
+	Nonce  string `json:"nonce"`
+	Cipher string `json:"cipher"`
+	Alg    string `json:"alg"`
+	Sig    string `json:"sig,omitempty"`
 }
 
 // SendDirect sends encrypted direct message to peerID using peer's public key stored in KV
@@ -262,16 +258,14 @@ func (cs *Service) SendDirect(peerID, peerPubB64, content string) error {
 	if err != nil {
 		return err
 	}
-	wire := directWire{
-		CID:       cid,
-		MID:       generateMessageID(),
-		From:      fromUID,
-		To:        peerID,
-		Ts:        time.Now().Unix(),
-		Nonce:     nonceB64,
-		Cipher:    cipherB64,
-		Alg:       "x25519-box",
-		SenderPub: pub,
+	wire := encWire{
+		Ver:    1,
+		CID:    cid,
+		Sender: fromUID,
+		Ts:     time.Now().Unix(),
+		Nonce:  nonceB64,
+		Cipher: cipherB64,
+		Alg:    "x25519-box",
 	}
 	data, _ := json.Marshal(wire)
 	subject := fmt.Sprintf("dchat.dm.%s.msg", cid)
@@ -302,14 +296,14 @@ func (cs *Service) SendGroup(gid, groupKeyB64, content string) error {
 	if err != nil {
 		return err
 	}
-	wire := map[string]interface{}{
-		"gid":    gid,
-		"mid":    generateMessageID(),
-		"from":   fromUID,
-		"ts":     time.Now().Unix(),
-		"nonce":  nonceB64,
-		"cipher": cipherB64,
-		"alg":    "aes256-gcm",
+	wire := encWire{
+		Ver:    1,
+		CID:    gid, // 复用 cid 字段表示群 id
+		Sender: fromUID,
+		Ts:     time.Now().Unix(),
+		Nonce:  nonceB64,
+		Cipher: cipherB64,
+		Alg:    "aes256-gcm",
 	}
 	data, _ := json.Marshal(wire)
 	subject := fmt.Sprintf("dchat.grp.%s.msg", gid)
@@ -348,12 +342,9 @@ func (cs *Service) getOrCreateRoomLocked(roomName string) *Room {
 		return room
 	}
 	room := &Room{
-		ID:          roomName,
-		Name:        roomName,
-		Description: fmt.Sprintf("聊天室: %s", roomName),
-		Members:     []string{cs.user.ID},
-		Messages:    []*Message{},
-		CreatedAt:   time.Now().UTC(),
+		ID:        roomName,
+		Messages:  []*Message{},
+		CreatedAt: time.Now().UTC(),
 	}
 	cs.rooms[roomName] = room
 	return room

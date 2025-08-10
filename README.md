@@ -86,6 +86,10 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群聊对称密钥。
   - KV 存储格式改为结构体：FriendPubKeyRecord{pub} / GroupSymKeyRecord{sym}，替换原 map，实现类型安全与易扩展。
   - 启用内置 JetStream：在 NodeManager.prepareServerOptions 中设置 opts.JetStream = true 以支持 KV。
+    - 精简 internal/chat 结构体：User 去除 Avatar；Message 去除 Username/Type；Room 去除 Name/Description/Members，仅保留最小字段（ID/Messages/CreatedAt）。同步更新 service.go 相关引用与 SetUser 签名（改为仅接受 nickname）。
+    - 统一加密消息载荷结构 encWire(ver,cid,sender,ts,nonce,cipher,alg,sig)；私聊与群聊复用，移除 mid/from/to/gid 等冗余字段。
+    - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
+    - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
 ```
 
 ## 运行演示
@@ -611,3 +615,4 @@ TODO:
 9.  精简 internal/chat/README.md 群聊部分：仅保留 dchat.grp.<gid>.msg 与可选 ctrl.rekey，删除成员/ack/typing/presence/meta/history 等扩展，定位最小去中心化实现，并在文档中解释软权限通过密钥轮换实现。
 10. 精简 internal/chat/README.md 私聊设计：移除 ack/typing/presence/rekey 多余 subject，统一为 dchat.dm.{cid}.msg，说明直接使用对方公钥 + 自己私钥派生共享密钥加密消息。
 11. 新增 internal/chat/crypto.go：实现 encryptDirect (NaCl box) 与 encryptGroup (AES-256-GCM)；扩展 chat.Service 提供 SetKeyPair/SendDirect/JoinDirect/SendGroup，消息发送前加密，接收后待后续解密集成。
+12. 精简 chat/README.md 密钥策略：群聊去除 rekey/version，KV 仅存储 {sym}；私聊仅使用己私钥+对方公钥派生共享密钥，不做 ratchet 与轮换描述。
