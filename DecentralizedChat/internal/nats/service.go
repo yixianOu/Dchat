@@ -165,8 +165,18 @@ func (s *Service) GetStats() map[string]interface{} {
 
 const (
 	kvBucketFriends = "dchat_friends" // 存储好友公钥  key: user_pub_key  val: JSON{"pub":"..."}
-	kvBucketGroups  = "dchat_groups"  // 存储群对称密钥  key: group_id val: JSON{"sym":"base64"}
+	kvBucketGroups  = "dchat_groups"  // 存储群聊对称密钥  key: group_id val: JSON{"sym":"base64"}
 )
+
+// FriendPubKeyRecord KV 存储格式
+type FriendPubKeyRecord struct {
+	Pub string `json:"pub"`
+}
+
+// GroupSymKeyRecord KV 存储格式
+type GroupSymKeyRecord struct {
+	Sym string `json:"sym"`
+}
 
 // ensureJS 获取 JetStream 上下文
 func (s *Service) ensureJS() (nats.JetStreamContext, error) {
@@ -196,8 +206,8 @@ func (s *Service) ensureBucket(name string) (nats.KeyValue, error) {
 }
 
 // PutFriendPubKey 存储好友公钥（幂等）
-func (s *Service) PutFriendPubKey(pubKey, raw string) error {
-	if pubKey == "" || raw == "" {
+func (s *Service) PutFriendPubKey(friendID, rawKey string) error {
+	if friendID == "" || rawKey == "" {
 		return fmt.Errorf("empty pubKey/raw")
 	}
 	kv, err := s.ensureBucket(kvBucketFriends)
@@ -205,34 +215,32 @@ func (s *Service) PutFriendPubKey(pubKey, raw string) error {
 		return err
 	}
 	// 直接覆盖即可
-	val, _ := json.Marshal(map[string]string{"pub": raw})
-	_, err = kv.Put(pubKey, val)
+	val, _ := json.Marshal(FriendPubKeyRecord{Pub: rawKey})
+	_, err = kv.Put(friendID, val)
 	return err
 }
 
 // GetFriendPubKey 读取好友公钥
-func (s *Service) GetFriendPubKey(pubKey string) (string, error) {
-	if pubKey == "" {
+func (s *Service) GetFriendPubKey(FriendID string) (string, error) {
+	if FriendID == "" {
 		return "", fmt.Errorf("empty key")
 	}
 	kv, err := s.ensureBucket(kvBucketFriends)
 	if err != nil {
 		return "", err
 	}
-	e, err := kv.Get(pubKey)
+	e, err := kv.Get(FriendID)
 	if err != nil {
 		return "", err
 	}
-	var obj map[string]string
-	if json.Unmarshal(e.Value(), &obj) == nil {
-		if v, ok := obj["pub"]; ok {
-			return v, nil
-		}
+	var rec FriendPubKeyRecord
+	if json.Unmarshal(e.Value(), &rec) == nil && rec.Pub != "" {
+		return rec.Pub, nil
 	}
 	return "", fmt.Errorf("pub key not found")
 }
 
-// PutGroupSymKey 存储群对称密钥（覆盖）
+// PutGroupSymKey 存储群聊对称密钥（覆盖）
 func (s *Service) PutGroupSymKey(groupID, keyB64 string) error {
 	if groupID == "" || keyB64 == "" {
 		return fmt.Errorf("empty group/key")
@@ -241,12 +249,12 @@ func (s *Service) PutGroupSymKey(groupID, keyB64 string) error {
 	if err != nil {
 		return err
 	}
-	val, _ := json.Marshal(map[string]string{"sym": keyB64})
+	val, _ := json.Marshal(GroupSymKeyRecord{Sym: keyB64})
 	_, err = kv.Put(groupID, val)
 	return err
 }
 
-// GetGroupSymKey 读取群对称密钥
+// GetGroupSymKey 读取群聊对称密钥
 func (s *Service) GetGroupSymKey(groupID string) (string, error) {
 	if groupID == "" {
 		return "", fmt.Errorf("empty group id")
@@ -259,11 +267,9 @@ func (s *Service) GetGroupSymKey(groupID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var obj map[string]string
-	if json.Unmarshal(e.Value(), &obj) == nil {
-		if v, ok := obj["sym"]; ok {
-			return v, nil
-		}
+	var rec GroupSymKeyRecord
+	if json.Unmarshal(e.Value(), &rec) == nil && rec.Sym != "" {
+		return rec.Sym, nil
 	}
 	return "", fmt.Errorf("group key not found")
 }

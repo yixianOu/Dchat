@@ -83,7 +83,8 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 修改 demo/cluster/cluster_demo.go 使用 cfg.Server.* 字段
   - 更新 README.md 追加本节说明
   - 精简订阅权限 API：删除 AddSubscribePermission / RemoveSubscribePermission 非持久化方法，只保留 AddSubscribePermissionAndSave / RemoveSubscribePermissionAndSave，确保权限修改即刻落盘。
-  - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群对称密钥。
+  - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群聊对称密钥。
+  - KV 存储格式改为结构体：FriendPubKeyRecord{pub} / GroupSymKeyRecord{sym}，替换原 map，实现类型安全与易扩展。
 ```
 
 ## 运行演示
