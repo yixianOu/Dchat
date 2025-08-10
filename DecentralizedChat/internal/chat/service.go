@@ -89,7 +89,11 @@ func (s *Service) SetUser(nickname string) {
 	s.mu.Unlock()
 }
 
-func (s *Service) GetUser() User { s.mu.RLock(); defer s.mu.RUnlock(); return *s.user }
+func (s *Service) GetUser() User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return *s.user
+}
 
 // SetKeyPair 设置本地密钥对
 func (s *Service) SetKeyPair(privB64, pubB64 string) {
@@ -280,12 +284,14 @@ func (s *Service) SendGroup(gid, content string) error {
 
 // handleEncrypted 解密并派发
 func (s *Service) handleEncrypted(subject string, data []byte) {
+	// 1) 反序列化
 	var w encWire
 	if err := json.Unmarshal(data, &w); err != nil {
 		s.dispatchError(fmt.Errorf("unmarshal: %w", err))
 		return
 	}
 
+	// 2) 读取必要状态
 	s.mu.RLock()
 	priv := s.userPrivB64
 	peerPub := s.friendPubKeys[w.Sender]
@@ -293,11 +299,15 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	selfID := s.user.ID
 	s.mu.RUnlock()
 
+	// 3) 忽略本地自发回环
 	if w.Sender == selfID {
 		return
-	} // 忽略自发回环
+	}
 
+	// 4) 判定是否群聊
 	isGroup := strings.HasPrefix(subject, "dchat.grp.")
+
+	// 5) 解密
 	var (
 		pt  []byte
 		err error
@@ -324,7 +334,18 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 		return
 	}
 
-	msg := &DecryptedMessage{CID: w.CID, Sender: w.Sender, Ts: time.Unix(w.Ts, 0), Plain: string(pt), IsGroup: isGroup, RawWire: w, Subject: subject}
+	// 6) 构造消息
+	msg := &DecryptedMessage{
+		CID:     w.CID,
+		Sender:  w.Sender,
+		Ts:      time.Unix(w.Ts, 0),
+		Plain:   string(pt),
+		IsGroup: isGroup,
+		RawWire: w,
+		Subject: subject,
+	}
+
+	// 7) 分发
 	s.dispatchDecrypted(msg)
 }
 
@@ -333,6 +354,7 @@ func (s *Service) dispatchDecrypted(msg *DecryptedMessage) {
 	s.mu.RLock()
 	handlers := append([]func(*DecryptedMessage){}, s.handlers...)
 	s.mu.RUnlock()
+
 	for _, h := range handlers {
 		cb := h
 		func() {
@@ -347,12 +369,17 @@ func (s *Service) dispatchError(err error) {
 	if err == nil {
 		return
 	}
+
 	s.mu.RLock()
 	handlers := append([]func(error){}, s.errHandlers...)
 	s.mu.RUnlock()
+
 	for _, h := range handlers {
 		cb := h
-		func() { defer func() { _ = recover() }(); cb(err) }()
+		func() {
+			defer func() { _ = recover() }()
+			cb(err)
+		}()
 	}
 }
 
@@ -370,7 +397,9 @@ func (s *Service) Close() error {
 }
 
 // --- helpers ---
-func generateUserID() string { return "user_" + randomID() }
+func generateUserID() string {
+	return "user_" + randomID()
+}
 func randomID() string {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {

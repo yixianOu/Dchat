@@ -96,6 +96,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 再次优化 internal/chat/service.go 代码风格：拆分长行（Subscribe 回调、结构体字面量、fmt.Sprintf、多参数函数调用），提高可读性与 diff 友好性。
   - 引入错误事件回调：新增 ErrorEvent/ErrorHandler，handleEncrypted 拆分为解析、解密、成功与错误分发，提高内聚与可观察性；避免静默失败。
   - 进一步简化错误回调：移除 ErrorEvent 结构，仅保留 func(error) 形式，减少耦合与调用复杂度；fmt.Sprintf 短行恢复单行表达。
+  - 调整 service.go 代码风格：一行一逻辑（GetUser/handleEncrypted/dispatch* 等拆分），去除多语句单行，提升可读性与审查效率。
 ```
 
 ## 运行演示
