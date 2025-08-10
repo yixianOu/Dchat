@@ -94,6 +94,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
     - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
     - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
   - 再次优化 internal/chat/service.go 代码风格：拆分长行（Subscribe 回调、结构体字面量、fmt.Sprintf、多参数函数调用），提高可读性与 diff 友好性。
+  - 引入错误事件回调：新增 ErrorEvent/ErrorHandler，handleEncrypted 拆分为解析、解密、成功与错误分发，提高内聚与可观察性；避免静默失败。
 ```
 
 ## 运行演示
