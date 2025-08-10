@@ -557,7 +557,8 @@ TODO:
 9.  配置修改为wire依赖注入(等)
 10. cluster节点的import配置能否热重启
 11. tls加密连接,公私钥传输和解密私聊信息
-12. wails集成前端
+12. 用nats kv存密钥
+13. wails集成前端
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
