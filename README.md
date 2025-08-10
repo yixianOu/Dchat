@@ -60,6 +60,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
  - 移除 run / runOut 包装函数，直接使用 execCommand，进一步简化命令执行路径。
   - 去除 setup 中硬编码的 operator/local、SYS、sys、resolver.conf：改为可配置 (operator/account/user 可由配置覆盖，resolver 文件名基于账户动态生成 <account>_resolver.conf)。
   - 精简 setup：移除 collectUserArtifacts/collectAccountArtifacts 未使用参数 (storeDir/keysDir/cfg)，消除 gopls unusedparams 警告。
+  - 重构 routes：内联 ensureNotStarted，辅助函数 (loadResolverConfig/applyLocalOverrides/applyRoutePermissions/configureSeedRoutes/loadTrustedKeysIfRequested) 改为 NodeConfig 方法。
 ```
 
 ## 运行演示

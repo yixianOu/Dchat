@@ -106,9 +106,11 @@ func (nm *NodeManager) StartLocalNode(nodeID string, clientPort int, clusterPort
 }
 
 // StartLocalNodeWithConfig starts local node with a custom configuration
+
 func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
-	if err := nm.ensureNotStarted(); err != nil { // guard re-entry
-		return err
+	// inline ensureNotStarted logic
+	if nm.node != nil {
+		return fmt.Errorf("local node already started: %s", nm.node.ID)
 	}
 
 	opts, err := nm.prepareServerOptions(config)
@@ -153,52 +155,43 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 }
 
 // ensureNotStarted returns error if a node is already running.
-func (nm *NodeManager) ensureNotStarted() error {
-	if nm.node != nil {
-		return fmt.Errorf("local node already started: %s", nm.node.ID)
-	}
-	return nil
-}
-
-// prepareServerOptions orchestrates building server options from config.
+// prepareServerOptions orchestrates building server options from config via NodeConfig methods.
 func (nm *NodeManager) prepareServerOptions(config *NodeConfig) (*server.Options, error) {
 	opts := &server.Options{}
-	if err := loadResolverConfig(opts, config.ResolverConfigPath); err != nil {
+	if err := config.loadResolverConfig(opts); err != nil {
 		return nil, err
 	}
-	applyLocalOverrides(opts, nm, config)
-	applyRoutePermissions(opts, config.NodeConfig)
-	if err := configureSeedRoutes(opts, config.SeedRoutes); err != nil {
+	config.applyLocalOverrides(opts, nm)
+	config.applyRoutePermissions(opts)
+	if err := config.configureSeedRoutes(opts); err != nil {
 		return nil, err
 	}
-	loadTrustedKeysIfRequested(opts, config.NodeConfig)
+	config.loadTrustedKeysIfRequested(opts)
 	return opts, nil
 }
 
-// loadResolverConfig loads resolver.conf if provided.
-func loadResolverConfig(opts *server.Options, path string) error {
-	if path == "" {
+// Methods on NodeConfig formerly standalone helpers
+func (c *NodeConfig) loadResolverConfig(opts *server.Options) error {
+	if c.ResolverConfigPath == "" {
 		return nil
 	}
-	if err := opts.ProcessConfigFile(path); err != nil {
+	if err := opts.ProcessConfigFile(c.ResolverConfigPath); err != nil {
 		return fmt.Errorf("failed loading resolver.conf: %v", err)
 	}
 	return nil
 }
 
-// applyLocalOverrides sets local runtime overrides.
-func applyLocalOverrides(opts *server.Options, nm *NodeManager, config *NodeConfig) {
-	opts.ServerName = config.NodeID
+func (c *NodeConfig) applyLocalOverrides(opts *server.Options, nm *NodeManager) {
+	opts.ServerName = c.NodeID
 	opts.Host = nm.host
-	opts.Port = config.ClientPort
+	opts.Port = c.ClientPort
 	opts.Cluster.Name = nm.clusterName
 	opts.Cluster.Host = nm.host
-	opts.Cluster.Port = config.ClusterPort
+	opts.Cluster.Port = c.ClusterPort
 }
 
-// applyRoutePermissions applies route import/export permissions with safe defaults.
-func applyRoutePermissions(opts *server.Options, npc *NodePermissionConfig) {
-	// Default: deny all if nil
+func (c *NodeConfig) applyRoutePermissions(opts *server.Options) {
+	npc := c.NodeConfig
 	if npc == nil || npc.Permissions == nil || npc.Permissions.Routes == nil {
 		opts.Cluster.Permissions = &server.RoutePermissions{
 			Import: &server.SubjectPermission{Allow: []string{}, Deny: []string{"*"}},
@@ -213,13 +206,12 @@ func applyRoutePermissions(opts *server.Options, npc *NodePermissionConfig) {
 	}
 }
 
-// configureSeedRoutes parses and assigns route URLs.
-func configureSeedRoutes(opts *server.Options, seeds []string) error {
-	if len(seeds) == 0 {
+func (c *NodeConfig) configureSeedRoutes(opts *server.Options) error {
+	if len(c.SeedRoutes) == 0 {
 		return nil
 	}
-	routeURLs := make([]*url.URL, len(seeds))
-	for i, route := range seeds {
+	routeURLs := make([]*url.URL, len(c.SeedRoutes))
+	for i, route := range c.SeedRoutes {
 		u, err := url.Parse(route)
 		if err != nil {
 			return fmt.Errorf("failed to parse seed route URL %s: %v", route, err)
@@ -230,16 +222,15 @@ func configureSeedRoutes(opts *server.Options, seeds []string) error {
 	return nil
 }
 
-// loadTrustedKeysIfRequested placeholder: attach trusted keys if credential mode demands.
-func loadTrustedKeysIfRequested(opts *server.Options, npc *NodePermissionConfig) {
-	if npc == nil || npc.Credentials != "use_local_trust" { // nothing to do now
+func (c *NodeConfig) loadTrustedKeysIfRequested(opts *server.Options) {
+	npc := c.NodeConfig
+	if npc == nil || npc.Credentials != "use_local_trust" {
 		return
 	}
-	// Placeholder for future: gather local trust anchors (e.g., from config) and assign opts.TrustedKeys
-	// Example (disabled): opts.TrustedKeys = append(opts.TrustedKeys, someKeyList...)
+	// Placeholder for future trusted keys integration
 }
 
-// StopLocalNode stops the local node
+// StopLocalNode stopts the local node
 func (nm *NodeManager) StopLocalNode() error {
 	if nm.node == nil {
 		return fmt.Errorf("no running local node")
