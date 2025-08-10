@@ -68,8 +68,6 @@ func (a *App) OnStartup(ctx context.Context) {
 		return
 	}
 	a.chatSvc = chat.NewService(a.natsSvc)
-	// auto-join a default room
-	_ = a.chatSvc.JoinRoom("general")
 	if err := config.SaveConfig(a.config); err != nil {
 		log.Printf("save config warn: %v", err)
 	}
@@ -83,49 +81,23 @@ func (a *App) GetTailscaleStatus() TailscaleStatus {
 }
 
 // GetConnectedRooms returns list of joined chat rooms
-func (a *App) GetConnectedRooms() []string {
-	if a.chatSvc == nil {
-		return []string{"general"}
-	}
-	rooms := a.chatSvc.GetRooms()
-	if len(rooms) == 0 {
-		return []string{"general"}
-	}
-	return rooms
-}
+// Deprecated room API placeholders (removed room concept). Return empty slice.
+func (a *App) GetConnectedRooms() []string { return []string{} }
 
 // JoinChatRoom joins a chat room
-func (a *App) JoinChatRoom(roomName string) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	return a.chatSvc.JoinRoom(roomName)
-}
+func (a *App) JoinChatRoom(_ string) error { return fmt.Errorf("room feature removed") }
 
 // LeaveChatRoom leaves a room (unsubscribe & purge local state)
-func (a *App) LeaveChatRoom(roomName string) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	return a.chatSvc.LeaveRoom(roomName)
-}
+func (a *App) LeaveChatRoom(_ string) error { return fmt.Errorf("room feature removed") }
 
 // SendMessage sends a message
-func (a *App) SendMessage(roomName, message string) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-
-	return a.chatSvc.SendMessage(roomName, message)
+func (a *App) SendMessage(_, _ string) error {
+	return fmt.Errorf("room feature removed; use SendDirect/SendGroup")
 }
 
 // GetChatHistory returns history of a room
-func (a *App) GetChatHistory(roomName string) ([]*chat.Message, error) {
-	if a.chatSvc == nil {
-		return nil, fmt.Errorf("chat service not initialized")
-	}
-
-	return a.chatSvc.GetHistory(roomName)
+func (a *App) GetChatHistory(_ string) ([]interface{}, error) {
+	return nil, fmt.Errorf("room feature removed")
 }
 
 // SetUserInfo sets current user metadata
@@ -136,6 +108,51 @@ func (a *App) SetUserInfo(nickname string) error {
 
 	a.chatSvc.SetUser(nickname)
 	return nil
+}
+
+// Direct / Group facade wrappers
+func (a *App) AddFriendKey(uid, pubB64 string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	a.chatSvc.AddFriendKey(uid, pubB64)
+	return nil
+}
+
+func (a *App) AddGroupKey(gid, symB64 string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	a.chatSvc.AddGroupKey(gid, symB64)
+	return nil
+}
+
+func (a *App) JoinDirect(peerID string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.JoinDirect(peerID)
+}
+
+func (a *App) JoinGroup(gid string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.JoinGroup(gid)
+}
+
+func (a *App) SendDirect(peerID, content string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.SendDirect(peerID, content)
+}
+
+func (a *App) SendGroup(gid, content string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.SendGroup(gid, content)
 }
 
 // GetNetworkStats aggregates network statistics
