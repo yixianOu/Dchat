@@ -82,7 +82,7 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	const startTimeout = 5 * time.Second
 	go srv.Start()
 	if !srv.ReadyForConnections(startTimeout) {
-		return fmt.Errorf("node %s start timeout", config.NodeID)
+		return fmt.Errorf("node %s start timeout (possible port conflict client:%d cluster:%d)", config.NodeID, config.ClientPort, config.ClusterPort)
 	}
 
 	nm.node = &LocalNode{

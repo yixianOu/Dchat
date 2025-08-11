@@ -99,6 +99,9 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 调整 service.go 代码风格：一行一逻辑（GetUser/handleEncrypted/dispatch* 等拆分），去除多语句单行，提升可读性与审查效率。
   - 更新 app.go：新增 SetKeyPair / OnDecrypted / OnError / GetUser 封装，提供与 service.go 对应外部调用入口。
   - 精简 app.go：移除房间/历史/统计/权限热重启等非最小聊天能力，仅保留 Direct/Group 相关 API 与启动初始化。
+  - 新增跨节点加密往返测试：internal/chat/dual_node_encrypt_test.go，单机模拟双节点（不同端口 + Routes seed）验证私聊加密 A<->B 往返成功。
+  - 新增 cmd/genkey & cmd/chatpeer：支持两台电脑快速生成密钥、启动本地嵌入式节点并进行私聊加密往返测试。
+  - chatpeer 增强：支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
 ```
 
 ## 运行演示

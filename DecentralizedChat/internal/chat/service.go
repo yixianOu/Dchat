@@ -89,6 +89,17 @@ func (s *Service) SetUser(nickname string) {
 	s.mu.Unlock()
 }
 
+// SetUserID 允许在启动阶段覆盖自动生成的用户 ID（用于持久身份/测试）。
+// 必须在加入/发送任何消息前调用。
+func (s *Service) SetUserID(id string) {
+	if id == "" {
+		return
+	}
+	s.mu.Lock()
+	s.user.ID = id
+	s.mu.Unlock()
+}
+
 func (s *Service) GetUser() User {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
