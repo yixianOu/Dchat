@@ -27,12 +27,21 @@ func genKeyPair() (privB64, pubB64 string) {
 	return base64.StdEncoding.EncodeToString(priv[:]), base64.StdEncoding.EncodeToString(pub[:])
 }
 
-func startServer(clientPort, clusterPort int, seedRoutes []string) (*server.Server, error) {
+func startServer(clientPort, clusterPort int, advertise string, seedRoutes []string) (*server.Server, error) {
 	opts := &server.Options{Host: "0.0.0.0", Port: clientPort}
 	opts.ServerName = fmt.Sprintf("dchat-%d", clientPort)
 	opts.Cluster.Name = "dchat-peer"
 	opts.Cluster.Host = "0.0.0.0"
 	opts.Cluster.Port = clusterPort
+	if strings.TrimSpace(advertise) != "" {
+		// 公共节点在无 Tailscale 场景下通过对外可达地址向其他节点公告
+		// 形如 "1.2.3.4:6222" 或 "example.com:6222"
+		// 兼容用户误传如 "nats://1.2.3.4:6222"，去除 scheme。
+		adv := strings.TrimSpace(advertise)
+		adv = strings.TrimPrefix(adv, "nats://")
+		adv = strings.TrimPrefix(adv, "tls://")
+		opts.Cluster.Advertise = adv
+	}
 	opts.JetStream = false
 	for _, r := range seedRoutes {
 		if strings.TrimSpace(r) == "" {
@@ -88,6 +97,7 @@ func main() {
 	clientPort := flag.Int("client-port", 4222, "本地 NATS 客户端端口")
 	clusterPort := flag.Int("cluster-port", 6222, "本地 NATS 集群端口")
 	seed := flag.String("seed-route", "", "可选：种子路由 nats://host:clusterPort")
+	clusterAdv := flag.String("cluster-advertise", "", "公共节点对外公告地址 host:port（例如 1.2.3.4:6222）")
 	privIn := flag.String("priv", "", "本地私钥 base64 (32 bytes)")
 	pubIn := flag.String("pub", "", "本地公钥 base64 (32 bytes)")
 	idIn := flag.String("id", "", "覆盖/指定固定用户ID (可与 --identity 配合)")
@@ -102,10 +112,19 @@ func main() {
 
 	seedRoutes := []string{}
 	if *seed != "" {
-		seedRoutes = append(seedRoutes, *seed)
+		// 允许逗号/空格分隔的多路由输入
+		raw := strings.ReplaceAll(*seed, ";", ",")
+		parts := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' })
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			seedRoutes = append(seedRoutes, p)
+		}
 	}
 
-	srv, err := startServer(*clientPort, *clusterPort, seedRoutes)
+	srv, err := startServer(*clientPort, *clusterPort, *clusterAdv, seedRoutes)
 	if err != nil {
 		log.Fatalf("start server: %v", err)
 	}
@@ -154,6 +173,11 @@ func main() {
 	fmt.Println("PubKey:", pub)
 	fmt.Println("ClientURL:", natsURL)
 	fmt.Println("ClusterPort:", *clusterPort)
+	if strings.TrimSpace(*clusterAdv) != "" {
+		adv := strings.TrimPrefix(strings.TrimSpace(*clusterAdv), "nats://")
+		adv = strings.TrimPrefix(adv, "tls://")
+		fmt.Println("ClusterAdvertise:", adv)
+	}
 	fmt.Println("SeedRoute(提供给其它节点):", fmt.Sprintf("nats://%s:%d", "<your_ip>", *clusterPort))
 	fmt.Println("====================")
 

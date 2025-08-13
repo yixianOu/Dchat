@@ -367,3 +367,46 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 - 修正 nsc 环境解析：移除不存在的 -J 标志，改为解析 `nsc env` 文本输出提取 keys/store 目录
 - 修正 nsc describe JSON 解析：使用 sub 字段为账户公钥并推导 account.jwt 路径，移除不存在的 jwt/public_key 字段访问
 
+### 15. chatpeer 公共节点公告与混合拓扑使用步骤 (2025-08-13 10:00)
+
+#### 背景与可行性评估
+- 需求：在无 Tailscale 的公网环境下，提供一个对外可达的“公共节点”作为引导，其他节点（含局域网内节点）通过 Routes 加入。
+- 选择：复用 NATS Cluster.Advertise 暴露“host:port”，无需额外协议，延迟低、实现简单。
+- 现状：chatpeer 已支持 --cluster-advertise 公告和多种子路由输入（逗号/空格/分号分隔）。
+
+#### 可执行步骤（混合拓扑）
+```bash
+# 0) 构建工具
+cd DecentralizedChat && go build ./cmd/chatpeer
+
+# 1) 公共节点（需公网 IP/端口转发）
+#    - 开放客户端端口: 4222（可选，仅供本机客户端使用）
+#    - 开放集群端口:  6222（必须，供其他节点路由连接）
+#    - 指定公告地址为可从外网访问的 host:port（无需 nats:// 前缀）
+./chatpeer --client-port 4222 \
+          --cluster-port 6222 \
+          --cluster-advertise "<public_ip_or_dns>:6222" \
+          --identity ~/.dchat/identity_pub.txt \
+          --nick Public
+
+# 2) 私网/其他节点（通过公共节点的 Routes 加入）
+#    - 将公共节点的 cluster 端口作为种子路由
+#    - 启动后填写对端 ID/公钥 或者预先交换 identity 文件
+./chatpeer --client-port 4223 \
+          --cluster-port 6223 \
+          --seed-route "nats://<public_ip_or_dns>:6222" \
+          --identity ~/.dchat/identity_lan.txt \
+          --peer-id <public_user_id> \
+          --peer-pub <public_user_pubkey_b64> \
+          --send "hello over hybrid"
+
+# 3) 多引导/多路由（可选）
+./chatpeer --seed-route "nats://a:6222, nats://b:6222 nats://c:6222" --identity ~/.dchat/identity_x.txt
+```
+
+#### 说明
+- 集群公告：--cluster-advertise 支持传入 "host:port" 或误传带 scheme 的地址，程序会自动去掉 nats://、tls://。
+- 多路由：--seed-route 支持逗号、空格、分号分隔的多个 nats:// 路由地址。
+- 身份持久化：--identity 指定文件将保存/加载 ID 与密钥，确保重启后身份稳定。
+- 互通验证：启动双方后，使用 --send 发送一条消息，另一端应能收到并打印。
+

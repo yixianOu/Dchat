@@ -1,3 +1,31 @@
+### 新增操作日志（2025-08-13 10:00）
+- 修改 DecentralizedChat/cmd/chatpeer/main.go：
+  - 增强 --cluster-advertise 支持，自动剥离 nats://、tls:// 前缀，按 host:port 注入 server.Options.Cluster.Advertise。
+  - --seed-route 支持逗号/空格/分号分隔的多路由输入，便于一次性指定多个引导节点。
+  - 启动信息新增 ClusterAdvertise 打印，便于核对公告地址；示例 SeedRoute 一并输出。
+- 构建与使用步骤（混合公网/局域网）：
+```bash
+cd DecentralizedChat && go build ./cmd/chatpeer
+
+# 公共节点（需公网IP/端口映射，对外公告6222）：
+./chatpeer --client-port 4222 \
+          --cluster-port 6222 \
+          --cluster-advertise "<public_ip_or_dns>:6222" \
+          --identity ~/.dchat/identity_pub.txt \
+          --nick Public
+
+# 私网/其它节点（经公共节点种子加入并发送一条测试消息）：
+./chatpeer --client-port 4223 \
+          --cluster-port 6223 \
+          --seed-route "nats://<public_ip_or_dns>:6222" \
+          --identity ~/.dchat/identity_lan.txt \
+          --peer-id <public_user_id> \
+          --peer-pub <public_user_pubkey_b64> \
+          --send "hello over hybrid"
+
+# 多引导路由（可选，支持逗号/空格/分号分隔）：
+./chatpeer --seed-route "nats://a:6222, nats://b:6222 nats://c:6222" --identity ~/.dchat/identity_x.txt
+```
 # 2025-08-06 重大重构
 - 完善 internal/routes/routes.go，支持链式集群、动态节点加入、集群连通性检查、消息路由测试等功能，参考cmd/routes/main.go。
 - 重构 internal/nats/service.go，仅保留NATS客户端功能，支持鉴权连接，去除服务端嵌入式启动。
@@ -101,7 +129,25 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 精简 app.go：移除房间/历史/统计/权限热重启等非最小聊天能力，仅保留 Direct/Group 相关 API 与启动初始化。
   - 新增跨节点加密往返测试：internal/chat/dual_node_encrypt_test.go，单机模拟双节点（不同端口 + Routes seed）验证私聊加密 A<->B 往返成功。
   - 新增 cmd/genkey & cmd/chatpeer：支持两台电脑快速生成密钥、启动本地嵌入式节点并进行私聊加密往返测试。
-  - chatpeer 增强：支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
+  - chatpeer 增强：
+    - 支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
+    - 支持 --cluster-advertise 用于“公共节点对外暴露集群端口”的无 Tailscale 方案。
+
+### 跨公网/局域网混合拓扑指引（弃用 Tailscale）
+
+公共节点（有公网 IP，暴露 cluster 端口）示例：
+```bash
+./chatpeer --client-port 4222 --cluster-port 6222 \
+  --cluster-advertise 1.2.3.4:6222
+```
+
+局域网节点（通过公共节点的 advertise 地址作为种子加入）：
+```bash
+./chatpeer --client-port 4322 --cluster-port 6322 \
+  --seed-route nats://1.2.3.4:6222
+```
+
+随后按双向加密私聊流程互换 userID/PubKey，并以 --identity 保持稳定身份重复使用。
 ```
 
 ## 运行演示
