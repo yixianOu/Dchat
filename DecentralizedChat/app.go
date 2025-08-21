@@ -22,9 +22,6 @@ type App struct {
 	mu          sync.RWMutex
 }
 
-// TailscaleStatus returned to frontend representing network status
-// (Tailscale 相关逻辑已移除，后续需要可再扩展)
-
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{}
