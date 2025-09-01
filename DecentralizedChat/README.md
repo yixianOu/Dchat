@@ -370,8 +370,8 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 ### 15. chatpeer 公共节点公告与混合拓扑使用步骤 (2025-08-13 10:00)
 
 #### 背景与可行性评估
-- 需求：在无 Tailscale 的公网环境下，提供一个对外可达的“公共节点”作为引导，其他节点（含局域网内节点）通过 Routes 加入。
-- 选择：复用 NATS Cluster.Advertise 暴露“host:port”，无需额外协议，延迟低、实现简单。
+- 需求：在无 Tailscale 的公网环境下，提供一个对外可达的"公共节点"作为引导，其他节点（含局域网内节点）通过 Routes 加入。
+- 选择：复用 NATS Cluster.Advertise 暴露"host:port"，无需额外协议，延迟低、实现简单。
 - 现状：chatpeer 已支持 --cluster-advertise 公告和多种子路由输入（逗号/空格/分号分隔）。
 
 #### 可执行步骤（混合拓扑）

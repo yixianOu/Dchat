@@ -1,3 +1,11 @@
+### 新增操作日志（2025-09-01 15:30）
+- 整理 cmd/routes/routes.md 文档，消除重复内容，为代码块标注文件路径和行数：
+  - 统一整合研究背景、对比分析和核心发现
+  - 为所有 NATS 源码示例添加准确的文件路径注释（如 nats-server/server/route.go:50-55）
+  - 重新组织文档结构，突出链式连接实现原理和配置示例
+  - 完善性能优化、监控调试和架构设计章节
+- 文档现已成为 NATS Routes 集群机制的完整技术手册，包含源码分析、实现原理和实践指南
+
 ### 新增操作日志（2025-08-13 10:00）
 - 修改 DecentralizedChat/cmd/chatpeer/main.go：
   - 增强 --cluster-advertise 支持，自动剥离 nats://、tls:// 前缀，按 host:port 注入 server.Options.Cluster.Advertise。
@@ -131,7 +139,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 新增 cmd/genkey & cmd/chatpeer：支持两台电脑快速生成密钥、启动本地嵌入式节点并进行私聊加密往返测试。
   - chatpeer 增强：
     - 支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
-    - 支持 --cluster-advertise 用于“公共节点对外暴露集群端口”的无 Tailscale 方案。
+    - 支持 --cluster-advertise 用于"公共节点对外暴露集群端口"的无 Tailscale 方案。
 
 ### 跨公网/局域网混合拓扑指引（弃用 Tailscale）
 

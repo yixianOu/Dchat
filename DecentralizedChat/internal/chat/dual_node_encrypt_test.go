@@ -2,7 +2,7 @@ package chat
 
 // 集成测试：启动两个本地嵌入 NATS 节点，通过 Routes 建立连接，
 // 使用最小 chat.Service 建立私聊加密通道，验证 A->B 与 B->A 往返加密消息解密成功。
-// 说明：该测试在单机上模拟“跨机”双节点，通过不同端口 + Routes 连接，
+// 说明：该测试在单机上模拟"跨机"双节点，通过不同端口 + Routes 连接，
 // 若需真实跨机，可将 host 改为实际局域网 / Tailscale IP，并在第二节点 seedRoutes 指向第一节点 cluster 端口。
 
 import (
