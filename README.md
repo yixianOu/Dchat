@@ -653,8 +653,9 @@ TODO:
 9. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
 10. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
 11. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
-12. 通过nsc支持配置导出和导入(等)
-13. wails集成前端
+12. 支持insecure tls
+13. 通过nsc支持配置导出和导入(等)
+14. wails集成前端
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
