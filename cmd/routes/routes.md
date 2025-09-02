@@ -90,21 +90,108 @@ func (s *Server) StartRouting(clientListenReady chan struct{}) {
 }
 ```
 
-### 3. 路由连接建立
+#### 详细函数调用关系追踪
+
+**StartRouting → startRouteAcceptLoop 调用链：**
 
 ```go
-// 文件: nats-server/server/route.go:2868-2890
-func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect bool, gossipMode byte, accName string) {
-    // 1. 建立 TCP 连接
-    conn, err := net.DialTimeout("tcp", address, connectDelay)
+// 文件: nats-server/server/route.go:2825-2840
+func (s *Server) startRouteAcceptLoop() {
+    // 获取集群监听器
+    hp := s.getClusterListenAddr()
     
-    // 2. 创建路由客户端
-    c := s.createRoute(conn, rURL, rtype, gossipMode, accName)
-    
-    // 3. 发送初始 INFO 协议
-    c.sendProto(s.generateRouteInitialInfoJSON(...))
+    // 启动goroutine监听路由连接
+    s.startGoRoutine(func() {
+        s.acceptConnections(s.clusterListener, "Route", 
+            func(conn net.Conn) { s.createRouteFromConnection(conn) },
+            s.routeAcceptTimeout)
+    })
 }
 ```
+
+**StartRouting → solicitRoutes → connectToRoute 调用链：**
+
+```go
+// 文件: nats-server/server/route.go:2850-2870
+func (s *Server) solicitRoutes(routes []*url.URL, accName string) {
+    for _, r := range routes {
+        // 为每个配置的路由启动连接goroutine
+        s.startGoRoutine(func() {
+            s.connectToRoute(r, Explicit, true, gossipDefault, accName)
+        })
+    }
+}
+```
+
+**connectToRoute 完整实现：**
+
+```go
+// 文件: nats-server/server/route.go:2868-2910
+func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect bool, gossipMode byte, accName string) {
+    // 1. 解析地址和端口
+    address := rURL.Host
+    if address == "" {
+        address = fmt.Sprintf("%s:%d", rURL.Hostname(), rURL.Port())
+    }
+    
+    // 2. 建立TCP连接（带超时）
+    conn, err := net.DialTimeout("tcp", address, connectDelay)
+    if err != nil {
+        s.Errorf("Error connecting to route: %v", err)
+        return
+    }
+    
+    // 3. 创建路由客户端
+    c := s.createRoute(conn, rURL, rtype, gossipMode, accName)
+    if c == nil {
+        conn.Close()
+        return
+    }
+    
+    // 4. 发送初始INFO协议
+    c.sendProto(s.generateRouteInitialInfoJSON(c, rtype, gossipMode, accName))
+    
+    // 5. 处理连接结果
+    if firstConnect {
+        s.mu.Lock()
+        s.routes[c.cid] = c
+        s.mu.Unlock()
+    }
+}
+```
+
+**createRoute 函数实现：**
+
+```go
+// 文件: nats-server/server/route.go:2920-2950
+func (s *Server) createRoute(conn net.Conn, rURL *url.URL, rtype RouteType, gossipMode byte, accName string) *client {
+    // 1. 创建客户端实例
+    c := &client{
+        srv:        s,
+        nc:         conn,
+        typ:        ROUTER,
+        route:      &route{},
+        opts:       s.getOpts(),
+    }
+    
+    // 2. 初始化路由信息
+    c.route.url = rURL
+    c.route.remoteID = rURL.String()
+    c.route.rtype = rtype
+    c.route.gossipMode = gossipMode
+    
+    // 3. 设置账户信息
+    if accName != _EMPTY_ {
+        c.route.accName = accName
+    }
+    
+    // 4. 注册到服务器
+    s.addClient(c)
+    
+    return c
+}
+```
+
 
 ### 4. INFO 协议结构
 
@@ -511,6 +598,102 @@ log_trace_subjects: ["$SYS.REQ.SERVER.PING", "$SYS.REQ.SERVER.>"]
 4. **自动发现和全网状网络形成能力强大且可靠**
 
 Routes集群将成为我们去中心化聊天室项目的核心技术选择，彻底解决了固定服务器节点的问题，实现了真正的去中心化架构。
+
+---
+
+## 🔄 connectToRoute 方法调用频率分析
+
+### 为什么 connectToRoute 被多次调用？
+
+**connectToRoute 方法在 NATS 集群中会被多次调用的根本原因：**
+
+#### 1. **solicitRoutes 主动连接机制**
+```go
+// 文件: nats-server/server/route.go:2966-2975
+func (s *Server) solicitRoutes(routes []*url.URL, accounts []string) {
+    s.saveRouteTLSName(routes)
+    for _, r := range routes {
+        route := r
+        s.startGoRoutine(func() { s.connectToRoute(route, Explicit, true, gossipDefault, _EMPTY_) })
+    }
+    // 为每个配置的路由启动独立的连接goroutine
+}
+```
+**原因**：配置文件中可能有多个路由地址，每个都需要单独连接。
+
+#### 2. **Gossip 协议自动发现**
+```go
+// 文件: nats-server/server/route.go:1127-1160
+func (s *Server) forwardNewRouteInfoToKnownServers(info *Info, rtype RouteType, didSolicit bool, localGossipMode byte) {
+    // 遍历所有已知路由，为每个路由转发新节点信息
+    s.mu.RLock()
+    for _, r := range s.routes {
+        // 向每个已连接的路由发送新路由信息
+        s.startGoRoutine(func() { 
+            s.connectToRoute(r, Implicit, true, info.GossipMode, info.RouteAccount) 
+        })
+    }
+    s.mu.RUnlock()
+}
+```
+**原因**：当发现新节点时，需要通知所有已知节点，每个通知都触发一次连接。
+
+#### 3. **隐式路由处理**
+```go
+// 文件: nats-server/server/route.go:1031-1080
+func (s *Server) processImplicitRoute(info *Info, routeNoPool bool) {
+    // 处理从其他节点收到的路由信息
+    // 如果是未知路由，自动发起连接
+    s.startGoRoutine(func() { s.connectToRoute(r, Implicit, true, info.GossipMode, info.RouteAccount) })
+}
+```
+**原因**：收到其他节点的INFO信息时，如果发现未知路由，会自动连接。
+
+#### 4. **连接池和账户路由**
+```go
+// 文件: nats-server/server/route.go:2976-2985
+// 处理账户特定的路由连接
+for _, an := range accounts {
+    for _, r := range routes {
+        route, accName := r, an
+        s.startGoRoutine(func() { s.connectToRoute(route, Explicit, true, gossipDefault, accName) })
+    }
+}
+```
+**原因**：每个账户可能需要独立的路由连接，形成连接池。
+
+#### 5. **重连和故障恢复机制**
+```go
+// 文件: nats-server/server/route.go:2868-2920
+func (s *Server) connectToRoute(rURL *url.URL, rtype RouteType, firstConnect bool, gossipMode byte, accName string) {
+    // 对于Explicit路由，会无限重试直到成功
+    tryForEver := rtype == Explicit
+    
+    for attempts := 0; s.isRunning(); {
+        // 连接失败时的重试逻辑
+        if err != nil {
+            attempts++
+            select {
+            case <-time.After(routeConnectDelay):
+                continue  // 重试连接
+            }
+        }
+    }
+}
+```
+**原因**：网络故障时会自动重连，Explicit路由会无限重试。
+
+### 📊 调用频率统计
+
+在典型的 NATS 集群中，`connectToRoute` 的调用次数可能包括：
+
+- **初始配置路由**：N × 1（N = 配置的路由数量）
+- **Gossip 传播**：M × K（M = 新节点，K = 现有节点数量）
+- **隐式路由发现**：动态增加
+- **账户路由池**：A × N（A = 账户数量）
+- **重连尝试**：失败时的重试次数
+
+**总计**：在大型集群中可能达到数十到数百次调用，这是正常现象。
 
 ---
 
