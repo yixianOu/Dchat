@@ -91,7 +91,7 @@ var defaultConfig = Config{
 		UserSeedPath:  "",
 		UserPubKey:    "",
 		Account:       "",
-		User:          "",
+		User:          "Anonymous", // 默认与user.nickname保持一致
 	},
 	Server: ServerOptionsLite{
 		Host:         "",
@@ -279,6 +279,12 @@ func (c *Config) ValidateAndSetDefaults() error {
 	if c.User.Nickname == "" {
 		c.User.Nickname = "Anonymous"
 	}
+
+	// ⭐ 确保keys.user与user.nickname保持一致（如果keys.user为空）
+	if c.Keys.User == "" {
+		c.Keys.User = c.User.Nickname
+	}
+
 	if c.UI.Theme == "" {
 		c.UI.Theme = "dark"
 	}

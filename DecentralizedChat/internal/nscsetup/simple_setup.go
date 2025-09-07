@@ -69,7 +69,7 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	userPub, _ := setup.userKey.PublicKey()
 	cfg.Keys.Operator = "dchat"
 	cfg.Keys.Account = "USERS"
-	cfg.Keys.User = "default"
+	cfg.Keys.User = cfg.User.Nickname // 使用用户昵称而不是硬编码的"default"
 	cfg.Keys.KeysDir = confDir
 	cfg.Keys.UserCredsPath = credsPath
 	cfg.Keys.UserSeedPath = userSeedPath
