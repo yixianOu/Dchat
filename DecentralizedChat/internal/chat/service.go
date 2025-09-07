@@ -53,6 +53,9 @@ type Service struct {
 	userPrivB64 string
 	userPubB64  string
 
+	// NSC密钥管理器 ⭐ 新增
+	nscKeyManager *NSCKeyManager
+
 	// key caches
 	friendPubKeys map[string]string // uid -> pub (b64)
 	groupSymKeys  map[string]string // gid -> sym (b64)
@@ -85,6 +88,55 @@ func NewService(n *natsservice.Service) *Service {
 	// 移除预加载逻辑，改为按需查询
 
 	return s
+}
+
+// LoadNSCKeys 从NSC seed加载密钥对用于聊天加密 ⭐ 新增功能
+func (s *Service) LoadNSCKeys(nscSeed string) error {
+	if nscSeed == "" {
+		return errors.New("NSC seed is empty")
+	}
+
+	// 验证seed格式
+	if err := ValidateNSCSeed(nscSeed); err != nil {
+		return fmt.Errorf("invalid NSC seed: %w", err)
+	}
+
+	// 创建NSC密钥管理器
+	keyManager, err := NewNSCKeyManager(nscSeed)
+	if err != nil {
+		return fmt.Errorf("create NSC key manager: %w", err)
+	}
+
+	// 从NSC密钥派生聊天密钥对
+	privB64, pubB64, err := keyManager.GetChatKeyPair()
+	if err != nil {
+		return fmt.Errorf("derive chat keys: %w", err)
+	}
+
+	s.mu.Lock()
+	s.nscKeyManager = keyManager
+	s.userPrivB64 = privB64
+	s.userPubB64 = pubB64
+	s.mu.Unlock()
+
+	return nil
+}
+
+// AddFriendNSCKey 通过NSC公钥添加好友聊天公钥 ⭐ 新增功能
+func (s *Service) AddFriendNSCKey(uid, nscPubKey string) error {
+	if uid == "" || nscPubKey == "" {
+		return errors.New("uid or NSC public key is empty")
+	}
+
+	// 从NSC公钥派生聊天公钥
+	chatPubKey, err := GetChatPubKeyFromNSCPub(nscPubKey)
+	if err != nil {
+		return fmt.Errorf("derive chat public key: %w", err)
+	}
+
+	// 添加到好友列表
+	s.AddFriendKey(uid, chatPubKey)
+	return nil
 }
 
 // getFriendKey 获取好友公钥，优先从内存缓存，如果没有则从KV查询

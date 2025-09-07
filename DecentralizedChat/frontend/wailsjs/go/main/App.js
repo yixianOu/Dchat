@@ -6,12 +6,20 @@ export function AddFriendKey(arg1, arg2) {
   return window['go']['main']['App']['AddFriendKey'](arg1, arg2);
 }
 
+export function AddFriendNSCKey(arg1, arg2) {
+  return window['go']['main']['App']['AddFriendNSCKey'](arg1, arg2);
+}
+
 export function AddGroupKey(arg1, arg2) {
   return window['go']['main']['App']['AddGroupKey'](arg1, arg2);
 }
 
 export function GetConversationID(arg1) {
   return window['go']['main']['App']['GetConversationID'](arg1);
+}
+
+export function GetNSCUserSeed() {
+  return window['go']['main']['App']['GetNSCUserSeed']();
 }
 
 export function GetNetworkStatus() {
@@ -28,6 +36,10 @@ export function JoinDirect(arg1) {
 
 export function JoinGroup(arg1) {
   return window['go']['main']['App']['JoinGroup'](arg1);
+}
+
+export function LoadNSCKeys(arg1) {
+  return window['go']['main']['App']['LoadNSCKeys'](arg1);
 }
 
 export function OnDecrypted(arg1) {

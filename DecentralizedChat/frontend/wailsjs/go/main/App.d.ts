@@ -4,9 +4,13 @@ import {chat} from '../models';
 
 export function AddFriendKey(arg1:string,arg2:string):Promise<void>;
 
+export function AddFriendNSCKey(arg1:string,arg2:string):Promise<void>;
+
 export function AddGroupKey(arg1:string,arg2:string):Promise<void>;
 
 export function GetConversationID(arg1:string):Promise<string>;
+
+export function GetNSCUserSeed():Promise<string>;
 
 export function GetNetworkStatus():Promise<Record<string, any>>;
 
@@ -15,6 +19,8 @@ export function GetUser():Promise<chat.User>;
 export function JoinDirect(arg1:string):Promise<void>;
 
 export function JoinGroup(arg1:string):Promise<void>;
+
+export function LoadNSCKeys(arg1:string):Promise<void>;
 
 export function OnDecrypted(arg1:any):Promise<void>;
 

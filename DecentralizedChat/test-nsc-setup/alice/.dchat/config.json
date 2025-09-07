@@ -1,0 +1,22 @@
+{
+  "user": {
+    "id": "alice",
+    "nickname": "Alice"
+  },
+  "network": {
+    "auto_discovery": true,
+    "seed_nodes": [],
+    "local_ip": "127.0.0.1"
+  },
+  "server": {
+    "client_port": 4222,
+    "cluster_port": 6222,
+    "cluster_name": "dchat-cluster",
+    "host": "127.0.0.1"
+  },
+  "nsc": {
+    "operator": "dchat-operator-alice",
+    "account": "SYS",
+    "user": "alice-user"
+  }
+}
