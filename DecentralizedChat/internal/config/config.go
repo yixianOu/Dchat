@@ -245,12 +245,34 @@ func (c *Config) ValidateAndSetDefaults() error {
 	if c.Server.Host == "" {
 		c.Server.Host = c.Network.LocalIP
 	}
+
+	// ⭐ 设置默认端口（如果为0）
+	if c.Server.ClientPort == 0 {
+		c.Server.ClientPort = 4222
+	}
+	if c.Server.ClusterPort == 0 {
+		c.Server.ClusterPort = 6222
+	}
+
+	// ⭐ 设置默认集群名称
+	if c.Server.ClusterName == "" {
+		c.Server.ClusterName = "dchat_network"
+	}
+
 	// 默认 URL 由 Server 构造； import/export 权限已直接在 Server 中维护
 	if len(c.Server.ExportAllow) == 0 {
 		c.Server.ExportAllow = []string{"*"}
 	}
-	if len(c.Server.ExportAllow) == 0 {
-		c.Server.ExportAllow = []string{"*"}
+
+	// ⭐ 设置其他默认值
+	if c.User.Nickname == "" {
+		c.User.Nickname = "Anonymous"
+	}
+	if c.UI.Theme == "" {
+		c.UI.Theme = "dark"
+	}
+	if c.UI.Language == "" {
+		c.UI.Language = "zh-CN"
 	}
 
 	return nil

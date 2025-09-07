@@ -62,20 +62,22 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.config = cfg
 
-	// ⭐ 启动NATS节点 - 使用统一的启动方法
-	if err := a.startNATSNode([]string{}); err != nil {
-		log.Printf("start NATS node failed: %v", err)
-		return
-	}
-
-	// ⭐ 设置NodeManager的NSC seed用于TLS证书生成
+	// ⭐ 预先初始化NodeManager并设置NSC seed用于TLS证书生成
+	a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
 	if a.config.NSC.UserSeedPath != "" {
 		seed, err := a.getNSCUserSeed()
 		if err != nil {
 			log.Printf("failed to load NSC seed for NodeManager: %v", err)
 		} else {
 			a.nodeManager.SetNSCSeed(seed)
+			log.Println("NSC seed loaded for TLS certificate generation")
 		}
+	}
+
+	// ⭐ 启动NATS节点 - 使用统一的启动方法
+	if err := a.startNATSNode([]string{}); err != nil {
+		log.Printf("start NATS node failed: %v", err)
+		return
 	}
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
 		URL:       a.nodeManager.GetClientURL(),
@@ -332,9 +334,9 @@ func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 
 // ⭐ startNATSNode 统一的NATS节点启动方法
 func (a *App) startNATSNode(seedRoutes []string) error {
-	// 初始化NodeManager（如果未初始化）
+	// NodeManager应该已经在OnStartup中初始化了
 	if a.nodeManager == nil {
-		a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
+		return fmt.Errorf("NodeManager not initialized - should be set in OnStartup")
 	}
 
 	// 停止现有节点（如果有的话）
