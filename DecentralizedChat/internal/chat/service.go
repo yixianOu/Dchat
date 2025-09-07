@@ -81,6 +81,8 @@ func NewService(n *natsservice.Service) *Service {
 		groupSymKeys:  make(map[string]string),
 		directSubs:    make(map[string]*nats.Subscription),
 		groupSubs:     make(map[string]*nats.Subscription),
+		handlers:      make([]func(*DecryptedMessage), 0),
+		errHandlers:   make([]func(error), 0),
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -510,34 +512,20 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 
 // dispatchDecrypted 分发解密成功事件
 func (s *Service) dispatchDecrypted(msg *DecryptedMessage) {
-	s.mu.RLock()
-	handlers := append([]func(*DecryptedMessage){}, s.handlers...)
-	s.mu.RUnlock()
-
-	for _, h := range handlers {
-		cb := h
+	for _, h := range s.handlers {
 		func() {
 			defer func() { _ = recover() }()
-			cb(msg)
+			h(msg)
 		}()
 	}
 }
 
 // dispatchError 分发错误事件（不 panic；不中断后续消息处理）
 func (s *Service) dispatchError(err error) {
-	if err == nil {
-		return
-	}
-
-	s.mu.RLock()
-	handlers := append([]func(error){}, s.errHandlers...)
-	s.mu.RUnlock()
-
-	for _, h := range handlers {
-		cb := h
+	for _, h := range s.errHandlers {
 		func() {
 			defer func() { _ = recover() }()
-			cb(err)
+			h(err)
 		}()
 	}
 }

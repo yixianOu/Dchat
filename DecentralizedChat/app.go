@@ -7,12 +7,15 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"DecentralizedChat/internal/chat"
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/nscsetup"
 	"DecentralizedChat/internal/routes"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -87,6 +90,19 @@ func (a *App) OnStartup(ctx context.Context) {
 		return
 	}
 	a.chatSvc = chat.NewService(a.natsSvc)
+
+	// ⭐ 设置默认的消息处理器，将解密后的消息推送给前端
+	a.chatSvc.OnDecrypted(func(msg *chat.DecryptedMessage) {
+		runtime.EventsEmit(a.ctx, "message:decrypted", msg)
+	})
+
+	// ⭐ 设置默认的错误处理器，将错误推送给前端
+	a.chatSvc.OnError(func(err error) {
+		runtime.EventsEmit(a.ctx, "message:error", map[string]interface{}{
+			"error":     err.Error(),
+			"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
+		})
+	})
 
 	// ⭐ 自动加载NSC密钥用于聊天加密
 	if a.config.NSC.UserSeedPath != "" {
@@ -169,24 +185,6 @@ func (a *App) SetKeyPair(privB64, pubB64 string) error {
 		return fmt.Errorf("chat service not initialized")
 	}
 	a.chatSvc.SetKeyPair(privB64, pubB64)
-	return nil
-}
-
-// OnDecrypted registers decrypted message callback
-func (a *App) OnDecrypted(h func(*chat.DecryptedMessage)) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	a.chatSvc.OnDecrypted(h)
-	return nil
-}
-
-// OnError registers error callback
-func (a *App) OnError(h func(error)) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	a.chatSvc.OnError(h)
 	return nil
 }
 

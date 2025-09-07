@@ -9,12 +9,11 @@ import {
   JoinGroup,
   SendDirect,
   SendGroup,
-  OnDecrypted,
-  OnError,
   GetConversationID,  // ✅ 新增功能，已生成
   GetNetworkStatus    // ✅ 新增功能，已生成
 } from '../../wailsjs/go/main/App';
 
+import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { chat } from '../../wailsjs/go/models';
 import { DecryptedMessage } from '../types';
 
@@ -31,13 +30,13 @@ export const sendGroup = SendGroup;
 export const getConversationID = GetConversationID;  // ✅ 新增功能
 export const getNetworkStatus = GetNetworkStatus;    // ✅ 新增功能
 
-// 事件监听器需要类型包装
-export const onDecrypted = (callback: (msg: DecryptedMessage) => void): Promise<void> => {
-  return OnDecrypted(callback);
+// ⭐ 基于事件的监听器，替代回调方式
+export const onDecrypted = (callback: (msg: DecryptedMessage) => void): (() => void) => {
+  return EventsOn('message:decrypted', callback);
 };
 
-export const onError = (callback: (error: string) => void): Promise<void> => {
-  return OnError(callback);
+export const onError = (callback: (error: { error: string; timestamp: string }) => void): (() => void) => {
+  return EventsOn('message:error', callback);
 };
 
 // 导出 Wails 生成的类型

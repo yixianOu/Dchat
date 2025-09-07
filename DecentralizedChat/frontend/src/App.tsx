@@ -38,8 +38,8 @@ const App: React.FC = () => {
         setUser(currentUser);
         setNickname(currentUser.nickname);
 
-        // 设置解密消息监听
-        await onDecrypted((msg: DecryptedMessage) => {
+        // ⭐ 基于事件的消息监听
+        const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {
           setMessages(prev => [...prev, msg]);
           
           // 更新会话列表
@@ -64,19 +64,28 @@ const App: React.FC = () => {
           });
         });
 
-        // 设置错误监听
-        await onError((error: string) => {
-          console.error('Chat error:', error);
+        // ⭐ 基于事件的错误监听
+        const unsubscribeErrors = onError((errorData: { error: string; timestamp: string }) => {
+          console.error('Chat error:', errorData.error);
           // 可以添加更好的错误处理，如错误状态管理
-          alert(`聊天错误: ${error}`);
+          alert(`聊天错误: ${errorData.error}`);
         });
+
+        // 清理函数
+        return () => {
+          unsubscribeMessages();
+          unsubscribeErrors();
+        };
 
       } catch (error) {
         console.error('初始化应用失败:', error);
       }
     };
 
-    initApp();
+    const cleanup = initApp();
+    return () => {
+      cleanup?.then(fn => fn?.());
+    };
   }, []);
 
   // ✅ 新增：定期检查网络状态
