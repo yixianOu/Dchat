@@ -1,3 +1,20 @@
+### 新增操作日志（2025-09-07 18:27）
+- 成功安装 Deskflow（键盘鼠标共享工具）：
+  - 下载 GitHub Release: deskflow-1.23.0-ubuntu-plucky-x86_64.deb
+  - 解决系统依赖冲突（libxtst6、libqt6gui6、libqt6widgets6）
+  - 最终使用 flatpak 安装：`flatpak install flathub org.deskflow.deskflow`
+  - 验证安装成功：`flatpak run org.deskflow.deskflow --help`
+  - 启动命令：`flatpak run org.deskflow.deskflow`
+
+### 新增操作日志（2025-09-07 18:19）
+- **成功解决 Wails 桌面应用编译问题**：
+  - 解决依赖冲突：降级 libpng16-16t64、libxtst6 到仓库兼容版本
+  - 安装完整 GTK3 开发环境：libgtk-3-dev 及所有依赖（67个包）
+  - 安装 WebKit2GTK 开发包：libwebkit2gtk-4.1-dev 及依赖
+  - 修复 pkg-config 配置：添加 javascriptcoregtk-4.1 库链接
+  - **桌面应用启动成功**：显示 Gtk 主题警告但功能正常
+  - Web 版本同时可用：http://localhost:34115（桌面版）、http://localhost:5173（前端）
+
 ### 新增操作日志（2025-09-07 14:30）
 - 完善前端与后端 Wails 绑定对接：
   - 分析 Go 后端 app.go 接口，生成对应的 TypeScript 前端代码
