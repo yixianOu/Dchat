@@ -64,6 +64,7 @@ const App: React.FC = () => {
         // 设置错误监听
         await onError((error: string) => {
           console.error('Chat error:', error);
+          // 可以添加更好的错误处理，如错误状态管理
           alert(`聊天错误: ${error}`);
         });
 
@@ -153,10 +154,16 @@ const App: React.FC = () => {
   };
 
   const getSessionMessages = (sessionId: string): DecryptedMessage[] => {
-    return messages.filter(msg => 
-      msg.IsGroup ? msg.CID === sessionId : 
-      (msg.CID === sessionId || msg.Sender === sessionId)
-    );
+    return messages.filter(msg => {
+      if (msg.IsGroup) {
+        // 群聊：直接匹配群组ID
+        return msg.CID === sessionId;
+      } else {
+        // 私聊：需要匹配实际的会话ID (CID) 或者通过发送者ID匹配
+        // 注意：后端会生成 SHA256 派生的 CID，前端暂时通过发送者匹配
+        return msg.CID === sessionId || msg.Sender === sessionId;
+      }
+    });
   };
 
   return (

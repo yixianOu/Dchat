@@ -15,12 +15,13 @@ export interface Message {
 export type User = chat.User;
 
 export interface DecryptedMessage {
-  CID: string;     // conversation id or group id
-  Sender: string;  // sender user id
-  Ts: string;      // timestamp
-  Plain: string;   // decrypted content
+  CID: string;      // conversation id or group id
+  Sender: string;   // sender user id
+  Ts: string;       // timestamp (ISO string)
+  Plain: string;    // decrypted content
   IsGroup: boolean; // is group message
-  Subject: string; // NATS subject
+  Subject: string;  // NATS subject
+  // 注意：后端还有 RawWire 字段，前端暂不需要
 }
 
 export interface ChatRoomProps {

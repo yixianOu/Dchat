@@ -11,10 +11,19 @@ const KeyManager: React.FC<KeyManagerProps> = ({ onClose }) => {
   const [showKeys, setShowKeys] = useState(false);
 
   const generateKeyPair = () => {
-    // 这里应该调用加密库生成密钥对
-    // 暂时用随机字符串模拟
-    const privKey = btoa(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
-    const pubKey = btoa(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+    // TODO: 需要集成真正的加密库（如 libsodium.js 或 tweetnacl-js）
+    // 当前使用模拟实现，生产环境中应该使用真正的 X25519 密钥对
+    console.warn('警告：当前使用模拟密钥生成，生产环境请使用真正的加密库');
+    
+    // 生成32字节的模拟密钥（实际应该使用 X25519）
+    const generateRandomBytes = (length: number) => {
+      const array = new Uint8Array(length);
+      crypto.getRandomValues(array);
+      return btoa(String.fromCharCode(...array));
+    };
+    
+    const privKey = generateRandomBytes(32);
+    const pubKey = generateRandomBytes(32);
     
     setPrivateKey(privKey);
     setPublicKey(pubKey);
