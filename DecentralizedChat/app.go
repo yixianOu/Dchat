@@ -348,7 +348,7 @@ func (a *App) startNATSNode(seedRoutes []string) error {
 	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
 	var nodeConfig *routes.NodeConfig
 
-	nodeConfig = a.nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, seedRoutes, []string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"})
+	nodeConfig = a.nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, seedRoutes, []string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"}, a.config.Server.EnableTLS)
 
 	// 设置resolver配置路径（如果已生成）
 	if a.config.Server.ResolverConf != "" {

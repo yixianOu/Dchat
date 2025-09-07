@@ -62,6 +62,8 @@ type ServerOptionsLite struct {
 	ImportDeny   []string `json:"import_deny"`
 	ExportAllow  []string `json:"export_allow"`
 	ExportDeny   []string `json:"export_deny"`
+	EnableTLS    bool     `json:"enable_tls,omitempty"`
+	NodeID       string   `json:"node_id,omitempty"` // 对应routes.NodeConfig.NodeID
 }
 
 var defaultConfig = Config{
@@ -101,6 +103,8 @@ var defaultConfig = Config{
 		ImportDeny:   []string{},
 		ExportAllow:  []string{"*"},
 		ExportDeny:   []string{},
+		EnableTLS:    true, // ⭐ 默认启用TLS，与routes.go一致
+		NodeID:       "",   // 运行时生成
 	},
 }
 

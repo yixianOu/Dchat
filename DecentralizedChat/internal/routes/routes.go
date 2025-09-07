@@ -375,7 +375,7 @@ func (nm *NodeManager) AddSubscribePermission(subject string) error {
 }
 
 // CreateNodeConfigWithPermissions creates node config translating subscribe permissions -> import
-func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string) *NodeConfig {
+func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string, enableTLS bool) *NodeConfig {
 	importPermissions := subscribePermissions
 	if len(importPermissions) == 0 {
 		importPermissions = []string{}
@@ -387,6 +387,6 @@ func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort
 		SeedRoutes:  seedRoutes,
 		ImportAllow: importPermissions,
 		ExportAllow: []string{"*"},
-		EnableTLS:   true, // 默认启用TLS
+		EnableTLS:   enableTLS, // 默认启用TLS
 	}
 }
