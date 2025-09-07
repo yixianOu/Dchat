@@ -1,187 +1,3 @@
-### 新增操作日志（2025-09-07 18:35）
-- 修复 TypeScript 配置弃用警告：
-  - 更新 frontend/tsconfig.json：`moduleResolution: "Node"` → `"Bundler"`
-  - 更新 frontend/tsconfig.node.json：同样修复 moduleResolution 配置
-  - 解决 VS Code 提示："选项'moduleResolution=node10'已弃用"
-  - 使用现代的 "Bundler" 模块解析策略，适配 Vite 构建环境
-  - 验证配置正确性：`npx tsc --noEmit` 无错误输出
-
-### 新增操作日志（2025-09-07 18:27）
-- 成功安装 Deskflow（键盘鼠标共享工具）：
-  - 下载 GitHub Release: deskflow-1.23.0-ubuntu-plucky-x86_64.deb
-  - 解决系统依赖冲突（libxtst6、libqt6gui6、libqt6widgets6）
-  - 最终使用 flatpak 安装：`flatpak install flathub org.deskflow.deskflow`
-  - 验证安装成功：`flatpak run org.deskflow.deskflow --help`
-  - 启动命令：`flatpak run org.deskflow.deskflow`
-
-### 新增操作日志（2025-09-07 18:19）
-- **成功解决 Wails 桌面应用编译问题**：
-  - 解决依赖冲突：降级 libpng16-16t64、libxtst6 到仓库兼容版本
-  - 安装完整 GTK3 开发环境：libgtk-3-dev 及所有依赖（67个包）
-  - 安装 WebKit2GTK 开发包：libwebkit2gtk-4.1-dev 及依赖
-  - 修复 pkg-config 配置：添加 javascriptcoregtk-4.1 库链接
-  - **桌面应用启动成功**：显示 Gtk 主题警告但功能正常
-  - Web 版本同时可用：http://localhost:34115（桌面版）、http://localhost:5173（前端）
-
-### 新增操作日志（2025-09-07 14:30）
-- 完善前端与后端 Wails 绑定对接：
-  - 分析 Go 后端 app.go 接口，生成对应的 TypeScript 前端代码
-  - 重构前端类型定义，使用 Wails 自动生成的绑定 (wailsjs/go/main/App.d.ts)
-  - 更新 frontend/src/services/dchatAPI.ts，直接使用 Wails 生成的函数而非手动包装
-  - 创建完整的去中心化聊天前端界面，包含用户管理、会话列表、密钥管理等功能
-  - **重要发现**：Wails CLI 会自动生成 TypeScript 绑定文件：
-    - `wailsjs/go/main/App.d.ts` - TypeScript 类型定义
-    - `wailsjs/go/main/App.js` - JavaScript 实现
-    - `wailsjs/go/models.ts` - Go 结构体对应的 TypeScript 类型
-  - **绑定生成规则**：
-    - 当运行 `wails dev` 或 `wails build` 时自动生成
-    - 基于 Go 结构体方法的导出函数自动创建对应的 TypeScript 接口
-    - 支持参数类型推断和 Promise 返回类型
-    - 使用 `--skipbindings` 可跳过绑定生成（调试用）
-
-### 新增操作日志（2025-09-01 15:30）
-- 整理 cmd/routes/routes.md 文档，消除重复内容，为代码块标注文件路径和行数：
-  - 统一整合研究背景、对比分析和核心发现
-  - 为所有 NATS 源码示例添加准确的文件路径注释（如 nats-server/server/route.go:50-55）
-  - 重新组织文档结构，突出链式连接实现原理和配置示例
-  - 完善性能优化、监控调试和架构设计章节
-- 文档现已成为 NATS Routes 集群机制的完整技术手册，包含源码分析、实现原理和实践指南
-
-### 新增操作日志（2025-08-13 10:00）
-- 修改 DecentralizedChat/cmd/chatpeer/main.go：
-  - 增强 --cluster-advertise 支持，自动剥离 nats://、tls:// 前缀，按 host:port 注入 server.Options.Cluster.Advertise。
-  - --seed-route 支持逗号/空格/分号分隔的多路由输入，便于一次性指定多个引导节点。
-  - 启动信息新增 ClusterAdvertise 打印，便于核对公告地址；示例 SeedRoute 一并输出。
-- 构建与使用步骤（混合公网/局域网）：
-```bash
-cd DecentralizedChat && go build ./cmd/chatpeer
-
-# 公共节点（需公网IP/端口映射，对外公告6222）：
-./chatpeer --client-port 4222 \
-          --cluster-port 6222 \
-          --cluster-advertise "<public_ip_or_dns>:6222" \
-          --identity ~/.dchat/identity_pub.txt \
-          --nick Public
-
-# 私网/其它节点（经公共节点种子加入并发送一条测试消息）：
-./chatpeer --client-port 4223 \
-          --cluster-port 6223 \
-          --seed-route "nats://<public_ip_or_dns>:6222" \
-          --identity ~/.dchat/identity_lan.txt \
-          --peer-id <public_user_id> \
-          --peer-pub <public_user_pubkey_b64> \
-          --send "hello over hybrid"
-
-# 多引导路由（可选，支持逗号/空格/分号分隔）：
-./chatpeer --seed-route "nats://a:6222, nats://b:6222 nats://c:6222" --identity ~/.dchat/identity_x.txt
-```
-# 2025-08-06 重大重构
-- 完善 internal/routes/routes.go，支持链式集群、动态节点加入、集群连通性检查、消息路由测试等功能，参考cmd/routes/main.go。
-- 重构 internal/nats/service.go，仅保留NATS客户端功能，支持鉴权连接，去除服务端嵌入式启动。
-- 新增 ClusterManager 类型，提供集群管理功能，支持节点创建、启动、停止、连通性检查。
-- 完善 NATS 客户端，新增 JSON 序列化/反序列化、请求-响应模式、增强连接配置。
-- 重构 config.go，分离 NATS 客户端配置和 Routes 集群配置，新增配置辅助方法。
-- 创建 examples/cluster_demo.go 演示新设计的使用方法。
-- **优化设计**：重命名 ClusterManager.network → clusterName，移除硬编码，新增 ClusterConfig 结构体支持可配置的主机地址和端口偏移量。
-- **增强配置**：Routes 配置新增 Host 和 ClusterPortOffset 字段，支持更灵活的部署环境。
-- **🔥 彻底清理硬编码**：
-  - 移除所有硬编码的 IP 地址和端口
-  - 移除向后兼容的旧 API，只保留最新设计
-  - 新增 `GetLocalIP()` 自动检测本地 IP 地址
-  - 新增 `ValidateAndSetDefaults()` 自动验证和设置配置默认值
-  - 强制用户提供配置，避免隐式默认值
-- **API 简化**：ClusterManager 现在要求明确的配置参数，增强了代码的可预测性和可维护性。
-
-## 2025-08-08 记录：引入 NSC/JWT 凭据与首次初始化
-- 客户端优先使用 NSC 生成的 .creds（JWT/公私钥）进行鉴权（internal/nats/service.go）。
-- 配置新增字段：
-  - nats.creds_file；routes.resolver_config；nsc 子配置（operator/store_dir/keys_dir/sys_jwt_path/sys_pub_path/sys_seed_path）。
-- 新增 internal/nscsetup/setup.go：首次运行时通过 nsc 创建/初始化 operator(SYS)、生成 resolver.conf，写入 ~/.dchat；并把路径持久化到 ~/.dchat/config.json。
-- 内置节点（internal/routes/routes.go）支持加载 resolver.conf，去除用户名/密码。
-- demo/cluster 改为使用 creds 连接，并在启动前调用首启初始化。
-
-实际执行步骤（zsh）：
-```bash
-# 构建（可选）
-cd /home/orician/workspace/learn/nats/Dchat
-go build ./...
-
-# 运行 demo（首次会自动执行 nsc 初始化并生成 ~/.dchat/resolver.conf）
-go run DecentralizedChat/demo/cluster/cluster_demo.go
-```
-备注：nsc 调用包含如下动作（由程序自动执行）：
-- nsc add operator --generate-signing-key --sys --name local
-- nsc edit operator --require-signing-keys --account-jwt-server-url nats://<host>:<port>
-- nsc edit account SYS --sk generate
-- nsc generate config --nats-resolver --sys-account SYS > ~/.dchat/resolver.conf
-
-- 简化 SYS JWT 路径解析：移除多次回退 (JSON/文本) 解析逻辑，改为单次通过目录结构推导 `stores/<operator>/accounts/SYS/SYS.jwt`。
-- 种子获取方式变更：不再遍历 keys 目录匹配公钥，改用 `nsc export keys --accounts --account SYS` 导出种子并写入本地配置目录。
-- 清理: 移除未使用的 firstMatch 助手与 regexp 依赖（JWT 路径解析已无需正则）。
-- 配置调整：NSC 配置改为存储用户级 (SYS/sys) 的 JWT/creds/seed（user_jwt_path/user_creds_path/user_seed_path, 增加 account/user 字段），不再持久化账户级 JWT。
-
-## 2025-08-09 调整：停止记录 JWT 路径，仅保留 nkey (seed) 与 creds
-- 移除 NSCConfig 中 user_jwt_path 与 account_jwt_path 字段及默认值。
-- 删除 setup 初始化中对用户与账户 JWT 路径的收集与持久化逻辑，仅保留：
-  - 用户级：user_creds_path, user_seed_path
-  - 账户级：account_creds_path, account_seed_path
-- 移除 findUserJWTPath / findAccountJWTPath 方法，避免不必要的磁盘路径依赖。
-- 目的：运行期只需 creds（含 JWT + 签名身份）与必要的私钥 seed；JWT 原始文件路径不再需要持久化。
-
-操作日志：
-- 修改 internal/config/config.go 移除字段 user_jwt_path/account_jwt_path
-- 修改 internal/nscsetup/setup.go 移除相关赋值与查找函数
-- 更新 README 增加本节说明
- - 重构 internal/nscsetup/setup.go：引入 execCommand 统一 run 与 runOut 的公共逻辑，消除重复代码（DRY）。
- - 合并 seed 导出与 creds 查找：exportUserSeed/exportAccountSeed 合并为 exportSeed；findUserCredsFile/findAccountCredsFile 合并为 findCredsFile，减少重复。
- - 移除 run / runOut 包装函数，直接使用 execCommand，进一步简化命令执行路径。
-  - 去除 setup 中硬编码的 operator/local、SYS、sys、resolver.conf：改为可配置 (operator/account/user 可由配置覆盖，resolver 文件名基于账户动态生成 <account>_resolver.conf)。
-  - 精简 setup：移除 collectUserArtifacts/collectAccountArtifacts 未使用参数 (storeDir/keysDir/cfg)，消除 gopls unusedparams 警告。
-  - 重构 routes：内联 ensureNotStarted，辅助函数 (loadResolverConfig/applyLocalOverrides/applyRoutePermissions/configureSeedRoutes/loadTrustedKeysIfRequested) 改为 NodeConfig 方法。
-  - 配置精简：移除 account_seed_path 及账户种子导出逻辑，仅保留用户 user_seed_path 与 user_creds_path。
-    - 移除 StoreDir 持久化：不再跟踪 NSC store_dir（JWT 存储目录）路径，仅保留 keys_dir + 用户 creds/seed，进一步最小化配置。
-    - 修改 internal/config/config.go 删除 nsc.store_dir 字段；修改 internal/nscsetup/setup.go 去除赋值；README 追加该操作记录。
-    - 二次清理：删除 residual StoresDir 相关函数与解析逻辑（readEnvPaths 去掉 storeDir 返回，移除 defaultStoresDir，实现最小依赖）。
-  - 新增 nsc.user_pub_key 字段：在初始化时解析 user JWT 的 sub 保存用户公钥，避免二次调用 nsc 解析。
-
-  ## 2025-08-10 重构：移除 NATSConfig 结构，直接使用 server.Options 扁平字段
-  - 删除 internal/config/config.go 中 NATSConfig / Permissions / PermissionRules 结构体。
-  - 所有客户端连接参数改由 ServerOptionsLite + 运行时拼接 URL 提供（Host/ClientPort/CredsFile）。
-  - 订阅/发布权限：移除嵌套 permissions，统一使用 Server.ImportAllow / ExportAllow。
-  - 删除 ensurePermissionsDefaults / syncServerFlat 中与旧结构相关逻辑。
-  - 简化 CanPublish/CanSubscribe：发布默认放行；订阅基于 ImportAllow 简单匹配。
-  - 更新 internal/nscsetup/setup.go 生成 NATS URL 逻辑，移除 cfg.NATS 引用。
-  - 更新 demo/cluster/cluster_demo.go 适配新结构，去除已删除的 Routes/NATS 字段引用。
-  - 构建验证通过。
-
-  操作日志：
-  - 修改 internal/config/config.go 移除 NATSConfig 及权限结构
-  - 修改 internal/nscsetup/setup.go 替换 cfg.NATS.URL 访问
-  - 修改 demo/cluster/cluster_demo.go 使用 cfg.Server.* 字段
-  - 更新 README.md 追加本节说明
-  - 精简订阅权限 API：删除 AddSubscribePermission / RemoveSubscribePermission 非持久化方法，只保留 AddSubscribePermissionAndSave / RemoveSubscribePermissionAndSave，确保权限修改即刻落盘。
-  - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群聊对称密钥。
-  - KV 存储格式改为结构体：FriendPubKeyRecord{pub} / GroupSymKeyRecord{sym}，替换原 map，实现类型安全与易扩展。
-  - 启用内置 JetStream：在 NodeManager.prepareServerOptions 中设置 opts.JetStream = true 以支持 KV。
-    - 精简 internal/chat 结构体：User 去除 Avatar；Message 去除 Username/Type；Room 去除 Name/Description/Members，仅保留最小字段（ID/Messages/CreatedAt）。同步更新 service.go 相关引用与 SetUser 签名（改为仅接受 nickname）。
-    - 统一加密消息载荷结构 encWire(ver,cid,sender,ts,nonce,cipher,alg,sig)；私聊与群聊复用，移除 mid/from/to/gid 等冗余字段。
-    - 再次裁剪 encWire：去除 ver/alg/sig 字段，最终格式 {cid,sender,ts,nonce,cipher}，算法由 subject 推断；更新 service.go 与 internal/chat/README.md 示例。
-    - 重写 internal/chat/service.go：移除房间/历史存储 API，仅保留私聊/群聊加密发送接收 (JoinDirect/JoinGroup/SendDirect/SendGroup)，新增解密回调；调整 app.go 删除房间相关方法并新增 Direct/Group 封装。
-    - 优化 service.go 回调分发代码风格：显式局部变量 + 保护性 defer 注释，提升可读性。
-    - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
-    - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
-  - 再次优化 internal/chat/service.go 代码风格：拆分长行（Subscribe 回调、结构体字面量、fmt.Sprintf、多参数函数调用），提高可读性与 diff 友好性。
-  - 引入错误事件回调：新增 ErrorEvent/ErrorHandler，handleEncrypted 拆分为解析、解密、成功与错误分发，提高内聚与可观察性；避免静默失败。
-  - 进一步简化错误回调：移除 ErrorEvent 结构，仅保留 func(error) 形式，减少耦合与调用复杂度；fmt.Sprintf 短行恢复单行表达。
-  - 调整 service.go 代码风格：一行一逻辑（GetUser/handleEncrypted/dispatch* 等拆分），去除多语句单行，提升可读性与审查效率。
-  - 更新 app.go：新增 SetKeyPair / OnDecrypted / OnError / GetUser 封装，提供与 service.go 对应外部调用入口。
-  - 精简 app.go：移除房间/历史/统计/权限热重启等非最小聊天能力，仅保留 Direct/Group 相关 API 与启动初始化。
-  - 新增跨节点加密往返测试：internal/chat/dual_node_encrypt_test.go，单机模拟双节点（不同端口 + Routes seed）验证私聊加密 A<->B 往返成功。
-  - 新增 cmd/genkey & cmd/chatpeer：支持两台电脑快速生成密钥、启动本地嵌入式节点并进行私聊加密往返测试。
-  - chatpeer 增强：
-    - 支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
-    - 支持 --cluster-advertise 用于"公共节点对外暴露集群端口"的方案。
-
 ### 跨公网/局域网混合拓扑指引
 
 公共节点（有公网 IP，暴露 cluster 端口）示例：
@@ -599,6 +415,191 @@ TODO:
 9.  通过nsc支持配置导出和导入(等)
 10. 支持ip自签名,insecure tls
 11. wails集成前端,检查
+
+
+### 新增操作日志（2025-09-07 18:35）
+- 修复 TypeScript 配置弃用警告：
+  - 更新 frontend/tsconfig.json：`moduleResolution: "Node"` → `"Bundler"`
+  - 更新 frontend/tsconfig.node.json：同样修复 moduleResolution 配置
+  - 解决 VS Code 提示："选项'moduleResolution=node10'已弃用"
+  - 使用现代的 "Bundler" 模块解析策略，适配 Vite 构建环境
+  - 验证配置正确性：`npx tsc --noEmit` 无错误输出
+
+### 新增操作日志（2025-09-07 18:27）
+- 成功安装 Deskflow（键盘鼠标共享工具）：
+  - 下载 GitHub Release: deskflow-1.23.0-ubuntu-plucky-x86_64.deb
+  - 解决系统依赖冲突（libxtst6、libqt6gui6、libqt6widgets6）
+  - 最终使用 flatpak 安装：`flatpak install flathub org.deskflow.deskflow`
+  - 验证安装成功：`flatpak run org.deskflow.deskflow --help`
+  - 启动命令：`flatpak run org.deskflow.deskflow`
+
+### 新增操作日志（2025-09-07 18:19）
+- **成功解决 Wails 桌面应用编译问题**：
+  - 解决依赖冲突：降级 libpng16-16t64、libxtst6 到仓库兼容版本
+  - 安装完整 GTK3 开发环境：libgtk-3-dev 及所有依赖（67个包）
+  - 安装 WebKit2GTK 开发包：libwebkit2gtk-4.1-dev 及依赖
+  - 修复 pkg-config 配置：添加 javascriptcoregtk-4.1 库链接
+  - **桌面应用启动成功**：显示 Gtk 主题警告但功能正常
+  - Web 版本同时可用：http://localhost:34115（桌面版）、http://localhost:5173（前端）
+
+### 新增操作日志（2025-09-07 14:30）
+- 完善前端与后端 Wails 绑定对接：
+  - 分析 Go 后端 app.go 接口，生成对应的 TypeScript 前端代码
+  - 重构前端类型定义，使用 Wails 自动生成的绑定 (wailsjs/go/main/App.d.ts)
+  - 更新 frontend/src/services/dchatAPI.ts，直接使用 Wails 生成的函数而非手动包装
+  - 创建完整的去中心化聊天前端界面，包含用户管理、会话列表、密钥管理等功能
+  - **重要发现**：Wails CLI 会自动生成 TypeScript 绑定文件：
+    - `wailsjs/go/main/App.d.ts` - TypeScript 类型定义
+    - `wailsjs/go/main/App.js` - JavaScript 实现
+    - `wailsjs/go/models.ts` - Go 结构体对应的 TypeScript 类型
+  - **绑定生成规则**：
+    - 当运行 `wails dev` 或 `wails build` 时自动生成
+    - 基于 Go 结构体方法的导出函数自动创建对应的 TypeScript 接口
+    - 支持参数类型推断和 Promise 返回类型
+    - 使用 `--skipbindings` 可跳过绑定生成（调试用）
+
+### 新增操作日志（2025-09-01 15:30）
+- 整理 cmd/routes/routes.md 文档，消除重复内容，为代码块标注文件路径和行数：
+  - 统一整合研究背景、对比分析和核心发现
+  - 为所有 NATS 源码示例添加准确的文件路径注释（如 nats-server/server/route.go:50-55）
+  - 重新组织文档结构，突出链式连接实现原理和配置示例
+  - 完善性能优化、监控调试和架构设计章节
+- 文档现已成为 NATS Routes 集群机制的完整技术手册，包含源码分析、实现原理和实践指南
+
+### 新增操作日志（2025-08-13 10:00）
+- 修改 DecentralizedChat/cmd/chatpeer/main.go：
+  - 增强 --cluster-advertise 支持，自动剥离 nats://、tls:// 前缀，按 host:port 注入 server.Options.Cluster.Advertise。
+  - --seed-route 支持逗号/空格/分号分隔的多路由输入，便于一次性指定多个引导节点。
+  - 启动信息新增 ClusterAdvertise 打印，便于核对公告地址；示例 SeedRoute 一并输出。
+- 构建与使用步骤（混合公网/局域网）：
+```bash
+cd DecentralizedChat && go build ./cmd/chatpeer
+
+# 公共节点（需公网IP/端口映射，对外公告6222）：
+./chatpeer --client-port 4222 \
+          --cluster-port 6222 \
+          --cluster-advertise "<public_ip_or_dns>:6222" \
+          --identity ~/.dchat/identity_pub.txt \
+          --nick Public
+
+# 私网/其它节点（经公共节点种子加入并发送一条测试消息）：
+./chatpeer --client-port 4223 \
+          --cluster-port 6223 \
+          --seed-route "nats://<public_ip_or_dns>:6222" \
+          --identity ~/.dchat/identity_lan.txt \
+          --peer-id <public_user_id> \
+          --peer-pub <public_user_pubkey_b64> \
+          --send "hello over hybrid"
+
+# 多引导路由（可选，支持逗号/空格/分号分隔）：
+./chatpeer --seed-route "nats://a:6222, nats://b:6222 nats://c:6222" --identity ~/.dchat/identity_x.txt
+```
+# 2025-08-06 重大重构
+- 完善 internal/routes/routes.go，支持链式集群、动态节点加入、集群连通性检查、消息路由测试等功能，参考cmd/routes/main.go。
+- 重构 internal/nats/service.go，仅保留NATS客户端功能，支持鉴权连接，去除服务端嵌入式启动。
+- 新增 ClusterManager 类型，提供集群管理功能，支持节点创建、启动、停止、连通性检查。
+- 完善 NATS 客户端，新增 JSON 序列化/反序列化、请求-响应模式、增强连接配置。
+- 重构 config.go，分离 NATS 客户端配置和 Routes 集群配置，新增配置辅助方法。
+- 创建 examples/cluster_demo.go 演示新设计的使用方法。
+- **优化设计**：重命名 ClusterManager.network → clusterName，移除硬编码，新增 ClusterConfig 结构体支持可配置的主机地址和端口偏移量。
+- **增强配置**：Routes 配置新增 Host 和 ClusterPortOffset 字段，支持更灵活的部署环境。
+- **🔥 彻底清理硬编码**：
+  - 移除所有硬编码的 IP 地址和端口
+  - 移除向后兼容的旧 API，只保留最新设计
+  - 新增 `GetLocalIP()` 自动检测本地 IP 地址
+  - 新增 `ValidateAndSetDefaults()` 自动验证和设置配置默认值
+  - 强制用户提供配置，避免隐式默认值
+- **API 简化**：ClusterManager 现在要求明确的配置参数，增强了代码的可预测性和可维护性。
+
+## 2025-08-08 记录：引入 NSC/JWT 凭据与首次初始化
+- 客户端优先使用 NSC 生成的 .creds（JWT/公私钥）进行鉴权（internal/nats/service.go）。
+- 配置新增字段：
+  - nats.creds_file；routes.resolver_config；nsc 子配置（operator/store_dir/keys_dir/sys_jwt_path/sys_pub_path/sys_seed_path）。
+- 新增 internal/nscsetup/setup.go：首次运行时通过 nsc 创建/初始化 operator(SYS)、生成 resolver.conf，写入 ~/.dchat；并把路径持久化到 ~/.dchat/config.json。
+- 内置节点（internal/routes/routes.go）支持加载 resolver.conf，去除用户名/密码。
+- demo/cluster 改为使用 creds 连接，并在启动前调用首启初始化。
+
+实际执行步骤（zsh）：
+```bash
+# 构建（可选）
+cd /home/orician/workspace/learn/nats/Dchat
+go build ./...
+
+# 运行 demo（首次会自动执行 nsc 初始化并生成 ~/.dchat/resolver.conf）
+go run DecentralizedChat/demo/cluster/cluster_demo.go
+```
+备注：nsc 调用包含如下动作（由程序自动执行）：
+- nsc add operator --generate-signing-key --sys --name local
+- nsc edit operator --require-signing-keys --account-jwt-server-url nats://<host>:<port>
+- nsc edit account SYS --sk generate
+- nsc generate config --nats-resolver --sys-account SYS > ~/.dchat/resolver.conf
+
+- 简化 SYS JWT 路径解析：移除多次回退 (JSON/文本) 解析逻辑，改为单次通过目录结构推导 `stores/<operator>/accounts/SYS/SYS.jwt`。
+- 种子获取方式变更：不再遍历 keys 目录匹配公钥，改用 `nsc export keys --accounts --account SYS` 导出种子并写入本地配置目录。
+- 清理: 移除未使用的 firstMatch 助手与 regexp 依赖（JWT 路径解析已无需正则）。
+- 配置调整：NSC 配置改为存储用户级 (SYS/sys) 的 JWT/creds/seed（user_jwt_path/user_creds_path/user_seed_path, 增加 account/user 字段），不再持久化账户级 JWT。
+
+## 2025-08-09 调整：停止记录 JWT 路径，仅保留 nkey (seed) 与 creds
+- 移除 NSCConfig 中 user_jwt_path 与 account_jwt_path 字段及默认值。
+- 删除 setup 初始化中对用户与账户 JWT 路径的收集与持久化逻辑，仅保留：
+  - 用户级：user_creds_path, user_seed_path
+  - 账户级：account_creds_path, account_seed_path
+- 移除 findUserJWTPath / findAccountJWTPath 方法，避免不必要的磁盘路径依赖。
+- 目的：运行期只需 creds（含 JWT + 签名身份）与必要的私钥 seed；JWT 原始文件路径不再需要持久化。
+
+操作日志：
+- 修改 internal/config/config.go 移除字段 user_jwt_path/account_jwt_path
+- 修改 internal/nscsetup/setup.go 移除相关赋值与查找函数
+- 更新 README 增加本节说明
+ - 重构 internal/nscsetup/setup.go：引入 execCommand 统一 run 与 runOut 的公共逻辑，消除重复代码（DRY）。
+ - 合并 seed 导出与 creds 查找：exportUserSeed/exportAccountSeed 合并为 exportSeed；findUserCredsFile/findAccountCredsFile 合并为 findCredsFile，减少重复。
+ - 移除 run / runOut 包装函数，直接使用 execCommand，进一步简化命令执行路径。
+  - 去除 setup 中硬编码的 operator/local、SYS、sys、resolver.conf：改为可配置 (operator/account/user 可由配置覆盖，resolver 文件名基于账户动态生成 <account>_resolver.conf)。
+  - 精简 setup：移除 collectUserArtifacts/collectAccountArtifacts 未使用参数 (storeDir/keysDir/cfg)，消除 gopls unusedparams 警告。
+  - 重构 routes：内联 ensureNotStarted，辅助函数 (loadResolverConfig/applyLocalOverrides/applyRoutePermissions/configureSeedRoutes/loadTrustedKeysIfRequested) 改为 NodeConfig 方法。
+  - 配置精简：移除 account_seed_path 及账户种子导出逻辑，仅保留用户 user_seed_path 与 user_creds_path。
+    - 移除 StoreDir 持久化：不再跟踪 NSC store_dir（JWT 存储目录）路径，仅保留 keys_dir + 用户 creds/seed，进一步最小化配置。
+    - 修改 internal/config/config.go 删除 nsc.store_dir 字段；修改 internal/nscsetup/setup.go 去除赋值；README 追加该操作记录。
+    - 二次清理：删除 residual StoresDir 相关函数与解析逻辑（readEnvPaths 去掉 storeDir 返回，移除 defaultStoresDir，实现最小依赖）。
+  - 新增 nsc.user_pub_key 字段：在初始化时解析 user JWT 的 sub 保存用户公钥，避免二次调用 nsc 解析。
+
+  ## 2025-08-10 重构：移除 NATSConfig 结构，直接使用 server.Options 扁平字段
+  - 删除 internal/config/config.go 中 NATSConfig / Permissions / PermissionRules 结构体。
+  - 所有客户端连接参数改由 ServerOptionsLite + 运行时拼接 URL 提供（Host/ClientPort/CredsFile）。
+  - 订阅/发布权限：移除嵌套 permissions，统一使用 Server.ImportAllow / ExportAllow。
+  - 删除 ensurePermissionsDefaults / syncServerFlat 中与旧结构相关逻辑。
+  - 简化 CanPublish/CanSubscribe：发布默认放行；订阅基于 ImportAllow 简单匹配。
+  - 更新 internal/nscsetup/setup.go 生成 NATS URL 逻辑，移除 cfg.NATS 引用。
+  - 更新 demo/cluster/cluster_demo.go 适配新结构，去除已删除的 Routes/NATS 字段引用。
+  - 构建验证通过。
+
+  操作日志：
+  - 修改 internal/config/config.go 移除 NATSConfig 及权限结构
+  - 修改 internal/nscsetup/setup.go 替换 cfg.NATS.URL 访问
+  - 修改 demo/cluster/cluster_demo.go 使用 cfg.Server.* 字段
+  - 更新 README.md 追加本节说明
+  - 精简订阅权限 API：删除 AddSubscribePermission / RemoveSubscribePermission 非持久化方法，只保留 AddSubscribePermissionAndSave / RemoveSubscribePermissionAndSave，确保权限修改即刻落盘。
+  - 移除配置中 TrustedPubKeyPaths；新增 NATS KV (dchat_friends / dchat_groups) 存储好友公钥与群聊对称密钥。
+  - KV 存储格式改为结构体：FriendPubKeyRecord{pub} / GroupSymKeyRecord{sym}，替换原 map，实现类型安全与易扩展。
+  - 启用内置 JetStream：在 NodeManager.prepareServerOptions 中设置 opts.JetStream = true 以支持 KV。
+    - 精简 internal/chat 结构体：User 去除 Avatar；Message 去除 Username/Type；Room 去除 Name/Description/Members，仅保留最小字段（ID/Messages/CreatedAt）。同步更新 service.go 相关引用与 SetUser 签名（改为仅接受 nickname）。
+    - 统一加密消息载荷结构 encWire(ver,cid,sender,ts,nonce,cipher,alg,sig)；私聊与群聊复用，移除 mid/from/to/gid 等冗余字段。
+    - 再次裁剪 encWire：去除 ver/alg/sig 字段，最终格式 {cid,sender,ts,nonce,cipher}，算法由 subject 推断；更新 service.go 与 internal/chat/README.md 示例。
+    - 重写 internal/chat/service.go：移除房间/历史存储 API，仅保留私聊/群聊加密发送接收 (JoinDirect/JoinGroup/SendDirect/SendGroup)，新增解密回调；调整 app.go 删除房间相关方法并新增 Direct/Group 封装。
+    - 优化 service.go 回调分发代码风格：显式局部变量 + 保护性 defer 注释，提升可读性。
+    - 更新 app.go SetUserInfo 签名以适配 SetUser 仅接收 nickname。
+    - 更新 internal/chat/README.md 移除 mid/from/to/gid 示例字段，采用统一 encWire(ver,cid,sender,ts,nonce,cipher,alg)。
+  - 再次优化 internal/chat/service.go 代码风格：拆分长行（Subscribe 回调、结构体字面量、fmt.Sprintf、多参数函数调用），提高可读性与 diff 友好性。
+  - 引入错误事件回调：新增 ErrorEvent/ErrorHandler，handleEncrypted 拆分为解析、解密、成功与错误分发，提高内聚与可观察性；避免静默失败。
+  - 进一步简化错误回调：移除 ErrorEvent 结构，仅保留 func(error) 形式，减少耦合与调用复杂度；fmt.Sprintf 短行恢复单行表达。
+  - 调整 service.go 代码风格：一行一逻辑（GetUser/handleEncrypted/dispatch* 等拆分），去除多语句单行，提升可读性与审查效率。
+  - 更新 app.go：新增 SetKeyPair / OnDecrypted / OnError / GetUser 封装，提供与 service.go 对应外部调用入口。
+  - 精简 app.go：移除房间/历史/统计/权限热重启等非最小聊天能力，仅保留 Direct/Group 相关 API 与启动初始化。
+  - 新增跨节点加密往返测试：internal/chat/dual_node_encrypt_test.go，单机模拟双节点（不同端口 + Routes seed）验证私聊加密 A<->B 往返成功。
+  - 新增 cmd/genkey & cmd/chatpeer：支持两台电脑快速生成密钥、启动本地嵌入式节点并进行私聊加密往返测试。
+  - chatpeer 增强：
+    - 支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
+    - 支持 --cluster-advertise 用于"公共节点对外暴露集群端口"的方案。
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
