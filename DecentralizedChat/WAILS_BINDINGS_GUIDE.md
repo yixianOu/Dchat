@@ -49,15 +49,15 @@ export namespace chat {
 
 ### 3. 类型映射
 
-| Go 类型 | TypeScript 类型 |
-|---------|----------------|
-| `string` | `string` |
-| `int`, `int64` | `number` |
-| `bool` | `boolean` |
-| `[]Type` | `Type[]` |
-| `map[string]Type` | `{[key: string]: Type}` |
-| `struct` | `class` |
-| `error` | `Promise<void>` (throws) |
+| Go 类型           | TypeScript 类型          |
+| ----------------- | ------------------------ |
+| `string`          | `string`                 |
+| `int`, `int64`    | `number`                 |
+| `bool`            | `boolean`                |
+| `[]Type`          | `Type[]`                 |
+| `map[string]Type` | `{[key: string]: Type}`  |
+| `struct`          | `class`                  |
+| `error`           | `Promise<void>` (throws) |
 
 ## 使用示例
 
@@ -178,9 +178,9 @@ wails dev
 
 ## 与手动包装的对比
 
-| 方式 | 优点 | 缺点 |
-|------|------|------|
-| 自动绑定 | 类型安全、自动同步、减少维护 | 依赖 Wails 工具链 |
-| 手动包装 | 完全控制、可定制 | 维护成本高、容易出错 |
+| 方式     | 优点                         | 缺点                 |
+| -------- | ---------------------------- | -------------------- |
+| 自动绑定 | 类型安全、自动同步、减少维护 | 依赖 Wails 工具链    |
+| 手动包装 | 完全控制、可定制             | 维护成本高、容易出错 |
 
 **结论**：推荐使用 Wails 自动生成的绑定，它提供了更好的类型安全性和开发体验。

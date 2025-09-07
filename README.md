@@ -1,3 +1,11 @@
+### 新增操作日志（2025-09-07 18:35）
+- 修复 TypeScript 配置弃用警告：
+  - 更新 frontend/tsconfig.json：`moduleResolution: "Node"` → `"Bundler"`
+  - 更新 frontend/tsconfig.node.json：同样修复 moduleResolution 配置
+  - 解决 VS Code 提示："选项'moduleResolution=node10'已弃用"
+  - 使用现代的 "Bundler" 模块解析策略，适配 Vite 构建环境
+  - 验证配置正确性：`npx tsc --noEmit` 无错误输出
+
 ### 新增操作日志（2025-09-07 18:27）
 - 成功安装 Deskflow（键盘鼠标共享工具）：
   - 下载 GitHub Release: deskflow-1.23.0-ubuntu-plucky-x86_64.deb
@@ -694,9 +702,9 @@ TODO:
 9. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
 10. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
 11. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
-12. 支持insecure tls
-13. 通过nsc支持配置导出和导入(等)
-14. wails集成前端
+12. 通过nsc支持配置导出和导入(等)
+13. 支持ip自签名,insecure tls
+14. wails集成前端,检查
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
