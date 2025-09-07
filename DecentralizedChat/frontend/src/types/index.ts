@@ -4,7 +4,8 @@ export interface Message {
   username: string;
   content: string;
   timestamp: number;
-  room_id: string;
+  isGroup: boolean;
+  chatId: string; // cid for direct, gid for group
 }
 
 export interface User {
@@ -13,26 +14,43 @@ export interface User {
   avatar?: string;
 }
 
-export interface TailscaleStatus {
-  connected: boolean;
-  ip: string;
+export interface DecryptedMessage {
+  CID: string;     // conversation id or group id
+  Sender: string;  // sender user id
+  Ts: string;      // timestamp
+  Plain: string;   // decrypted content
+  IsGroup: boolean; // is group message
+  Subject: string; // NATS subject
 }
 
 export interface ChatRoomProps {
   roomName: string;
+  sessionId: string;
+  isGroup?: boolean;
+  messages: DecryptedMessage[];
 }
 
-// 事件类型定义
-export interface MessageEvent {
-  room_id: string;
+// 聊天会话信息
+export interface ChatSession {
   id: string;
-  username: string;
-  content: string;
-  timestamp: number;
+  name: string;
+  isGroup: boolean;
+  lastMessage?: string;
+  lastTime?: number;
 }
 
-export interface UsersUpdateEvent {
-  users: User[];
+// 好友信息
+export interface Friend {
+  id: string;
+  nickname: string;
+  publicKey: string;
+}
+
+// 群组信息
+export interface Group {
+  id: string;
+  name: string;
+  symmetricKey: string;
 }
 
 // Wails 事件回调类型

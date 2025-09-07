@@ -1,33 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SendMessage, GetChatHistory } from '../services/mockWails';
-import { EventsOn } from '../../wailsjs/runtime/runtime';
-import { Message, User, ChatRoomProps, MessageEvent } from '../types';
+import { sendDirect, sendGroup } from '../services/dchatAPI';
+import { DecryptedMessage, ChatRoomProps } from '../types';
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ roomName }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
+const ChatRoom: React.FC<ChatRoomProps> = ({ roomName, sessionId, isGroup = false, messages }) => {
   const [newMessage, setNewMessage] = useState<string>('');
-  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const sendMessage = async (): Promise<void> => {
     if (!newMessage.trim()) return;
     
     try {
-      // 调用Go后端方法
-      await SendMessage(roomName, newMessage);
+      if (isGroup) {
+        await sendGroup(sessionId, newMessage);
+      } else {
+        await sendDirect(sessionId, newMessage);
+      }
       setNewMessage('');
     } catch (error) {
       console.error('发送消息失败:', error);
-    }
-  };
-
-  const loadMessages = async (): Promise<void> => {
-    try {
-      const history: Message[] = await GetChatHistory(roomName);
-      setMessages(history || []);
-      setTimeout(scrollToBottom, 0);
-    } catch (error) {
-      console.error('加载消息历史失败:', error);
+      alert('发送消息失败');
     }
   };
 
@@ -38,8 +29,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomName }) => {
     }
   };
 
-  const formatTime = (timestamp: number): string => {
-    return new Date(timestamp).toLocaleTimeString();
+  const formatTime = (timeStr: string): string => {
+    return new Date(timeStr).toLocaleTimeString();
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -49,28 +40,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomName }) => {
   };
 
   useEffect(() => {
-    loadMessages();
-    
-    // 订阅消息更新
-    EventsOn('new-message', (msg: MessageEvent) => {
-      if (msg.room_id === roomName) {
-        setMessages((prev: Message[]) => [...prev, msg]);
-        setTimeout(scrollToBottom, 0);
-      }
-    });
-
-    // 订阅在线用户更新
-    EventsOn('users-update', (users: User[]) => {
-      setOnlineUsers(users);
-    });
-
-    // 清理订阅在组件卸载时处理
-    return () => {
-      // Wails EventsOn 不返回unsubscribe函数，由Wails自动处理
-    };
-  }, [roomName]);
-
-  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
@@ -78,25 +47,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomName }) => {
     <div className="chat-room">
       {/* 聊天室头部 */}
       <div className="room-header">
-        <h3>#{roomName}</h3>
-        <div className="online-users">
-          {onlineUsers.map(user => (
-            <span key={user.id} className="user-badge">
-              {user.nickname}
-            </span>
-          ))}
+        <h3>{roomName}</h3>
+        <div className="room-info">
+          <span className="room-type">
+            {isGroup ? '群聊' : '私聊'} | ID: {sessionId.slice(0, 8)}...
+          </span>
         </div>
       </div>
       
       {/* 消息列表 */}
       <div className="messages" ref={messagesContainerRef}>
-        {messages.map(msg => (
-          <div key={msg.id} className="message">
+        {messages.map((msg, index) => (
+          <div key={`${msg.CID}-${msg.Ts}-${index}`} className="message">
             <div className="message-header">
-              <span className="username">{msg.username}</span>
-              <span className="timestamp">{formatTime(msg.timestamp)}</span>
+              <span className="username">{msg.Sender}</span>
+              <span className="timestamp">{formatTime(msg.Ts)}</span>
             </div>
-            <div className="message-content">{msg.content}</div>
+            <div className="message-content">{msg.Plain}</div>
           </div>
         ))}
       </div>
