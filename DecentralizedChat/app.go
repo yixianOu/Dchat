@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -279,3 +280,86 @@ func (a *App) GetNSCUserSeed() (string, error) {
 
 // GetNetworkStats aggregates network statistics
 // （权限热重启、网络统计、凭据导出接口已移除，保持核心最小 API）
+
+// ⭐ SSL证书生成功能
+
+// GenerateSSLCertificate 生成自签名SSL证书 ⭐ 新增功能
+func (a *App) GenerateSSLCertificate(hosts []string, ipStrings []string, validDays int) (map[string]interface{}, error) {
+	if a.chatSvc == nil {
+		return nil, fmt.Errorf("chat service not initialized")
+	}
+
+	// 获取NSC seed
+	seed, err := a.GetNSCUserSeed()
+	if err != nil {
+		return nil, fmt.Errorf("get NSC seed: %w", err)
+	}
+
+	// 创建密钥管理器
+	keyManager, err := chat.NewNSCKeyManager(seed)
+	if err != nil {
+		return nil, fmt.Errorf("create key manager: %w", err)
+	}
+
+	// 解析IP地址
+	var ips []net.IP
+	for _, ipStr := range ipStrings {
+		ip := net.ParseIP(ipStr)
+		if ip != nil {
+			ips = append(ips, ip)
+		}
+	}
+
+	// 生成SSL证书
+	cert, err := keyManager.GenerateSSLCertificate(hosts, ips, validDays)
+	if err != nil {
+		return nil, fmt.Errorf("generate SSL certificate: %w", err)
+	}
+
+	return map[string]interface{}{
+		"cert_pem":    cert.CertPEM,
+		"private_pem": cert.PrivKeyPEM,
+		"public_key":  cert.PublicKey,
+		"valid_days":  validDays,
+		"hosts":       hosts,
+		"ips":         ipStrings,
+	}, nil
+}
+
+// GetAllDerivedKeys 获取所有从NSC派生的密钥对 ⭐ 新增功能
+func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
+	if a.chatSvc == nil {
+		return nil, fmt.Errorf("chat service not initialized")
+	}
+
+	// 获取NSC seed
+	seed, err := a.GetNSCUserSeed()
+	if err != nil {
+		return nil, fmt.Errorf("get NSC seed: %w", err)
+	}
+
+	// 创建密钥管理器
+	keyManager, err := chat.NewNSCKeyManager(seed)
+	if err != nil {
+		return nil, fmt.Errorf("create key manager: %w", err)
+	}
+
+	// 获取所有派生密钥
+	keys, err := keyManager.GetAllDerivedKeys()
+	if err != nil {
+		return nil, fmt.Errorf("get derived keys: %w", err)
+	}
+
+	// 转换为map[string]interface{}以便前端使用
+	result := make(map[string]interface{})
+	for domain, keyPair := range keys {
+		result[string(domain)] = map[string]interface{}{
+			"private_key": keyPair.PrivateKeyB64,
+			"public_key":  keyPair.PublicKeyB64,
+			"key_type":    keyPair.KeyType,
+			"domain":      string(keyPair.Domain),
+		}
+	}
+
+	return result, nil
+}
