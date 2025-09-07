@@ -75,7 +75,7 @@ func (nm *NodeManager) GenerateSimpleTLSCert() (certPEM, keyPEM string, err erro
 	}
 
 	// 准备主机和IP列表
-	hosts := []string{"localhost", nm.host, "*.local"}
+	hosts := []string{nm.host, "localhost", "127.0.0.1"}
 	ips := []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}
 
 	// 如果host是IP地址，添加到IPAddresses

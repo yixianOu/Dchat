@@ -63,7 +63,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.config = cfg
 
 	// ⭐ 启动NATS节点 - 使用统一的启动方法
-	if err := a.startNATSNode(false, []string{}); err != nil {
+	if err := a.startNATSNode([]string{}); err != nil {
 		log.Printf("start NATS node failed: %v", err)
 		return
 	}
@@ -331,7 +331,7 @@ func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 }
 
 // ⭐ startNATSNode 统一的NATS节点启动方法
-func (a *App) startNATSNode(enableTLS bool, seedRoutes []string) error {
+func (a *App) startNATSNode(seedRoutes []string) error {
 	// 初始化NodeManager（如果未初始化）
 	if a.nodeManager == nil {
 		a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
@@ -357,20 +357,4 @@ func (a *App) startNATSNode(enableTLS bool, seedRoutes []string) error {
 
 	// 启动节点
 	return a.nodeManager.StartLocalNodeWithConfig(nodeConfig)
-}
-
-// StartSecureClusterNode 启动带TLS的安全集群节点
-func (a *App) StartSecureClusterNode(seedRoutes []string) (map[string]interface{}, error) {
-	if err := a.startNATSNode(true, seedRoutes); err != nil {
-		return nil, err
-	}
-
-	return map[string]interface{}{
-		"node_id":      fmt.Sprintf("dchat-%s-secure", a.config.Network.LocalIP),
-		"client_url":   a.nodeManager.GetClientURL(),
-		"cluster_port": DefaultClusterPort,
-		"tls_enabled":  true,
-		"auto_cert":    true,
-		"seed_routes":  seedRoutes,
-	}, nil
 }
