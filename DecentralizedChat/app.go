@@ -107,7 +107,7 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// ⭐ 自动加载NSC密钥用于聊天加密
 	if a.config.NSC.UserSeedPath != "" {
-		seed, err := a.GetNSCUserSeed()
+		seed, err := a.getNSCUserSeed()
 		if err != nil {
 			log.Printf("failed to load NSC seed: %v", err)
 		} else {
@@ -180,15 +180,6 @@ func (a *App) SendGroup(gid, content string) error {
 	return a.chatSvc.SendGroup(gid, content)
 }
 
-// SetKeyPair sets local user key pair (base64 encoded)
-func (a *App) SetKeyPair(privB64, pubB64 string) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	a.chatSvc.SetKeyPair(privB64, pubB64)
-	return nil
-}
-
 // GetUser returns current user info
 func (a *App) GetUser() (chat.User, error) {
 	if a.chatSvc == nil {
@@ -248,8 +239,8 @@ func (a *App) AddFriendNSCKey(uid, nscPubKey string) error {
 	return a.chatSvc.AddFriendNSCKey(uid, nscPubKey)
 }
 
-// GetNSCUserSeed 获取当前用户的NSC seed (从配置中读取) ⭐ 新增API
-func (a *App) GetNSCUserSeed() (string, error) {
+// getNSCUserSeed 获取当前用户的NSC seed (从配置中读取) 🔒 内部方法
+func (a *App) getNSCUserSeed() (string, error) {
 	if a.config == nil {
 		return "", fmt.Errorf("config not loaded")
 	}
@@ -290,7 +281,7 @@ func (a *App) GenerateSSLCertificate(hosts []string, ipStrings []string, validDa
 	}
 
 	// 获取NSC seed
-	seed, err := a.GetNSCUserSeed()
+	seed, err := a.getNSCUserSeed()
 	if err != nil {
 		return nil, fmt.Errorf("get NSC seed: %w", err)
 	}
@@ -326,14 +317,14 @@ func (a *App) GenerateSSLCertificate(hosts []string, ipStrings []string, validDa
 	}, nil
 }
 
-// GetAllDerivedKeys 获取所有从NSC派生的密钥对 ⭐ 新增功能
+// GetAllDerivedKeys 获取所有从NSC派生的密钥对 ⚠️ 调试功能，包含敏感信息
 func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 	if a.chatSvc == nil {
 		return nil, fmt.Errorf("chat service not initialized")
 	}
 
 	// 获取NSC seed
-	seed, err := a.GetNSCUserSeed()
+	seed, err := a.getNSCUserSeed()
 	if err != nil {
 		return nil, fmt.Errorf("get NSC seed: %w", err)
 	}
@@ -351,6 +342,7 @@ func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 	}
 
 	// 转换为map[string]interface{}以便前端使用
+	// ⚠️ 注意：此方法返回敏感的私钥信息，仅用于调试
 	result := make(map[string]interface{})
 	for domain, keyPair := range keys {
 		result[string(domain)] = map[string]interface{}{
@@ -362,4 +354,60 @@ func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 	}
 
 	return result, nil
+}
+
+// ⭐ StartSecureClusterNode 启动带TLS的安全集群节点
+func (a *App) StartSecureClusterNode(seedRoutes []string, insecure bool) (map[string]interface{}, error) {
+	if a.nodeManager == nil {
+		return nil, fmt.Errorf("node manager not initialized")
+	}
+
+	// 停止现有节点（如果有的话）
+	if a.nodeManager.IsRunning() {
+		if err := a.nodeManager.StopLocalNode(); err != nil {
+			return nil, fmt.Errorf("stop existing node: %w", err)
+		}
+	}
+
+	// 生成集群SSL证书
+	hosts := []string{"localhost", "*.local", a.config.Network.LocalIP}
+	ips := []string{"127.0.0.1", "::1", a.config.Network.LocalIP}
+	
+	cert, err := a.GenerateSSLCertificate(hosts, ips, 365)
+	if err != nil {
+		return nil, fmt.Errorf("generate cluster SSL certificate: %w", err)
+	}
+
+	// 创建带TLS的节点配置
+	nodeID := fmt.Sprintf("dchat-secure-%s", a.config.Network.LocalIP)
+	config := a.nodeManager.CreateNodeConfigWithTLS(
+nodeID,
+DefaultClientPort,
+DefaultClusterPort, 
+seedRoutes,
+[]string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"},
+cert["cert_pem"].(string),
+cert["private_pem"].(string),
+insecure,
+)
+
+	// 设置resolver配置路径（如果已生成）
+	if a.config.Server.ResolverConf != "" {
+		config.ResolverConfigPath = a.config.Server.ResolverConf
+	}
+
+	// 启动安全节点
+	if err := a.nodeManager.StartLocalNodeWithConfig(config); err != nil {
+		return nil, fmt.Errorf("start secure node: %w", err)
+	}
+
+	return map[string]interface{}{
+		"node_id":        nodeID,
+		"client_url":     a.nodeManager.GetClientURL(),
+		"cluster_port":   DefaultClusterPort,
+		"tls_enabled":    true,
+		"tls_insecure":   insecure,
+		"certificate":    cert,
+		"seed_routes":    seedRoutes,
+	}, nil
 }

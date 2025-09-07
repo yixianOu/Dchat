@@ -1,7 +1,10 @@
 package routes
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/url"
 	"os"
@@ -37,6 +40,11 @@ type NodeConfig struct {
 	ResolverConfigPath string
 	ImportAllow        []string
 	ExportAllow        []string
+	// ⭐ TLS configuration for cluster
+	EnableClusterTLS bool   `json:"enable_cluster_tls,omitempty"`
+	ClusterCertPEM   string `json:"cluster_cert_pem,omitempty"`
+	ClusterKeyPEM    string `json:"cluster_key_pem,omitempty"`
+	ClusterInsecure  bool   `json:"cluster_insecure,omitempty"`
 	// Future: credentials path if needed
 }
 
@@ -119,6 +127,10 @@ func (nm *NodeManager) prepareServerOptions(config *NodeConfig) (*server.Options
 	if err := config.configureSeedRoutes(opts); err != nil {
 		return nil, err
 	}
+	// ⭐ 应用集群TLS配置
+	if err := config.applyClusterTLS(opts); err != nil {
+		return nil, fmt.Errorf("apply cluster TLS: %w", err)
+	}
 	// Enable JetStream for KV / stream features
 	opts.JetStream = true
 	return opts, nil
@@ -157,6 +169,52 @@ func (c *NodeConfig) applyRoutePermissions(opts *server.Options) {
 		Import: &server.SubjectPermission{Allow: allowImport, Deny: []string{}},
 		Export: &server.SubjectPermission{Allow: allowExport, Deny: []string{}},
 	}
+}
+
+// ⭐ 新增：配置集群TLS
+func (c *NodeConfig) applyClusterTLS(opts *server.Options) error {
+	if !c.EnableClusterTLS {
+		return nil
+	}
+
+	if c.ClusterCertPEM == "" || c.ClusterKeyPEM == "" {
+		return fmt.Errorf("cluster TLS enabled but cert/key PEM not provided")
+	}
+
+	// 解析证书和私钥
+	cert, err := tls.X509KeyPair([]byte(c.ClusterCertPEM), []byte(c.ClusterKeyPEM))
+	if err != nil {
+		return fmt.Errorf("parse cluster TLS cert/key: %w", err)
+	}
+
+	// 解析证书以获取CA
+	certBlock, _ := pem.Decode([]byte(c.ClusterCertPEM))
+	if certBlock == nil {
+		return fmt.Errorf("failed to decode cluster certificate PEM")
+	}
+
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("parse cluster certificate: %w", err)
+	}
+
+	// 创建CA池（自签名证书，使用自己作为CA）
+	caCertPool := x509.NewCertPool()
+	caCertPool.AddCert(parsedCert)
+
+	// 配置集群TLS
+	opts.Cluster.TLSConfig = &tls.Config{
+		Certificates:       []tls.Certificate{cert},
+		ClientAuth:         tls.RequireAndVerifyClientCert,
+		ClientCAs:          caCertPool,
+		RootCAs:            caCertPool,
+		InsecureSkipVerify: c.ClusterInsecure,
+		ServerName:         parsedCert.Subject.CommonName,
+	}
+
+	opts.Cluster.TLSTimeout = 5.0 // 5秒TLS握手超时
+
+	return nil
 }
 
 func (c *NodeConfig) configureSeedRoutes(opts *server.Options) error {
@@ -305,4 +363,14 @@ func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort
 		ImportAllow: importPermissions,
 		ExportAllow: []string{"*"},
 	}
+}
+
+// ⭐ CreateNodeConfigWithTLS 创建启用集群TLS的节点配置
+func (nm *NodeManager) CreateNodeConfigWithTLS(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string, certPEM, keyPEM string, insecure bool) *NodeConfig {
+	config := nm.CreateNodeConfigWithPermissions(nodeID, clientPort, clusterPort, seedRoutes, subscribePermissions)
+	config.EnableClusterTLS = true
+	config.ClusterCertPEM = certPEM
+	config.ClusterKeyPEM = keyPEM
+	config.ClusterInsecure = insecure
+	return config
 }
