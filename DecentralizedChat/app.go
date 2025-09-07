@@ -64,7 +64,7 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// ⭐ 预先初始化NodeManager并设置NSC seed用于TLS证书生成
 	a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
-	if a.config.NSC.UserSeedPath != "" {
+	if a.config.Keys.UserSeedPath != "" {
 		seed, err := a.getNSCUserSeed()
 		if err != nil {
 			log.Printf("failed to load NSC seed for NodeManager: %v", err)
@@ -82,7 +82,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
 		URL:       a.nodeManager.GetClientURL(),
 		Name:      "DChatClient",
-		CredsFile: a.config.NSC.UserCredsPath, // 使用NSC生成的凭据文件
+		CredsFile: a.config.Keys.UserCredsPath, // 使用简化密钥系统生成的凭据文件
 	})
 	if err != nil {
 		log.Printf("start nats client failed: %v", err)
@@ -104,7 +104,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	})
 
 	// ⭐ 自动加载NSC密钥用于聊天加密
-	if a.config.NSC.UserSeedPath != "" {
+	if a.config.Keys.UserSeedPath != "" {
 		seed, err := a.getNSCUserSeed()
 		if err != nil {
 			log.Printf("failed to load NSC seed: %v", err)
@@ -244,9 +244,9 @@ func (a *App) getNSCUserSeed() (string, error) {
 	}
 
 	// 从NSC用户seed文件读取
-	if a.config.NSC.UserSeedPath != "" {
+	if a.config.Keys.UserSeedPath != "" {
 		// 读取seed文件内容
-		data, err := os.ReadFile(a.config.NSC.UserSeedPath)
+		data, err := os.ReadFile(a.config.Keys.UserSeedPath)
 		if err != nil {
 			return "", fmt.Errorf("read NSC seed file: %w", err)
 		}

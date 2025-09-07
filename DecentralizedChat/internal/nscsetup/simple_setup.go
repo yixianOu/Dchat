@@ -42,7 +42,7 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	}
 
 	// 2. 生成JWT链
-	if err := setup.generateJWTs(cfg); err != nil {
+	if err := setup.generateJWTs(); err != nil {
 		return fmt.Errorf("generate JWTs: %w", err)
 	}
 
@@ -67,13 +67,13 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 
 	// 6. 更新配置
 	userPub, _ := setup.userKey.PublicKey()
-	cfg.NSC.Operator = "dchat"
-	cfg.NSC.Account = "USERS"
-	cfg.NSC.User = "default"
-	cfg.NSC.KeysDir = confDir
-	cfg.NSC.UserCredsPath = credsPath
-	cfg.NSC.UserSeedPath = userSeedPath
-	cfg.NSC.UserPubKey = userPub
+	cfg.Keys.Operator = "dchat"
+	cfg.Keys.Account = "USERS"
+	cfg.Keys.User = "default"
+	cfg.Keys.KeysDir = confDir
+	cfg.Keys.UserCredsPath = credsPath
+	cfg.Keys.UserSeedPath = userSeedPath
+	cfg.Keys.UserPubKey = userPub
 	cfg.Server.ResolverConf = resolverPath
 
 	return config.SaveConfig(cfg)
@@ -108,7 +108,7 @@ func (s *SimpleSetup) ensureKeys(confDir string) error {
 }
 
 // generateJWTs 生成JWT链
-func (s *SimpleSetup) generateJWTs(cfg *config.Config) error {
+func (s *SimpleSetup) generateJWTs() error {
 	now := time.Now()
 
 	// 1. 操作者JWT
