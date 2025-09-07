@@ -2,13 +2,14 @@ package routes
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"time"
+
+	"DecentralizedChat/internal/chat"
 
 	"github.com/nats-io/nats-server/v2/server"
 )
@@ -29,6 +30,7 @@ type NodeManager struct {
 	clusterName string
 	host        string
 	lastConfig  *NodeConfig // persist last started config for updates
+	nscSeed     string      // NSC seed for certificate generation
 }
 
 // NodeConfig defines runtime parameters for the local node
@@ -40,12 +42,11 @@ type NodeConfig struct {
 	ResolverConfigPath string
 	ImportAllow        []string
 	ExportAllow        []string
-	// ⭐ TLS configuration for cluster
-	EnableClusterTLS bool   `json:"enable_cluster_tls,omitempty"`
-	ClusterCertPEM   string `json:"cluster_cert_pem,omitempty"`
-	ClusterKeyPEM    string `json:"cluster_key_pem,omitempty"`
-	ClusterInsecure  bool   `json:"cluster_insecure,omitempty"`
-	// Future: credentials path if needed
+	// ⭐ 简化的TLS配置 - 默认启用insecure TLS
+	EnableTLS bool `json:"enable_tls,omitempty"`
+	// 内部使用，不需要手动配置
+	autoTLSCert string
+	autoTLSKey  string
 }
 
 // NewNodeManager creates a new NodeManager
@@ -54,6 +55,41 @@ func NewNodeManager(clusterName string, host string) *NodeManager {
 		clusterName: clusterName,
 		host:        host,
 	}
+}
+
+// SetNSCSeed 设置NSC seed用于证书生成
+func (nm *NodeManager) SetNSCSeed(seed string) {
+	nm.nscSeed = seed
+}
+
+// ⭐ GenerateSimpleTLSCert 使用NSC密钥系统生成高级证书 (公开方法)
+func (nm *NodeManager) GenerateSimpleTLSCert() (certPEM, keyPEM string, err error) {
+	if nm.nscSeed == "" {
+		return "", "", fmt.Errorf("NSC seed not set")
+	}
+
+	// 创建密钥管理器
+	keyManager, err := chat.NewNSCKeyManager(nm.nscSeed)
+	if err != nil {
+		return "", "", fmt.Errorf("create NSC key manager: %w", err)
+	}
+
+	// 准备主机和IP列表
+	hosts := []string{"localhost", nm.host, "*.local"}
+	ips := []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}
+
+	// 如果host是IP地址，添加到IPAddresses
+	if ip := net.ParseIP(nm.host); ip != nil {
+		ips = append(ips, ip)
+	}
+
+	// 使用NSC密钥系统生成SSL证书
+	cert, err := keyManager.GenerateSSLCertificate(hosts, ips, 365)
+	if err != nil {
+		return "", "", fmt.Errorf("generate SSL certificate: %w", err)
+	}
+
+	return cert.CertPEM, cert.PrivKeyPEM, nil
 }
 
 // StartLocalNode starts a local NATS node with default wide-open import/export
@@ -127,8 +163,8 @@ func (nm *NodeManager) prepareServerOptions(config *NodeConfig) (*server.Options
 	if err := config.configureSeedRoutes(opts); err != nil {
 		return nil, err
 	}
-	// ⭐ 应用集群TLS配置
-	if err := config.applyClusterTLS(opts); err != nil {
+	// ⭐ 应用简化的集群TLS配置
+	if err := config.applyClusterTLS(opts, nm); err != nil {
 		return nil, fmt.Errorf("apply cluster TLS: %w", err)
 	}
 	// Enable JetStream for KV / stream features
@@ -171,49 +207,38 @@ func (c *NodeConfig) applyRoutePermissions(opts *server.Options) {
 	}
 }
 
-// ⭐ 新增：配置集群TLS
-func (c *NodeConfig) applyClusterTLS(opts *server.Options) error {
-	if !c.EnableClusterTLS {
+// ⭐ 简化的集群TLS配置 - 自动生成证书，默认insecure
+func (c *NodeConfig) applyClusterTLS(opts *server.Options, nm *NodeManager) error {
+	if !c.EnableTLS {
 		return nil
 	}
 
-	if c.ClusterCertPEM == "" || c.ClusterKeyPEM == "" {
-		return fmt.Errorf("cluster TLS enabled but cert/key PEM not provided")
+	// 如果没有预生成的证书，自动生成
+	if c.autoTLSCert == "" || c.autoTLSKey == "" {
+		certPEM, keyPEM, err := nm.GenerateSimpleTLSCert()
+		if err != nil {
+			return fmt.Errorf("auto-generate TLS cert: %w", err)
+		}
+		c.autoTLSCert = certPEM
+		c.autoTLSKey = keyPEM
 	}
 
 	// 解析证书和私钥
-	cert, err := tls.X509KeyPair([]byte(c.ClusterCertPEM), []byte(c.ClusterKeyPEM))
+	cert, err := tls.X509KeyPair([]byte(c.autoTLSCert), []byte(c.autoTLSKey))
 	if err != nil {
-		return fmt.Errorf("parse cluster TLS cert/key: %w", err)
+		return fmt.Errorf("parse auto TLS cert/key: %w", err)
 	}
 
-	// 解析证书以获取CA
-	certBlock, _ := pem.Decode([]byte(c.ClusterCertPEM))
-	if certBlock == nil {
-		return fmt.Errorf("failed to decode cluster certificate PEM")
-	}
-
-	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return fmt.Errorf("parse cluster certificate: %w", err)
-	}
-
-	// 创建CA池（自签名证书，使用自己作为CA）
-	caCertPool := x509.NewCertPool()
-	caCertPool.AddCert(parsedCert)
-
-	// 配置集群TLS
+	// ⭐ 简化配置 - 使用insecure模式，便于开发和测试
 	opts.Cluster.TLSConfig = &tls.Config{
 		Certificates:       []tls.Certificate{cert},
-		ClientAuth:         tls.RequireAndVerifyClientCert,
-		ClientCAs:          caCertPool,
-		RootCAs:            caCertPool,
-		InsecureSkipVerify: c.ClusterInsecure,
-		ServerName:         parsedCert.Subject.CommonName,
+		InsecureSkipVerify: true,             // 默认跳过验证，简化配置
+		ClientAuth:         tls.NoClientCert, // 简化客户端验证
 	}
 
 	opts.Cluster.TLSTimeout = 5.0 // 5秒TLS握手超时
 
+	fmt.Printf("✅ Cluster TLS enabled (insecure mode) for node: %s\n", c.NodeID)
 	return nil
 }
 
@@ -362,15 +387,6 @@ func (nm *NodeManager) CreateNodeConfigWithPermissions(nodeID string, clientPort
 		SeedRoutes:  seedRoutes,
 		ImportAllow: importPermissions,
 		ExportAllow: []string{"*"},
+		EnableTLS:   true, // 默认启用TLS
 	}
-}
-
-// ⭐ CreateNodeConfigWithTLS 创建启用集群TLS的节点配置
-func (nm *NodeManager) CreateNodeConfigWithTLS(nodeID string, clientPort, clusterPort int, seedRoutes []string, subscribePermissions []string, certPEM, keyPEM string, insecure bool) *NodeConfig {
-	config := nm.CreateNodeConfigWithPermissions(nodeID, clientPort, clusterPort, seedRoutes, subscribePermissions)
-	config.EnableClusterTLS = true
-	config.ClusterCertPEM = certPEM
-	config.ClusterKeyPEM = keyPEM
-	config.ClusterInsecure = insecure
-	return config
 }

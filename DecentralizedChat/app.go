@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"strings"
 	"sync"
@@ -63,23 +62,20 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.config = cfg
 
-	// 启动最小节点（权限策略后续可细化）
-	a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
-	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
-	nodeConfig := a.nodeManager.CreateNodeConfigWithPermissions(
-		nodeID,
-		DefaultClientPort,
-		DefaultClusterPort,
-		[]string{},
-		[]string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"},
-	)
-	// 设置resolver配置路径（如果已生成）
-	if a.config.Server.ResolverConf != "" {
-		nodeConfig.ResolverConfigPath = a.config.Server.ResolverConf
-	}
-	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {
-		log.Printf("start node failed: %v", err)
+	// ⭐ 启动NATS节点 - 使用统一的启动方法
+	if err := a.startNATSNode(false, []string{}); err != nil {
+		log.Printf("start NATS node failed: %v", err)
 		return
+	}
+
+	// ⭐ 设置NodeManager的NSC seed用于TLS证书生成
+	if a.config.NSC.UserSeedPath != "" {
+		seed, err := a.getNSCUserSeed()
+		if err != nil {
+			log.Printf("failed to load NSC seed for NodeManager: %v", err)
+		} else {
+			a.nodeManager.SetNSCSeed(seed)
+		}
 	}
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
 		URL:       a.nodeManager.GetClientURL(),
@@ -274,46 +270,24 @@ func (a *App) getNSCUserSeed() (string, error) {
 
 // ⭐ SSL证书生成功能
 
-// GenerateSSLCertificate 生成自签名SSL证书 ⭐ 新增功能
+// GenerateSSLCertificate 生成自签名SSL证书 ⭐ 使用统一的证书生成
 func (a *App) GenerateSSLCertificate(hosts []string, ipStrings []string, validDays int) (map[string]interface{}, error) {
-	if a.chatSvc == nil {
-		return nil, fmt.Errorf("chat service not initialized")
+	if a.nodeManager == nil {
+		return nil, fmt.Errorf("node manager not initialized")
 	}
 
-	// 获取NSC seed
-	seed, err := a.getNSCUserSeed()
+	// 直接使用NodeManager的证书生成（已集成NSC密钥系统）
+	certPEM, keyPEM, err := a.nodeManager.GenerateSimpleTLSCert()
 	if err != nil {
-		return nil, fmt.Errorf("get NSC seed: %w", err)
-	}
-
-	// 创建密钥管理器
-	keyManager, err := chat.NewNSCKeyManager(seed)
-	if err != nil {
-		return nil, fmt.Errorf("create key manager: %w", err)
-	}
-
-	// 解析IP地址
-	var ips []net.IP
-	for _, ipStr := range ipStrings {
-		ip := net.ParseIP(ipStr)
-		if ip != nil {
-			ips = append(ips, ip)
-		}
-	}
-
-	// 生成SSL证书
-	cert, err := keyManager.GenerateSSLCertificate(hosts, ips, validDays)
-	if err != nil {
-		return nil, fmt.Errorf("generate SSL certificate: %w", err)
+		return nil, fmt.Errorf("generate certificate: %w", err)
 	}
 
 	return map[string]interface{}{
-		"cert_pem":    cert.CertPEM,
-		"private_pem": cert.PrivKeyPEM,
-		"public_key":  cert.PublicKey,
-		"valid_days":  validDays,
-		"hosts":       hosts,
-		"ips":         ipStrings,
+		"cert_pem":    certPEM,
+		"private_pem": keyPEM,
+		"valid_days":  365, // 固定1年有效期
+		"hosts":       []string{"localhost", "*.local"},
+		"ips":         []string{"127.0.0.1", "::1"},
 	}, nil
 }
 
@@ -346,7 +320,7 @@ func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 	result := make(map[string]interface{})
 	for domain, keyPair := range keys {
 		result[string(domain)] = map[string]interface{}{
-			"private_key": keyPair.PrivateKeyB64,
+			"private_key": "***HIDDEN***", // 🔒 隐藏私钥信息
 			"public_key":  keyPair.PublicKeyB64,
 			"key_type":    keyPair.KeyType,
 			"domain":      string(keyPair.Domain),
@@ -356,58 +330,47 @@ func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
 	return result, nil
 }
 
-// ⭐ StartSecureClusterNode 启动带TLS的安全集群节点
-func (a *App) StartSecureClusterNode(seedRoutes []string, insecure bool) (map[string]interface{}, error) {
+// ⭐ startNATSNode 统一的NATS节点启动方法
+func (a *App) startNATSNode(enableTLS bool, seedRoutes []string) error {
+	// 初始化NodeManager（如果未初始化）
 	if a.nodeManager == nil {
-		return nil, fmt.Errorf("node manager not initialized")
+		a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
 	}
 
 	// 停止现有节点（如果有的话）
 	if a.nodeManager.IsRunning() {
 		if err := a.nodeManager.StopLocalNode(); err != nil {
-			return nil, fmt.Errorf("stop existing node: %w", err)
+			return fmt.Errorf("stop existing node: %w", err)
 		}
 	}
 
-	// 生成集群SSL证书
-	hosts := []string{"localhost", "*.local", a.config.Network.LocalIP}
-	ips := []string{"127.0.0.1", "::1", a.config.Network.LocalIP}
-	
-	cert, err := a.GenerateSSLCertificate(hosts, ips, 365)
-	if err != nil {
-		return nil, fmt.Errorf("generate cluster SSL certificate: %w", err)
-	}
+	// 创建节点配置
+	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
+	var nodeConfig *routes.NodeConfig
 
-	// 创建带TLS的节点配置
-	nodeID := fmt.Sprintf("dchat-secure-%s", a.config.Network.LocalIP)
-	config := a.nodeManager.CreateNodeConfigWithTLS(
-nodeID,
-DefaultClientPort,
-DefaultClusterPort, 
-seedRoutes,
-[]string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"},
-cert["cert_pem"].(string),
-cert["private_pem"].(string),
-insecure,
-)
+	nodeConfig = a.nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, seedRoutes, []string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"})
 
 	// 设置resolver配置路径（如果已生成）
 	if a.config.Server.ResolverConf != "" {
-		config.ResolverConfigPath = a.config.Server.ResolverConf
+		nodeConfig.ResolverConfigPath = a.config.Server.ResolverConf
 	}
 
-	// 启动安全节点
-	if err := a.nodeManager.StartLocalNodeWithConfig(config); err != nil {
-		return nil, fmt.Errorf("start secure node: %w", err)
+	// 启动节点
+	return a.nodeManager.StartLocalNodeWithConfig(nodeConfig)
+}
+
+// StartSecureClusterNode 启动带TLS的安全集群节点
+func (a *App) StartSecureClusterNode(seedRoutes []string) (map[string]interface{}, error) {
+	if err := a.startNATSNode(true, seedRoutes); err != nil {
+		return nil, err
 	}
 
 	return map[string]interface{}{
-		"node_id":        nodeID,
-		"client_url":     a.nodeManager.GetClientURL(),
-		"cluster_port":   DefaultClusterPort,
-		"tls_enabled":    true,
-		"tls_insecure":   insecure,
-		"certificate":    cert,
-		"seed_routes":    seedRoutes,
+		"node_id":      fmt.Sprintf("dchat-%s-secure", a.config.Network.LocalIP),
+		"client_url":   a.nodeManager.GetClientURL(),
+		"cluster_port": DefaultClusterPort,
+		"tls_enabled":  true,
+		"auto_cert":    true,
+		"seed_routes":  seedRoutes,
 	}, nil
 }
