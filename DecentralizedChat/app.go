@@ -9,6 +9,7 @@ import (
 	"DecentralizedChat/internal/chat"
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/nats"
+	"DecentralizedChat/internal/nscsetup"
 	"DecentralizedChat/internal/routes"
 )
 
@@ -36,13 +37,23 @@ const (
 
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
+	// 1. 加载配置
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Printf("load config failed: %v", err)
 		cfg = &config.Config{}
 	}
 	if cfg.Network.LocalIP == "" {
-		cfg.Network.LocalIP = "127.0.0.1"
+		cfg.Network.LocalIP = "localhost"
+	}
+
+	// 启用Routes集群，使用自动检测的本地IP
+	cfg.EnableRoutes(cfg.Network.LocalIP, DefaultClientPort, DefaultClusterPort, []string{})
+
+	// 首次运行：通过 nsc 初始化 SYS 账户与 resolver.conf，并将路径写入配置
+	if err := nscsetup.EnsureSysAccountSetup(cfg); err != nil {
+		log.Printf("初始化 NSC/SYS 失败: %v", err)
+		return
 	}
 	a.config = cfg
 
@@ -56,11 +67,19 @@ func (a *App) OnStartup(ctx context.Context) {
 		[]string{},
 		[]string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"},
 	)
+	// 设置resolver配置路径（如果已生成）
+	if a.config.Server.ResolverConf != "" {
+		nodeConfig.ResolverConfigPath = a.config.Server.ResolverConf
+	}
 	if err := a.nodeManager.StartLocalNodeWithConfig(nodeConfig); err != nil {
 		log.Printf("start node failed: %v", err)
 		return
 	}
-	a.natsSvc, err = nats.NewService(nats.ClientConfig{URL: a.nodeManager.GetClientURL(), Name: "DChatClient"})
+	a.natsSvc, err = nats.NewService(nats.ClientConfig{
+		URL:       a.nodeManager.GetClientURL(),
+		Name:      "DChatClient",
+		CredsFile: a.config.NSC.UserCredsPath, // 使用NSC生成的凭据文件
+	})
 	if err != nil {
 		log.Printf("start nats client failed: %v", err)
 		return

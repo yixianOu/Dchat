@@ -30,7 +30,7 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// 创建Node B，连接到Node A
-	nodeB := createNode("NodeB", 4223, []string{"nats://127.0.0.1:6222"})
+	nodeB := createNode("NodeB", 4223, []string{"nats://localhost:6222"})
 	startNode(nodeB)
 	defer nodeB.Server.Shutdown()
 
@@ -38,7 +38,7 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	// 创建Node C，连接到Node B (不直接连接Node A)
-	nodeC := createNode("NodeC", 4224, []string{"nats://127.0.0.1:6223"})
+	nodeC := createNode("NodeC", 4224, []string{"nats://localhost:6223"})
 	startNode(nodeC)
 	defer nodeC.Server.Shutdown()
 
@@ -71,11 +71,11 @@ func createNode(name string, clientPort int, routes []string) *RouteNode {
 
 	opts := &server.Options{
 		ServerName: name,
-		Host:       "127.0.0.1",
+		Host:       "localhost",
 		Port:       clientPort,
 		Cluster: server.ClusterOpts{
 			Name: "decentralized_chat",
-			Host: "127.0.0.1",
+			Host: "localhost",
 			Port: clusterPort,
 		},
 	}
@@ -190,7 +190,7 @@ func testDynamicJoin(existingNodes ...*RouteNode) {
 	fmt.Printf("🔄 动态加入新节点 NodeD...\n")
 
 	// 创建Node D，连接到Node B (任意现有节点)
-	nodeD := createNode("NodeD", 4225, []string{"nats://127.0.0.1:6223"})
+	nodeD := createNode("NodeD", 4225, []string{"nats://localhost:6223"})
 	startNode(nodeD)
 	defer nodeD.Server.Shutdown()
 
@@ -205,7 +205,7 @@ func testDynamicJoin(existingNodes ...*RouteNode) {
 
 // connectClient 连接到NATS客户端
 func connectClient(node *RouteNode, clientName string) *nats.Conn {
-	url := fmt.Sprintf("nats://127.0.0.1:%d", node.Port)
+	url := fmt.Sprintf("nats://localhost:%d", node.Port)
 
 	nc, err := nats.Connect(url, nats.Name(clientName))
 	if err != nil {

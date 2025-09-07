@@ -232,7 +232,7 @@ func (c *Config) ValidateAndSetDefaults() error {
 		localIP, err := GetLocalIP()
 		if err != nil {
 			// 如果无法获取，使用回环地址作为后备
-			c.Network.LocalIP = "127.0.0.1"
+			c.Network.LocalIP = "localhost"
 		} else {
 			c.Network.LocalIP = localIP
 		}

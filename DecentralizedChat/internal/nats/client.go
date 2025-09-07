@@ -15,7 +15,7 @@ type Service struct {
 }
 
 type ClientConfig struct {
-	URL           string        // e.g. nats://127.0.0.1:4222
+	URL           string        // e.g. nats://localhost:4222
 	User          string        // Optional legacy username (not recommended)
 	Password      string        // Optional legacy password (not recommended)
 	Token         string        // Optional auth token

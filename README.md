@@ -408,16 +408,24 @@ TODO:
 2.  客户端连接使用公私钥而不是帐号密码,使用nsc生成jwt token ok
 3.  用户可以自行添加allow subscribe subject,会被写入到本地的config.json持久化, 本地配置文件存储信任的公钥路径列表 ok
 4. nsc自动生成凭证用于本地连接 ok
-5.  cluster节点的import配置能否热重启 不能
-6.  研究creds,jwt,nkey的关系和作用 ok
-7.  通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥 ok
-8.  好友公钥和群聊对称公钥需要通过nats KV存储在本地,并且每次发送信息和接受信息是都需要加密解密.
+5.  研究creds,jwt,nkey的关系和作用 ok
+6.  通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥 ok
+7.  好友公钥和群聊对称公钥需要通过nats KV存储在本地,并且每次发送信息和接受信息是都需要加密解密.
+8.  cluster节点的import配置能否热重启 不能
 9.  通过nsc支持配置导出和导入(等)
 10. 支持ip自签名,insecure tls
 11. wails集成前端,检查
 
 
-### 新增操作日志（2025-09-07 18:35）
+### 新增操作日志（2025-09-07 18:55）
+- **完成 NSC 安全配置对接**：
+  - 在 app.go 中集成 nscsetup.EnsureSysAccountSetup() 函数
+  - 首次运行时自动初始化 NSC 操作员和 SYS 账户
+  - 生成 resolver.conf 配置文件并写入 ~/.dchat/ 目录
+  - 自动生成用户凭据文件 (.creds) 用于 JWT 认证
+  - NATS 客户端使用生成的凭据文件进行安全连接
+  - 集成配置持久化，确保重启后配置保持一致
+  - 验证编译成功，所有模块完整对接
 - 修复 TypeScript 配置弃用警告：
   - 更新 frontend/tsconfig.json：`moduleResolution: "Node"` → `"Bundler"`
   - 更新 frontend/tsconfig.node.json：同样修复 moduleResolution 配置
