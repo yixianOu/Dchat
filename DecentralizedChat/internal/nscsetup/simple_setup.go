@@ -35,6 +35,17 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	}
 	confDir := filepath.Dir(confPath)
 
+	// 确保配置有默认值
+	if cfg.Keys.Operator == "" {
+		cfg.Keys.Operator = "dchat"
+	}
+	if cfg.Keys.Account == "" {
+		cfg.Keys.Account = "USERS"
+	}
+	if cfg.Keys.User == "" {
+		cfg.Keys.User = cfg.User.Nickname
+	}
+
 	// 1. 生成或加载密钥对
 	setup := &SimpleSetup{}
 	if err := setup.ensureKeys(confDir); err != nil {
@@ -42,7 +53,7 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	}
 
 	// 2. 生成JWT链
-	if err := setup.generateJWTs(); err != nil {
+	if err := setup.generateJWTs(cfg); err != nil {
 		return fmt.Errorf("generate JWTs: %w", err)
 	}
 
@@ -67,9 +78,18 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 
 	// 6. 更新配置
 	userPub, _ := setup.userKey.PublicKey()
-	cfg.Keys.Operator = "dchat"
-	cfg.Keys.Account = "USERS"
-	cfg.Keys.User = cfg.User.Nickname // 使用用户昵称而不是硬编码的"default"
+
+	// 设置默认值（如果配置为空）
+	if cfg.Keys.Operator == "" {
+		cfg.Keys.Operator = "dchat"
+	}
+	if cfg.Keys.Account == "" {
+		cfg.Keys.Account = "USERS"
+	}
+	if cfg.Keys.User == "" {
+		cfg.Keys.User = cfg.User.Nickname
+	}
+
 	cfg.Keys.KeysDir = confDir
 	cfg.Keys.UserCredsPath = credsPath
 	cfg.Keys.UserSeedPath = userSeedPath
@@ -108,13 +128,13 @@ func (s *SimpleSetup) ensureKeys(confDir string) error {
 }
 
 // generateJWTs 生成JWT链
-func (s *SimpleSetup) generateJWTs() error {
+func (s *SimpleSetup) generateJWTs(cfg *config.Config) error {
 	now := time.Now()
 
 	// 1. 操作者JWT
 	operatorPub, _ := s.operatorKey.PublicKey()
 	operatorClaims := jwt.NewOperatorClaims(operatorPub)
-	operatorClaims.Name = "dchat"
+	operatorClaims.Name = cfg.Keys.Operator // 使用配置中的值
 	operatorClaims.IssuedAt = now.Unix()
 
 	// 设置系统账户
@@ -129,7 +149,7 @@ func (s *SimpleSetup) generateJWTs() error {
 
 	// 2. 账户JWT
 	accountClaims := jwt.NewAccountClaims(accountPub)
-	accountClaims.Name = "USERS"
+	accountClaims.Name = cfg.Keys.Account // 使用配置中的值
 	accountClaims.IssuedAt = now.Unix()
 	accountClaims.Issuer = operatorPub
 
@@ -146,13 +166,14 @@ func (s *SimpleSetup) generateJWTs() error {
 	// 3. 用户JWT
 	userPub, _ := s.userKey.PublicKey()
 	userClaims := jwt.NewUserClaims(userPub)
-	userClaims.Name = "default"
+	userClaims.Name = cfg.Keys.User // 使用配置中的值
 	userClaims.IssuedAt = now.Unix()
 	userClaims.Issuer = accountPub
 
-	// 设置聊天权限
-	userClaims.Pub.Allow = []string{"dchat.>", "_INBOX.>"}
-	userClaims.Sub.Allow = []string{"dchat.>", "_INBOX.>"}
+	// 设置聊天权限 - 使用操作者名称作为主题前缀
+	subjectPrefix := cfg.Keys.Operator + ".>"
+	userClaims.Pub.Allow = []string{subjectPrefix, "_INBOX.>"}
+	userClaims.Sub.Allow = []string{subjectPrefix, "_INBOX.>"}
 
 	userJWT, err := userClaims.Encode(s.accountKey)
 	if err != nil {
