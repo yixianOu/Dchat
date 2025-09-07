@@ -54,5 +54,29 @@ export interface Group {
   symmetricKey: string;
 }
 
+// 网络状态信息 ⭐ 新增
+export interface NetworkStatus {
+  nats: {
+    connected: boolean;
+    stats: {
+      InMsgs: number;
+      OutMsgs: number;
+      InBytes: number;
+      OutBytes: number;
+      Reconnects: number;
+    };
+  };
+  cluster: {
+    nodeCount: number;
+    health: string;
+    routes: string[];
+  };
+  config: {
+    localIP: string;
+    clientPort: number;
+    clusterPort: number;
+  };
+}
+
 // Wails 事件回调类型
 export type EventCallback<T = any> = (data: T) => void;

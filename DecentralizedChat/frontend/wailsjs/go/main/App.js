@@ -10,6 +10,14 @@ export function AddGroupKey(arg1, arg2) {
   return window['go']['main']['App']['AddGroupKey'](arg1, arg2);
 }
 
+export function GetConversationID(arg1) {
+  return window['go']['main']['App']['GetConversationID'](arg1);
+}
+
+export function GetNetworkStatus() {
+  return window['go']['main']['App']['GetNetworkStatus']();
+}
+
 export function GetUser() {
   return window['go']['main']['App']['GetUser']();
 }

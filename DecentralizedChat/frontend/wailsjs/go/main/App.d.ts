@@ -6,6 +6,10 @@ export function AddFriendKey(arg1:string,arg2:string):Promise<void>;
 
 export function AddGroupKey(arg1:string,arg2:string):Promise<void>;
 
+export function GetConversationID(arg1:string):Promise<string>;
+
+export function GetNetworkStatus():Promise<Record<string, any>>;
+
 export function GetUser():Promise<chat.User>;
 
 export function JoinDirect(arg1:string):Promise<void>;

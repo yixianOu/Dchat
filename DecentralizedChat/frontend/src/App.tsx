@@ -10,9 +10,11 @@ import {
   joinDirect, 
   joinGroup,
   onDecrypted,
-  onError
+  onError,
+  getConversationID,  // ✅ 新增功能
+  getNetworkStatus    // ✅ 新增功能
 } from './services/dchatAPI';
-import { User, DecryptedMessage, ChatSession, Friend, Group } from './types';
+import { User, DecryptedMessage, ChatSession, Friend, Group, NetworkStatus } from './types';
 import './App.css';
 
 const App: React.FC = () => {
@@ -25,6 +27,7 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [nickname, setNickname] = useState('');
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null); // ✅ 新增网络状态
 
   // 初始化用户信息和事件监听
   useEffect(() => {
@@ -74,6 +77,26 @@ const App: React.FC = () => {
     };
 
     initApp();
+  }, []);
+
+  // ✅ 新增：定期检查网络状态
+  useEffect(() => {
+    const checkNetworkStatus = async () => {
+      try {
+        const status = await getNetworkStatus();
+        setNetworkStatus(status as NetworkStatus);
+      } catch (error) {
+        console.error('获取网络状态失败:', error);
+      }
+    };
+
+    // 立即检查一次
+    checkNetworkStatus();
+    
+    // 每30秒检查一次网络状态
+    const interval = setInterval(checkNetworkStatus, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleSetNickname = async () => {
@@ -138,8 +161,12 @@ const App: React.FC = () => {
       
       try {
         await joinDirect(peerID);
+        
+        // ✅ 使用新功能：获取真实的会话ID
+        const conversationID = await getConversationID(peerID);
+        
         const newSession: ChatSession = {
-          id: peerID, // 这里使用 peerID，实际的 CID 会在后端计算
+          id: conversationID, // 使用后端计算的真实CID
           name: `私聊 ${friend.nickname}`,
           isGroup: false
         };
@@ -154,16 +181,8 @@ const App: React.FC = () => {
   };
 
   const getSessionMessages = (sessionId: string): DecryptedMessage[] => {
-    return messages.filter(msg => {
-      if (msg.IsGroup) {
-        // 群聊：直接匹配群组ID
-        return msg.CID === sessionId;
-      } else {
-        // 私聊：需要匹配实际的会话ID (CID) 或者通过发送者ID匹配
-        // 注意：后端会生成 SHA256 派生的 CID，前端暂时通过发送者匹配
-        return msg.CID === sessionId || msg.Sender === sessionId;
-      }
-    });
+    // ✅ 简化：现在直接匹配CID，因为我们使用真实的会话ID
+    return messages.filter(msg => msg.CID === sessionId);
   };
 
   return (
@@ -176,6 +195,21 @@ const App: React.FC = () => {
             <span>{user.nickname || '未设置昵称'}</span>
             <button onClick={() => setShowSettings(true)}>设置</button>
           </div>
+          
+          {/* ✅ 新增：网络状态显示 */}
+          {networkStatus && (
+            <div className="network-status">
+              <div className={`status-indicator ${networkStatus.nats.connected ? 'online' : 'offline'}`}>
+                {networkStatus.nats.connected ? '🟢 在线' : '🔴 离线'}
+              </div>
+              <div className="network-info">
+                <small>
+                  节点: {networkStatus.cluster.nodeCount} | 
+                  消息: {networkStatus.nats.stats.InMsgs}↓ {networkStatus.nats.stats.OutMsgs}↑
+                </small>
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="chat-controls">
