@@ -1,3 +1,6 @@
+// 导入 Wails 生成的类型
+import { chat } from '../../wailsjs/go/models';
+
 // Chat 相关类型定义
 export interface Message {
   id: string;
@@ -8,11 +11,8 @@ export interface Message {
   chatId: string; // cid for direct, gid for group
 }
 
-export interface User {
-  id: string;
-  nickname: string;
-  avatar?: string;
-}
+// 使用 Wails 生成的 User 类型
+export type User = chat.User;
 
 export interface DecryptedMessage {
   CID: string;     // conversation id or group id

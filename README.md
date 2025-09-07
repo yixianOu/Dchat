@@ -1,3 +1,19 @@
+### 新增操作日志（2025-09-07 14:30）
+- 完善前端与后端 Wails 绑定对接：
+  - 分析 Go 后端 app.go 接口，生成对应的 TypeScript 前端代码
+  - 重构前端类型定义，使用 Wails 自动生成的绑定 (wailsjs/go/main/App.d.ts)
+  - 更新 frontend/src/services/dchatAPI.ts，直接使用 Wails 生成的函数而非手动包装
+  - 创建完整的去中心化聊天前端界面，包含用户管理、会话列表、密钥管理等功能
+  - **重要发现**：Wails CLI 会自动生成 TypeScript 绑定文件：
+    - `wailsjs/go/main/App.d.ts` - TypeScript 类型定义
+    - `wailsjs/go/main/App.js` - JavaScript 实现
+    - `wailsjs/go/models.ts` - Go 结构体对应的 TypeScript 类型
+  - **绑定生成规则**：
+    - 当运行 `wails dev` 或 `wails build` 时自动生成
+    - 基于 Go 结构体方法的导出函数自动创建对应的 TypeScript 接口
+    - 支持参数类型推断和 Promise 返回类型
+    - 使用 `--skipbindings` 可跳过绑定生成（调试用）
+
 ### 新增操作日志（2025-09-01 15:30）
 - 整理 cmd/routes/routes.md 文档，消除重复内容，为代码块标注文件路径和行数：
   - 统一整合研究背景、对比分析和核心发现
