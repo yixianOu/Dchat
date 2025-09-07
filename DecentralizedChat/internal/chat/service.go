@@ -82,17 +82,65 @@ func NewService(n *natsservice.Service) *Service {
 		cancel:        cancel,
 	}
 
-	// 启动时从KV存储加载已保存的密钥（后台异步加载，不阻塞启动）
-	go s.loadPersistedKeys()
+	// 移除预加载逻辑，改为按需查询
 
 	return s
 }
 
-// loadPersistedKeys 从JetStream KV存储加载已持久化的密钥
-func (s *Service) loadPersistedKeys() {
-	// 这里可以实现从KV存储批量加载密钥的逻辑
-	// 由于KV接口是单个key操作，需要遍历或使用Watch功能
-	// 当前暂时保持简单实现，后续可以扩展
+// getFriendKey 获取好友公钥，优先从内存缓存，如果没有则从KV查询
+func (s *Service) getFriendKey(uid string) (string, error) {
+	if uid == "" {
+		return "", errors.New("uid empty")
+	}
+
+	// 1. 先检查内存缓存
+	s.mu.RLock()
+	if pubKey, exists := s.friendPubKeys[uid]; exists && pubKey != "" {
+		s.mu.RUnlock()
+		return pubKey, nil
+	}
+	s.mu.RUnlock()
+
+	// 2. 内存中没有，从KV存储查询
+	pubKey, err := s.nats.GetFriendPubKey(uid)
+	if err != nil {
+		return "", fmt.Errorf("friend key not found: %w", err)
+	}
+
+	// 3. 查询成功后缓存到内存
+	s.mu.Lock()
+	s.friendPubKeys[uid] = pubKey
+	s.mu.Unlock()
+
+	return pubKey, nil
+}
+
+// getGroupKey 获取群组对称密钥，优先从内存缓存，如果没有则从KV查询
+func (s *Service) getGroupKey(gid string) (string, error) {
+	if gid == "" {
+		return "", errors.New("gid empty")
+	}
+
+	// 1. 先检查内存缓存
+	s.mu.RLock()
+	if symKey, exists := s.groupSymKeys[gid]; exists && symKey != "" {
+		s.mu.RUnlock()
+		return symKey, nil
+	}
+	s.mu.RUnlock()
+
+	// 2. 内存中没有，从KV存储查询
+	symKey, err := s.nats.GetGroupSymKey(gid)
+	if err != nil {
+		return "", fmt.Errorf("group key not found: %w", err)
+	}
+
+	// 3. 查询成功后缓存到内存
+	s.mu.Lock()
+	s.groupSymKeys[gid] = symKey
+	s.mu.Unlock()
+
+	return symKey, nil
 }
 
 func (s *Service) SetUser(nickname string) {
@@ -194,18 +242,22 @@ func (s *Service) OnError(h func(error)) {
 	s.mu.Unlock()
 }
 
-// JoinDirect 订阅一个私聊会话（需要先 AddFriendKey）
+// JoinDirect 订阅一个私聊会话（会自动查询好友公钥）
 func (s *Service) JoinDirect(peerID string) error {
 	if peerID == "" {
 		return errors.New("peerID empty")
 	}
+
+	// 获取好友公钥（如果内存中没有会自动从KV查询）
+	_, err := s.getFriendKey(peerID)
+	if err != nil {
+		return fmt.Errorf("friend pub key not available: %w", err)
+	}
+
 	s.mu.RLock()
 	self := s.user.ID
-	_, ok := s.friendPubKeys[peerID]
 	s.mu.RUnlock()
-	if !ok {
-		return errors.New("friend pub key missing; call AddFriendKey first")
-	}
+
 	cid := deriveCID(self, peerID)
 	s.mu.RLock()
 	if _, exists := s.directSubs[cid]; exists {
@@ -213,6 +265,7 @@ func (s *Service) JoinDirect(peerID string) error {
 		return nil
 	}
 	s.mu.RUnlock()
+
 	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
 	if err := s.nats.Subscribe(
 		subj,
@@ -229,23 +282,25 @@ func (s *Service) JoinDirect(peerID string) error {
 	return nil
 }
 
-// JoinGroup 订阅群（需要先 AddGroupKey）
+// JoinGroup 订阅群（会自动查询群组密钥）
 func (s *Service) JoinGroup(gid string) error {
 	if gid == "" {
 		return errors.New("gid empty")
 	}
-	s.mu.RLock()
-	_, ok := s.groupSymKeys[gid]
-	s.mu.RUnlock()
-	if !ok {
-		return errors.New("group key missing; call AddGroupKey first")
+
+	// 获取群组密钥（如果内存中没有会自动从KV查询）
+	_, err := s.getGroupKey(gid)
+	if err != nil {
+		return fmt.Errorf("group key not available: %w", err)
 	}
+
 	s.mu.RLock()
 	if _, exists := s.groupSubs[gid]; exists {
 		s.mu.RUnlock()
 		return nil
 	}
 	s.mu.RUnlock()
+
 	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
 	if err := s.nats.Subscribe(
 		subj,
@@ -267,17 +322,22 @@ func (s *Service) SendDirect(peerID, content string) error {
 	if peerID == "" || content == "" {
 		return errors.New("peerID/content empty")
 	}
+
 	s.mu.RLock()
 	priv := s.userPrivB64
 	from := s.user.ID
-	peerPub, ok := s.friendPubKeys[peerID]
 	s.mu.RUnlock()
-	if !ok {
-		return errors.New("friend pub key missing")
-	}
+
 	if priv == "" {
 		return errors.New("local priv key empty")
 	}
+
+	// 按需获取好友公钥
+	peerPub, err := s.getFriendKey(peerID)
+	if err != nil {
+		return fmt.Errorf("friend pub key not available: %w", err)
+	}
+
 	cid := deriveCID(from, peerID)
 	nonceB64, cipherB64, err := encryptDirect(priv, peerPub, []byte(content))
 	if err != nil {
@@ -300,13 +360,17 @@ func (s *Service) SendGroup(gid, content string) error {
 	if gid == "" || content == "" {
 		return errors.New("gid/content empty")
 	}
+
 	s.mu.RLock()
-	sym, ok := s.groupSymKeys[gid]
 	from := s.user.ID
 	s.mu.RUnlock()
-	if !ok {
-		return errors.New("group key missing")
+
+	// 按需获取群组密钥
+	sym, err := s.getGroupKey(gid)
+	if err != nil {
+		return fmt.Errorf("group key not available: %w", err)
 	}
+
 	nonceB64, cipherB64, err := encryptGroup(sym, []byte(content))
 	if err != nil {
 		return err
@@ -332,11 +396,9 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 		return
 	}
 
-	// 2) 读取必要状态
+	// 2) 读取基本状态
 	s.mu.RLock()
 	priv := s.userPrivB64
-	peerPub := s.friendPubKeys[w.Sender]
-	sym := s.groupSymKeys[w.CID]
 	selfID := s.user.ID
 	s.mu.RUnlock()
 
@@ -348,14 +410,16 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	// 4) 判定是否群聊
 	isGroup := strings.HasPrefix(subject, "dchat.grp.")
 
-	// 5) 解密
+	// 5) 按需获取密钥并解密
 	var (
 		pt  []byte
 		err error
 	)
 	if isGroup {
-		if sym == "" {
-			s.dispatchError(errors.New("group sym key missing"))
+		// 按需获取群组密钥
+		sym, keyErr := s.getGroupKey(w.CID)
+		if keyErr != nil {
+			s.dispatchError(fmt.Errorf("group key not available for %s: %w", w.CID, keyErr))
 			return
 		}
 		pt, err = decryptGroup(sym, w.Nonce, w.Cipher)
@@ -364,8 +428,10 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 			s.dispatchError(errors.New("local priv key missing"))
 			return
 		}
-		if peerPub == "" {
-			s.dispatchError(errors.New("peer pub key missing"))
+		// 按需获取好友公钥
+		peerPub, keyErr := s.getFriendKey(w.Sender)
+		if keyErr != nil {
+			s.dispatchError(fmt.Errorf("friend pub key not available for %s: %w", w.Sender, keyErr))
 			return
 		}
 		pt, err = decryptDirect(priv, peerPub, w.Nonce, w.Cipher)
