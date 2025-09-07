@@ -71,7 +71,7 @@ type Service struct {
 // NewService create minimal service
 func NewService(n *natsservice.Service) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{
+	s := &Service{
 		nats:          n,
 		user:          &User{ID: generateUserID(), Nickname: "Anonymous"},
 		friendPubKeys: make(map[string]string),
@@ -81,6 +81,18 @@ func NewService(n *natsservice.Service) *Service {
 		ctx:           ctx,
 		cancel:        cancel,
 	}
+
+	// 启动时从KV存储加载已保存的密钥（后台异步加载，不阻塞启动）
+	go s.loadPersistedKeys()
+
+	return s
+}
+
+// loadPersistedKeys 从JetStream KV存储加载已持久化的密钥
+func (s *Service) loadPersistedKeys() {
+	// 这里可以实现从KV存储批量加载密钥的逻辑
+	// 由于KV接口是单个key操作，需要遍历或使用Watch功能
+	// 当前暂时保持简单实现，后续可以扩展
 }
 
 func (s *Service) SetUser(nickname string) {
@@ -114,7 +126,7 @@ func (s *Service) SetKeyPair(privB64, pubB64 string) {
 	s.mu.Unlock()
 }
 
-// AddFriendKey 缓存好友公钥
+// AddFriendKey 缓存好友公钥并持久化到KV存储
 func (s *Service) AddFriendKey(uid, pubB64 string) {
 	if uid == "" || pubB64 == "" {
 		return
@@ -122,9 +134,14 @@ func (s *Service) AddFriendKey(uid, pubB64 string) {
 	s.mu.Lock()
 	s.friendPubKeys[uid] = pubB64
 	s.mu.Unlock()
+
+	// 持久化到JetStream KV（最佳努力，失败不影响内存缓存）
+	if err := s.nats.PutFriendPubKey(uid, pubB64); err != nil {
+		s.dispatchError(fmt.Errorf("failed to persist friend key: %w", err))
+	}
 }
 
-// AddGroupKey 缓存群对称密钥
+// AddGroupKey 缓存群对称密钥并持久化到KV存储
 func (s *Service) AddGroupKey(gid, symB64 string) {
 	if gid == "" || symB64 == "" {
 		return
@@ -132,6 +149,11 @@ func (s *Service) AddGroupKey(gid, symB64 string) {
 	s.mu.Lock()
 	s.groupSymKeys[gid] = symB64
 	s.mu.Unlock()
+
+	// 持久化到JetStream KV（最佳努力，失败不影响内存缓存）
+	if err := s.nats.PutGroupSymKey(gid, symB64); err != nil {
+		s.dispatchError(fmt.Errorf("failed to persist group key: %w", err))
+	}
 }
 
 // deriveCID 生成私聊 cid
@@ -141,6 +163,14 @@ func deriveCID(a, b string) string {
 	}
 	h := sha256.Sum256([]byte(a + ":" + b))
 	return hex.EncodeToString(h[:])[:16]
+}
+
+// GetConversationID 公开的CID计算函数，供前端使用
+func (s *Service) GetConversationID(peerID string) string {
+	s.mu.RLock()
+	selfID := s.user.ID
+	s.mu.RUnlock()
+	return deriveCID(selfID, peerID)
 }
 
 // OnDecrypted 注册解密后回调

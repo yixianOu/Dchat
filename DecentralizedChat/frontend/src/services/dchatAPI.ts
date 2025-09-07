@@ -11,6 +11,8 @@ import {
   SendGroup,
   OnDecrypted,
   OnError
+  // GetConversationID,  // 新增功能，需要 wails build 后生成
+  // GetNetworkStatus    // 新增功能，需要 wails build 后生成
 } from '../../wailsjs/go/main/App';
 
 import { chat } from '../../wailsjs/go/models';
@@ -26,6 +28,8 @@ export const joinDirect = JoinDirect;
 export const joinGroup = JoinGroup;
 export const sendDirect = SendDirect;
 export const sendGroup = SendGroup;
+// export const getConversationID = GetConversationID;  // 新增功能
+// export const getNetworkStatus = GetNetworkStatus;    // 新增功能
 
 // 事件监听器需要类型包装
 export const onDecrypted = (callback: (msg: DecryptedMessage) => void): Promise<void> => {

@@ -181,5 +181,40 @@ func (a *App) GetUser() (chat.User, error) {
 	return a.chatSvc.GetUser(), nil
 }
 
+// GetConversationID returns the conversation ID for a direct chat with peerID
+func (a *App) GetConversationID(peerID string) (string, error) {
+	if a.chatSvc == nil {
+		return "", fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.GetConversationID(peerID), nil
+}
+
+// GetNetworkStatus returns current network and cluster status
+func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
+	if a.natsSvc == nil || a.nodeManager == nil {
+		return nil, fmt.Errorf("services not initialized")
+	}
+
+	result := make(map[string]interface{})
+
+	// NATS客户端状态
+	result["nats"] = a.natsSvc.GetStats()
+
+	// 集群节点状态
+	result["cluster"] = a.nodeManager.GetClusterInfo()
+
+	// 配置信息
+	if a.config != nil {
+		result["config"] = map[string]interface{}{
+			"local_ip":     a.config.Network.LocalIP,
+			"client_port":  a.config.Server.ClientPort,
+			"cluster_port": a.config.Server.ClusterPort,
+			"cluster_name": a.config.Server.ClusterName,
+		}
+	}
+
+	return result, nil
+}
+
 // GetNetworkStats aggregates network statistics
 // （权限热重启、网络统计、凭据导出接口已移除，保持核心最小 API）
