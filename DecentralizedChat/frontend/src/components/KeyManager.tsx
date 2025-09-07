@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { setKeyPair } from '../services/dchatAPI';
+import { loadNSCKeys } from '../services/dchatAPI';
 
 interface KeyManagerProps {
   onClose: () => void;
@@ -37,12 +37,13 @@ const KeyManager: React.FC<KeyManagerProps> = ({ onClose }) => {
     }
     
     try {
-      await setKeyPair(privateKey, publicKey);
-      alert('密钥对设置成功');
+      // 使用NSC seed加载密钥（这里应该传入实际的NSC seed）
+      await loadNSCKeys(privateKey);  // 假设privateKey是NSC seed
+      alert('NSC密钥加载成功');
       onClose();
     } catch (error) {
-      console.error('设置密钥对失败:', error);
-      alert('设置密钥对失败');
+      console.error('加载NSC密钥失败:', error);
+      alert('加载NSC密钥失败');
     }
   };
 

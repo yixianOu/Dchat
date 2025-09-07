@@ -8,9 +8,11 @@ export function AddFriendNSCKey(arg1:string,arg2:string):Promise<void>;
 
 export function AddGroupKey(arg1:string,arg2:string):Promise<void>;
 
-export function GetConversationID(arg1:string):Promise<string>;
+export function GenerateSSLCertificate(arg1:Array<string>,arg2:Array<string>,arg3:number):Promise<Record<string, any>>;
 
-export function GetNSCUserSeed():Promise<string>;
+export function GetAllDerivedKeys():Promise<Record<string, any>>;
+
+export function GetConversationID(arg1:string):Promise<string>;
 
 export function GetNetworkStatus():Promise<Record<string, any>>;
 
@@ -22,14 +24,8 @@ export function JoinGroup(arg1:string):Promise<void>;
 
 export function LoadNSCKeys(arg1:string):Promise<void>;
 
-export function OnDecrypted(arg1:any):Promise<void>;
-
-export function OnError(arg1:any):Promise<void>;
-
 export function SendDirect(arg1:string,arg2:string):Promise<void>;
 
 export function SendGroup(arg1:string,arg2:string):Promise<void>;
-
-export function SetKeyPair(arg1:string,arg2:string):Promise<void>;
 
 export function SetUserInfo(arg1:string):Promise<void>;

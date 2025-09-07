@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ChatRoom from './components/ChatRoom';
 import KeyManager from './components/KeyManager';
-import { 
-  setUserInfo, 
-  getUser, 
-  setKeyPair, 
-  addFriendKey, 
+import {
+  setUserInfo,
+  getUser,
+  addFriendKey,
   addGroupKey, 
   joinDirect, 
   joinGroup,

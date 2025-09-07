@@ -14,12 +14,16 @@ export function AddGroupKey(arg1, arg2) {
   return window['go']['main']['App']['AddGroupKey'](arg1, arg2);
 }
 
-export function GetConversationID(arg1) {
-  return window['go']['main']['App']['GetConversationID'](arg1);
+export function GenerateSSLCertificate(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GenerateSSLCertificate'](arg1, arg2, arg3);
 }
 
-export function GetNSCUserSeed() {
-  return window['go']['main']['App']['GetNSCUserSeed']();
+export function GetAllDerivedKeys() {
+  return window['go']['main']['App']['GetAllDerivedKeys']();
+}
+
+export function GetConversationID(arg1) {
+  return window['go']['main']['App']['GetConversationID'](arg1);
 }
 
 export function GetNetworkStatus() {
@@ -42,24 +46,12 @@ export function LoadNSCKeys(arg1) {
   return window['go']['main']['App']['LoadNSCKeys'](arg1);
 }
 
-export function OnDecrypted(arg1) {
-  return window['go']['main']['App']['OnDecrypted'](arg1);
-}
-
-export function OnError(arg1) {
-  return window['go']['main']['App']['OnError'](arg1);
-}
-
 export function SendDirect(arg1, arg2) {
   return window['go']['main']['App']['SendDirect'](arg1, arg2);
 }
 
 export function SendGroup(arg1, arg2) {
   return window['go']['main']['App']['SendGroup'](arg1, arg2);
-}
-
-export function SetKeyPair(arg1, arg2) {
-  return window['go']['main']['App']['SetKeyPair'](arg1, arg2);
 }
 
 export function SetUserInfo(arg1) {

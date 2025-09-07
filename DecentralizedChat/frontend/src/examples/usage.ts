@@ -1,14 +1,17 @@
 // 去中心化聊天应用使用示例
 
-import { 
-  setUserInfo, 
-  setKeyPair, 
-  addFriendKey, 
-  addGroupKey, 
-  joinDirect, 
-  joinGroup, 
-  sendDirect, 
+import {
+  setUserInfo,
+  getUser,
+  addFriendKey,
+  addGroupKey,
+  joinDirect,
+  joinGroup,
+  sendDirect,
   sendGroup,
+  getConversationID,
+  getNetworkStatus,
+  loadNSCKeys,  // ✅ 新的密钥加载方式 
   onDecrypted,
   onError 
 } from '../services/dchatAPI';
@@ -21,10 +24,9 @@ async function initializeApp() {
     // 1. 设置用户信息
     await setUserInfo('Alice');
     
-    // 2. 设置密钥对（实际应用中应该生成真实的密钥对）
-    const privateKey = 'base64EncodedPrivateKey';
-    const publicKey = 'base64EncodedPublicKey';
-    await setKeyPair(privateKey, publicKey);
+    // 2. 加载NSC密钥（实际应用中应该使用真实的NSC seed）
+    const nscSeed = 'SU...'; // NSC seed以SU开头
+    await loadNSCKeys(nscSeed);
     
     // 3. 设置消息监听
     await onDecrypted((message: DecryptedMessage) => {
@@ -37,8 +39,8 @@ async function initializeApp() {
     });
     
     // 4. 设置错误监听
-    await onError((error: string) => {
-      console.error('聊天错误:', error);
+    await onError((error: { error: string; timestamp: string }) => {
+      console.error('聊天错误:', error.error);
     });
     
     console.log('应用初始化完成');

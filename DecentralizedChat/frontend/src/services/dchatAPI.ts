@@ -2,9 +2,11 @@
 import { 
   SetUserInfo,
   GetUser,
-  SetKeyPair,
   AddFriendKey,
   AddGroupKey,
+  LoadNSCKeys,
+  GenerateSSLCertificate,  // ✅ 新增的证书生成功能
+  GetAllDerivedKeys,       // ✅ 新增的密钥获取功能
   JoinDirect,
   JoinGroup,
   SendDirect,
@@ -20,7 +22,6 @@ import { DecryptedMessage } from '../types';
 // 重新导出 Wails 生成的函数，保持 API 一致性
 export const setUserInfo = SetUserInfo;
 export const getUser = GetUser;
-export const setKeyPair = SetKeyPair;
 export const addFriendKey = AddFriendKey;
 export const addGroupKey = AddGroupKey;
 export const joinDirect = JoinDirect;
@@ -29,6 +30,9 @@ export const sendDirect = SendDirect;
 export const sendGroup = SendGroup;
 export const getConversationID = GetConversationID;  // ✅ 新增功能
 export const getNetworkStatus = GetNetworkStatus;    // ✅ 新增功能
+export const loadNSCKeys = LoadNSCKeys;              // ✅ 新的密钥加载方式
+export const generateSSLCertificate = GenerateSSLCertificate;  // ✅ 证书生成
+export const getAllDerivedKeys = GetAllDerivedKeys;  // ✅ 密钥获取
 
 // ⭐ 基于事件的监听器，替代回调方式
 export const onDecrypted = (callback: (msg: DecryptedMessage) => void): (() => void) => {
