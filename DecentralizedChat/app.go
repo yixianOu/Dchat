@@ -55,9 +55,9 @@ func (a *App) OnStartup(ctx context.Context) {
 	// 启用Routes集群，使用自动检测的本地IP
 	cfg.EnableRoutes(cfg.Network.LocalIP, DefaultClientPort, DefaultClusterPort, []string{})
 
-	// 首次运行：通过 nsc 初始化 SYS 账户与 resolver.conf，并将路径写入配置
-	if err := nscsetup.EnsureSysAccountSetup(cfg); err != nil {
-		log.Printf("初始化 NSC/SYS 失败: %v", err)
+	// 简化版NATS初始化：无需NSC CLI，直接使用Go库
+	if err := nscsetup.EnsureSimpleSetup(cfg); err != nil {
+		log.Printf("初始化简化NATS设置失败: %v", err)
 		return
 	}
 	a.config = cfg
