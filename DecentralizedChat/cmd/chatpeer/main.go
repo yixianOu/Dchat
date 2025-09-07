@@ -34,7 +34,7 @@ func startServer(clientPort, clusterPort int, advertise string, seedRoutes []str
 	opts.Cluster.Host = "0.0.0.0"
 	opts.Cluster.Port = clusterPort
 	if strings.TrimSpace(advertise) != "" {
-		// 公共节点在无 Tailscale 场景下通过对外可达地址向其他节点公告
+		// 公共节点通过对外可达地址向其他节点公告
 		// 形如 "1.2.3.4:6222" 或 "example.com:6222"
 		// 兼容用户误传如 "nats://1.2.3.4:6222"，去除 scheme。
 		adv := strings.TrimSpace(advertise)

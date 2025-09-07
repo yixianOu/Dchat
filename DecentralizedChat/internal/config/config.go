@@ -26,10 +26,9 @@ type UserConfig struct {
 }
 
 type NetworkConfig struct {
-	TailscaleEnabled bool     `json:"tailscale_enabled"`
-	AutoDiscovery    bool     `json:"auto_discovery"`
-	SeedNodes        []string `json:"seed_nodes"`
-	LocalIP          string   `json:"local_ip"`
+	AutoDiscovery bool     `json:"auto_discovery"`
+	SeedNodes     []string `json:"seed_nodes"`
+	LocalIP       string   `json:"local_ip"`
 }
 
 // Legacy NATSConfig/Permissions 结构已移除：直接使用 ServerOptionsLite 提供的 Import/Export 权限。
@@ -72,10 +71,9 @@ var defaultConfig = Config{
 		Avatar:   "",
 	},
 	Network: NetworkConfig{
-		TailscaleEnabled: true,
-		AutoDiscovery:    true,
-		SeedNodes:        []string{},
-		LocalIP:          "", // Will be resolved dynamically or provided by user
+		AutoDiscovery: true,
+		SeedNodes:     []string{},
+		LocalIP:       "", // Will be resolved dynamically or provided by user
 	},
 	// NATS 字段已删除
 	UI: UIConfig{

@@ -102,5 +102,5 @@ func main() {
 
 	fmt.Println("\n=== 单节点演示完成 ===")
 	fmt.Println("说明: 在实际使用中，每个DChat应用只启动一个本地节点")
-	fmt.Println("通过Tailscale网络发现和连接其他用户的节点形成去中心化集群")
+	fmt.Println("通过网络发现和连接其他用户的节点形成去中心化集群")
 }

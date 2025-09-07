@@ -72,9 +72,6 @@ func (a *App) OnStartup(ctx context.Context) {
 	log.Println("DChat application started (minimal mode)")
 }
 
-// GetTailscaleStatus returns Tailscale connectivity status
-// （房间/历史/尾部统计等功能已移除，只保留最小 Direct/Group 能力）
-
 // SetUserInfo sets current user metadata
 func (a *App) SetUserInfo(nickname string) error {
 	if a.chatSvc == nil {

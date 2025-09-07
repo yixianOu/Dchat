@@ -180,9 +180,9 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
   - 新增 cmd/genkey & cmd/chatpeer：支持两台电脑快速生成密钥、启动本地嵌入式节点并进行私聊加密往返测试。
   - chatpeer 增强：
     - 支持 --identity 持久化 (ID/PRIV/PUB) 与 --id 覆盖，避免重启后身份变化导致无法预填对端参数。
-    - 支持 --cluster-advertise 用于"公共节点对外暴露集群端口"的无 Tailscale 方案。
+    - 支持 --cluster-advertise 用于"公共节点对外暴露集群端口"的方案。
 
-### 跨公网/局域网混合拓扑指引（弃用 Tailscale）
+### 跨公网/局域网混合拓扑指引
 
 公共节点（有公网 IP，暴露 cluster 端口）示例：
 ```bash
@@ -214,7 +214,7 @@ go run examples/cluster_demo.go
 
 ## 项目概述
 
-基于 **NATS Routes集群 + Tailscale + Wails** 构建的真正去中心化聊天室应用。
+基于 **NATS Routes集群 + Wails** 构建的真正去中心化聊天室应用。
 
 ### 核心特性
 - ⚡ **自动发现**：节点自动形成全网状网络，无需手动配置
@@ -226,15 +226,14 @@ go run examples/cluster_demo.go
 ```
 用户设备A                用户设备B                用户设备C
 │  (Routes)    │        │  (Routes)    │        │  (Routes)    │
-│  Tailscale   │        │  Tailscale   │        │  Tailscale   │
 │   Network    │        │   Network    │        │   Network    │
 └──────────────┘        └──────────────┘        └──────────────┘
        │                        │                        │
        └────────────────────────┼────────────────────────┘
                                 │
                      ┌──────────────┐
-                     │  Tailscale   │
-                     │   Mesh VPN   │
+                     │   NATS Mesh   │
+                     │   Network     │
                      └──────────────┘
 ```
 
@@ -248,16 +247,7 @@ go run examples/cluster_demo.go
   - ✅ 配置简单，只需种子节点地址
   - ✅ 自动形成全网状网络
 
-#### 2. Tailscale网络
-- **用途**：提供安全的P2P网络连接
-- **优势**：
-  - ✅ 零配置WireGuard VPN
-  - ✅ 自动NAT穿透
-  - ✅ 端到端加密
-  - ✅ 跨平台支持
-  - ✅ 网络自动发现
-
-#### 3. Wails框架
+#### 2. Wails框架
 - **用途**：构建现代化桌面应用
 - **优势**：
   - ✅ Go后端 + React前端
@@ -300,30 +290,6 @@ go run examples/cluster_demo.go
 - 🎯 **动态自愈**：节点故障时自动从网络移除
 - 🎯 **无中心节点**：所有节点地位平等
 
-### 2. Tailscale安全网络
-
-解决公网连接和安全问题：
-
-```
-传统方案（FRP）的问题：
-❌ 需要公网服务器
-❌ 端口映射复杂
-❌ 安全性依赖配置
-❌ 单点故障风险
-
-Tailscale方案优势：
-✅ P2P直连，无需中转
-✅ 自动NAT穿透
-✅ WireGuard加密
-✅ 零配置安全
-```
-
-**Tailscale集成方式：**
-- 每个用户设备加入Tailscale网络
-- NATS节点通过Tailscale IP互连
-- 自动获得加密和认证
-- 支持动态IP变化
-
 ### 3. Wails应用架构
 
 现代化桌面应用设计：
@@ -337,7 +303,6 @@ Tailscale方案优势：
 ├─────────────────────────────────────┤
 │              后端 (Go)              │
 │  ├─ NATS客户端                      │
-│  ├─ Tailscale集成                   │
 │  ├─ 消息加密/解密                    │
 │  ├─ 用户管理                        │
 │  └─ 系统集成                        │
@@ -362,9 +327,9 @@ cluster: {
   name: "dchat_network"
   # 集群端口
   port: 6222
-  # 连接到种子节点（Tailscale IP）
+  # 连接到种子节点
   routes: [
-    "nats://100.64.1.100:6222"  # 种子节点的Tailscale IP
+    "nats://seed-node-ip:6222"  # 种子节点的IP地址
   ]
 }
 
@@ -377,58 +342,15 @@ include "accounts.conf"
 #!/bin/bash
 # start-dchat-node.sh
 
-# 获取本机Tailscale IP
-TAILSCALE_IP=$(tailscale ip -4)
-
 # 启动NATS服务器
 nats-server \
   -p 4222 \
-  -cluster "nats://${TAILSCALE_IP}:6222" \
-  -routes "nats://seed-node-tailscale-ip:6222" \
+  -cluster "nats://local-ip:6222" \
+  -routes "nats://seed-node-ip:6222" \
   -server_name "dchat-${USER}-$(hostname)"
 ```
 
-#### 2. Tailscale集成
-
-**自动Tailscale配置：**
-```go
-// internal/network/tailscale.go
-package network
-
-import (
-    "context"
-    "tailscale.com/client/tailscale"
-)
-
-type TailscaleManager struct {
-    client *tailscale.Client
-}
-
-func (tm *TailscaleManager) GetLocalIP() (string, error) {
-    status, err := tm.client.Status(context.Background())
-    if err != nil {
-        return "", err
-    }
-    return status.Self.TailscaleIPs[0].String(), nil
-}
-
-func (tm *TailscaleManager) GetPeerIPs() ([]string, error) {
-    status, err := tm.client.Status(context.Background())
-    if err != nil {
-        return nil, err
-    }
-    
-    var ips []string
-    for _, peer := range status.Peer {
-        if len(peer.TailscaleIPs) > 0 {
-            ips = append(ips, peer.TailscaleIPs[0].String())
-        }
-    }
-    return ips, nil
-}
-```
-
-#### 3. Wails应用结构
+#### 2. Wails应用结构
 
 **项目结构：**
 ```
@@ -455,7 +377,6 @@ dchat/
 │   └── runtime/
 ├── internal/              # 内部包
 │   ├── nats/             # NATS客户端
-│   ├── network/          # Tailscale集成
 │   ├── crypto/           # 消息加密
 │   ├── chat/             # 聊天逻辑
 │   └── config/           # 配置管理
@@ -473,13 +394,10 @@ dchat/
 sequenceDiagram
     participant User
     participant WailsApp
-    participant Tailscale
     participant NATS
     participant Network
 
     User->>WailsApp: 启动DChat
-    WailsApp->>Tailscale: 检查Tailscale状态
-    Tailscale-->>WailsApp: 返回本机IP
     WailsApp->>NATS: 启动NATS节点
     NATS->>Network: 连接到种子节点
     Network-->>NATS: 建立Routes连接
@@ -491,7 +409,7 @@ sequenceDiagram
 
 ```bash
 # 第一个用户启动（种子节点）
-User A: 启动DChat → 成为种子节点（100.64.1.100:6222）
+User A: 启动DChat → 成为种子节点（local-ip:6222）
 
 # 第二个用户加入
 User B: 启动DChat → 连接到种子节点 → 形成A←→B网络
@@ -538,10 +456,6 @@ UserA.SendMessage("general", "Hello everyone!")
 
 **安装依赖：**
 ```bash
-# 安装Tailscale
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-
 # 安装NATS Server
 go install github.com/nats-io/nats-server/v2@latest
 
@@ -571,17 +485,10 @@ wails build
 ### 3. 首次使用
 
 ```bash
-# 1. 确保Tailscale已连接
-tailscale status
 
 # 2. 启动DChat应用
 ./build/bin/dchat
 
-# 3. 应用自动：
-#    - 检测Tailscale网络
-#    - 启动NATS节点
-#    - 连接到现有网络或创建新网络
-#    - 开始聊天！
 ```
 
 ### 4. 网络拓扑示例
@@ -610,11 +517,6 @@ Alice (种子) ←→ Bob ←→ Charlie
 - ✅ NATS Routes集群研究和验证
 - ✅ 链式连接原理验证
 - ✅ 基础Demo实现
-
-### Phase 2: Tailscale集成 (进行中)
-- 🔄 Tailscale网络检测和集成
-- 🔄 自动IP发现机制
-- ⏳ 网络状态监控
 
 ### Phase 3: Wails应用开发 (计划中)
 - ⏳ 项目结构搭建
@@ -649,13 +551,10 @@ Alice (种子) ←→ Bob ←→ Charlie
 - **动态自愈能力**：故障节点自动从网络移除
 
 ### 🔒 企业级安全
-- **端到端加密**：Tailscale WireGuard加密
 - **消息签名**：Ed25519数字签名验证身份
 - **零信任架构**：不依赖中心化身份认证
-- **网络隔离**：Tailscale提供网络层隔离
 
 ### ⚡ 极简配置
-- **零配置网络**：Tailscale自动NAT穿透
 - **一键启动**：Wails一键启动所有服务
 - **自动发现**：NATS Routes自动建立连接
 - **热插拔**：节点可随时加入/离开
@@ -670,7 +569,6 @@ Alice (种子) ←→ Bob ←→ Charlie
 
 ### 官方文档
 - [NATS Routes官方文档](https://docs.nats.io/running-a-nats-service/configuration/clustering)
-- [Tailscale官方文档](https://tailscale.com/kb/)
 - [Wails框架文档](https://wails.io/docs/introduction)
 
 ### 技术研究
@@ -679,7 +577,6 @@ Alice (种子) ←→ Bob ←→ Charlie
 
 ### 相关项目
 - [nats-io/nats-server](https://github.com/nats-io/nats-server)
-- [tailscale/tailscale](https://github.com/tailscale/tailscale)
 - [wailsapp/wails](https://github.com/wailsapp/wails)
 
 ---
@@ -687,7 +584,7 @@ Alice (种子) ←→ Bob ←→ Charlie
 **项目愿景**：构建一个真正去中心化、安全、易用的现代聊天平台，让每个人都能拥有自己的通信网络。
 
 **开始时间**：2025年8月3日  
-**技术栈**：NATS Routes + Tailscale + Wails + Go + React.js  
+**技术栈**：NATS Routes + Wails + Go + React.js  
 **核心特性**：去中心化、链式连接、零配置、企业级安全
 
 TODO:
@@ -699,12 +596,9 @@ TODO:
 6.  研究creds,jwt,nkey的关系和作用 ok
 7.  通过nats kv(https://docs.nats.io/nats-concepts/jetstream/key-value-store/kv_walkthrough)持久化私聊好友的公钥和群聊对称密钥 ok
 8.  好友公钥和群聊对称公钥需要通过nats KV存储在本地,并且每次发送信息和接受信息是都需要加密解密.
-9. 通过手动输入或tailscale cli自动查询ip,把tailscale内网IP和集群端口广播到特定主题(等)
-10. 要读取到tailscale的IP地址,需要在wails中调用tailscale命令行工具(等)
-11. 测试使用服务器公网ip节点,这样新节点不需要tailscale就能加入集群,但会导致中心化(等)
-12. 通过nsc支持配置导出和导入(等)
-13. 支持ip自签名,insecure tls
-14. wails集成前端,检查
+9.  通过nsc支持配置导出和导入(等)
+10. 支持ip自签名,insecure tls
+11. wails集成前端,检查
 
 新增操作日志：
 - 修改 internal/nscsetup/setup.go：移除单一 deriveAccountJWTPath 假设，新增 findAccountJWTPath 支持多种 nsc 存储结构并回退浅层遍历匹配 SYS.jwt。
@@ -719,8 +613,7 @@ TODO:
 5.  SYS 公钥路径改为优先记录 creds 文件路径 (keys/creds/<operator>/SYS/*.creds)，找不到再回退写 sys.pub。
 6.  移除 sys.pub 回退逻辑：仅记录已有 creds 文件路径，不再生成 sys.pub。
 7.  重构 internal/chat/service.go：引入并发安全（RWMutex）、房间订阅幂等、OnMessage 回调机制、LeaveRoom、GetUser、历史快照复制、随机ID生成，新增 Close 释放订阅。
-8.  更新 app.go：移除 tailscale 直接依赖（保留占位网络状态）、精简启动流程、本地 IP 为空回退 127.0.0.1、自动加入 general 房间、新增 LeaveChatRoom、GetNetworkStats 不再引用 tailscale、使用新的 chat Service API。
-9.  精简 internal/chat/README.md 群聊部分：仅保留 dchat.grp.<gid>.msg 与可选 ctrl.rekey，删除成员/ack/typing/presence/meta/history 等扩展，定位最小去中心化实现，并在文档中解释软权限通过密钥轮换实现。
-10. 精简 internal/chat/README.md 私聊设计：移除 ack/typing/presence/rekey 多余 subject，统一为 dchat.dm.{cid}.msg，说明直接使用对方公钥 + 自己私钥派生共享密钥加密消息。
-11. 新增 internal/chat/crypto.go：实现 encryptDirect (NaCl box) 与 encryptGroup (AES-256-GCM)；扩展 chat.Service 提供 SetKeyPair/SendDirect/JoinDirect/SendGroup，消息发送前加密，接收后待后续解密集成。
-12. 精简 chat/README.md 密钥策略：群聊去除 rekey/version，KV 仅存储 {sym}；私聊仅使用己私钥+对方公钥派生共享密钥，不做 ratchet 与轮换描述。
+8.  精简 internal/chat/README.md 群聊部分：仅保留 dchat.grp.<gid>.msg 与可选 ctrl.rekey，删除成员/ack/typing/presence/meta/history 等扩展，定位最小去中心化实现，并在文档中解释软权限通过密钥轮换实现。
+9.  精简 internal/chat/README.md 私聊设计：移除 ack/typing/presence/rekey 多余 subject，统一为 dchat.dm.{cid}.msg，说明直接使用对方公钥 + 自己私钥派生共享密钥加密消息。
+10. 新增 internal/chat/crypto.go：实现 encryptDirect (NaCl box) 与 encryptGroup (AES-256-GCM)；扩展 chat.Service 提供 SetKeyPair/SendDirect/JoinDirect/SendGroup，消息发送前加密，接收后待后续解密集成。
+11. 精简 chat/README.md 密钥策略：群聊去除 rekey/version，KV 仅存储 {sym}；私聊仅使用己私钥+对方公钥派生共享密钥，不做 ratchet 与轮换描述。

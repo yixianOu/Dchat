@@ -24,8 +24,6 @@ DecentralizedChat/
 └── internal/             # Go后端代码
     ├── nats/             # NATS消息服务
     │   └── service.go
-    ├── network/          # 网络管理(Tailscale)
-    │   └── tailscale.go
     ├── chat/             # 聊天服务
     │   └── service.go
     ├── config/           # 配置管理
@@ -43,7 +41,6 @@ DecentralizedChat/
 
 ### ✅ 后端代码移动
 - **NATS服务**: 创建 `internal/nats/service.go`，封装NATS连接和消息处理
-- **Tailscale网络**: 创建 `internal/network/tailscale.go`，管理Tailscale网络状态
 - **聊天服务**: 创建 `internal/chat/service.go`，处理聊天室和消息逻辑
 - **配置管理**: 创建 `internal/config/config.go`，管理应用配置
 - **Routes工具**: 创建 `internal/routes/routes.go`，从cmd/routes移植核心功能
@@ -62,19 +59,18 @@ DecentralizedChat/
 
 ### 2. 后端服务
 - **NATS服务**: 处理消息发布/订阅，Routes集群管理
-- **Tailscale集成**: 自动网络发现，P2P连接管理
 - **聊天服务**: 聊天室管理，消息历史，用户管理
 
 ### 3. 配置系统
 - **用户配置**: 昵称、头像等个人信息
-- **网络配置**: Tailscale设置，种子节点配置
+- **网络配置**: 种子节点配置
 - **NATS配置**: 端口设置，集群名称等
 
 ## 下一步开发计划
 
 1. **依赖完善**: 添加缺少的Go模块依赖
 2. **错误修复**: 修复编译错误和类型问题
-3. **功能测试**: 验证NATS Routes和Tailscale集成
+3. **功能测试**: 验证NATS Routes集成
 4. **UI完善**: 添加更多React组件和交互功能
 5. **打包构建**: 配置Wails构建流程
 
@@ -97,9 +93,9 @@ go mod tidy
 ## 技术栈
 
 - **前端**: React.js + Vite + CSS3
-- **后端**: Go + NATS + Tailscale
+- **后端**: Go + NATS
 - **框架**: Wails v2
-- **网络**: NATS Routes集群 + Tailscale VPN
+- **网络**: NATS Routes集群
 - **构建**: Vite + Go build
 
 ## 开发记录
@@ -160,7 +156,7 @@ go run examples/cluster_demo.go  # 测试新的单节点设计
 
 #### 重构原因：
 - **设计误区**：原ClusterManager假设一个应用管理多个节点，不符合去中心化场景
-- **实际需求**：每个DChat应用只启动一个本地节点，通过Tailscale连接其他节点
+- **实际需求**：每个DChat应用只启动一个本地节点，通过网络连接其他节点
 - **概念澄清**：去中心化≠集中管理多节点，而是分布式单节点网络
 
 #### 实现内容：
@@ -315,7 +311,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 ### 13. 引导(bootstrap)公共节点可行性评估与初始实现 (2025-08-09 09:20)
 
 #### 目标问题：
-在完全去中心化 & NAT/Tailscale 混合网络中，首次节点如何发现其他对等节点？
+在完全去中心化网络中，首次节点如何发现其他对等节点？
 
 #### 评估方案对比：
 1. 纯 DHT: 需要额外协议与打洞，复杂度高，冷启动慢。
@@ -326,7 +322,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 采取混合式：
 - 启动阶段: 连接 1..N 个 BootstrapServers 获取活动路由视图/对等地址
 - 达到阈值 (BootstrapMinPeers) 后: 可选主动断开公共引导 (DisconnectBootstrap=true)
-- 后续发现: 依赖现有路由传播 + Tailscale/局域广播 (未来扩展空间)
+- 后续发现: 依赖现有路由传播 + 局域广播 (未来扩展空间)
 
 #### 新增配置字段：
 ```jsonc
@@ -348,7 +344,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 2. 监听 $SYS.ACCOUNT.*.CONNECT 事件动态收集对等
 3. 将 TrustedPubKeyPaths 解析为 TrustedKeys 注入 server.Options
 4. 如引入多引导节点：并行连接 + 超时快速失败策略
-5. 增加对 Tailscale IP 映射的过滤/优先级 (内网优先, 公网降级)
+5. 增加对 IP 映射的过滤/优先级 (内网优先, 公网降级)
 
 #### 执行步骤(当前演示)：
 ```bash
@@ -370,7 +366,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 ### 15. chatpeer 公共节点公告与混合拓扑使用步骤 (2025-08-13 10:00)
 
 #### 背景与可行性评估
-- 需求：在无 Tailscale 的公网环境下，提供一个对外可达的"公共节点"作为引导，其他节点（含局域网内节点）通过 Routes 加入。
+- 需求：在公网环境下，提供一个对外可达的"公共节点"作为引导，其他节点（含局域网内节点）通过 Routes 加入。
 - 选择：复用 NATS Cluster.Advertise 暴露"host:port"，无需额外协议，延迟低、实现简单。
 - 现状：chatpeer 已支持 --cluster-advertise 公告和多种子路由输入（逗号/空格/分号分隔）。
 
