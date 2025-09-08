@@ -52,8 +52,16 @@ func (a *App) OnStartup(ctx context.Context) {
 		cfg.Network.LocalIP = "localhost"
 	}
 
-	// 启用Routes集群，使用自动检测的本地IP
-	cfg.EnableRoutes(cfg.Network.LocalIP, DefaultClientPort, DefaultClusterPort, []string{})
+	// 启用Routes集群，使用配置中的端口而不是硬编码
+	clientPort := cfg.Server.ClientPort
+	if clientPort == 0 {
+		clientPort = DefaultClientPort
+	}
+	clusterPort := cfg.Server.ClusterPort
+	if clusterPort == 0 {
+		clusterPort = DefaultClusterPort
+	}
+	cfg.EnableRoutes(cfg.Network.LocalIP, clientPort, clusterPort, []string{})
 
 	// 简化版NATS初始化：无需NSC CLI，直接使用Go库
 	if err := nscsetup.EnsureSimpleSetup(cfg); err != nil {
@@ -80,7 +88,7 @@ func (a *App) OnStartup(ctx context.Context) {
 		return
 	}
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
-		URL:       a.nodeManager.GetClientURL(),
+		URL:       "nats://localhost:4223", // 使用localhost而不是IP
 		Name:      "DChatClient",
 		CredsFile: a.config.Keys.UserCredsPath, // 使用简化密钥系统生成的凭据文件
 	})
@@ -350,7 +358,7 @@ func (a *App) startNATSNode(seedRoutes []string) error {
 	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
 	var nodeConfig *routes.NodeConfig
 
-	nodeConfig = a.nodeManager.CreateNodeConfigWithPermissions(nodeID, DefaultClientPort, DefaultClusterPort, seedRoutes, []string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"}, a.config.Server.EnableTLS)
+	nodeConfig = a.nodeManager.CreateNodeConfigWithPermissions(nodeID, a.config.Server.ClientPort, a.config.Server.ClusterPort, seedRoutes, []string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"}, a.config.Server.EnableTLS)
 
 	// 设置resolver配置路径（如果已生成）
 	if a.config.Server.ResolverConf != "" {
