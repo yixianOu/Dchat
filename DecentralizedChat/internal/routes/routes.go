@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"DecentralizedChat/internal/chat"
@@ -200,6 +201,7 @@ func (nm *NodeManager) prepareMinimalJetStreamOptions(config *NodeConfig) (*serv
 
 		// 集群配置 - JetStream集群必须设置name
 		Cluster: server.ClusterOpts{
+			Host: "0.0.0.0", // 绑定到所有接口
 			Port: config.ClusterPort,
 			Name: "dchat-cluster", // JetStream集群必需的名称
 		},
@@ -209,7 +211,29 @@ func (nm *NodeManager) prepareMinimalJetStreamOptions(config *NodeConfig) (*serv
 		Trace: false, // 减少日志
 	}
 
-	fmt.Printf("🔧 Server will bind to: %s:%d (cluster: %d)\n", opts.Host, opts.Port, config.ClusterPort)
+	// 🎯 关键修复：添加Routes配置以确保集群正常工作
+	if len(config.SeedRoutes) > 0 {
+		fmt.Printf("� Configuring Routes: %v\n", config.SeedRoutes)
+		routeURLs := make([]*url.URL, len(config.SeedRoutes))
+		for i, route := range config.SeedRoutes {
+			// 如果route不包含协议，添加nats://
+			if !strings.Contains(route, "://") {
+				route = "nats://" + route
+			}
+			u, err := url.Parse(route)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse seed route URL %s: %v", route, err)
+			}
+			routeURLs[i] = u
+		}
+		opts.Routes = routeURLs
+		fmt.Printf("✅ Routes configured: %d route(s)\n", len(routeURLs))
+	} else {
+		fmt.Printf("⚠️ No seed routes configured - this node will be isolated until other nodes connect\n")
+	}
+
+	fmt.Printf("�🔧 Server will bind to: %s:%d (cluster: %s:%d)\n",
+		opts.Host, opts.Port, opts.Cluster.Host, config.ClusterPort)
 	return opts, nil
 }
 
