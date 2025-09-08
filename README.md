@@ -626,3 +626,7 @@ go run DecentralizedChat/demo/cluster/cluster_demo.go
 9.  精简 internal/chat/README.md 私聊设计：移除 ack/typing/presence/rekey 多余 subject，统一为 dchat.dm.{cid}.msg，说明直接使用对方公钥 + 自己私钥派生共享密钥加密消息。
 10. 新增 internal/chat/crypto.go：实现 encryptDirect (NaCl box) 与 encryptGroup (AES-256-GCM)；扩展 chat.Service 提供 SetKeyPair/SendDirect/JoinDirect/SendGroup，消息发送前加密，接收后待后续解密集成。
 11. 精简 chat/README.md 密钥策略：群聊去除 rekey/version，KV 仅存储 {sym}；私聊仅使用己私钥+对方公钥派生共享密钥，不做 ratchet 与轮换描述。
+12. 集成 NSC 安全设置：修改 app.go 在 OnStartup 中调用 nscsetup.EnsureSysAccountSetup()，自动配置 SYS 账户、生成 JWT、建立 resolver.conf。
+13. 移除 Wails build tags：删除 main.go 和 app.go 中的 "//go:build desktop" 约束，使用 wails build 官方构建命令完成桌面应用编译。
+14. 修复并验证 Wails 应用：使用 wails build 成功构建 build/bin/DecentralizedChat，应用启动正常，GTK/WebKit 引擎加载完成，NSC 初始化运行（存在密钥解析问题待解决）。
+15. 修复 SSH 连接问题：配置 ~/.ssh/config 使用 ssh.github.com:443 端口绕过网络限制，恢复 git pull 正常工作。
