@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"DecentralizedChat/internal/chat"
@@ -113,15 +112,10 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 		return fmt.Errorf("local node already started: %s", nm.node.ID)
 	}
 
-	// 使用渐进式配置 - 首先尝试最小配置 + JetStream
-	opts, err := nm.prepareMinimalJetStreamOptions(config)
+	opts, err := nm.prepareServerOptions(config)
 	if err != nil {
-		return fmt.Errorf("prepare minimal JetStream options: %w", err)
+		return err
 	}
-
-	fmt.Printf("🔧 Creating NATS server with config...\n")
-	fmt.Printf("   Host: %s, Client: %d, Cluster: %d, JetStream: %v\n",
-		opts.Host, config.ClientPort, config.ClusterPort, opts.JetStream)
 
 	srv, err := server.NewServer(opts)
 	if err != nil {
@@ -129,31 +123,11 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	}
 
 	// Start server
-	fmt.Printf("⏳ Starting NATS server for node %s...\n", config.NodeID)
-
-	// Start server and wait for it to be ready
+	const startTimeout = 5 * time.Second
 	go srv.Start()
-
-	// Use NATS built-in method to wait for readiness with longer timeout for cluster
-	fmt.Printf("⏳ Waiting for server to be ready (JetStream cluster may take longer)...\n")
-	if !srv.ReadyForConnections(30 * time.Second) {
-		// If ReadyForConnections fails, try to get more info
-		if srv.Running() {
-			fmt.Printf("⚠️ Server is running but not ready for connections\n")
-			fmt.Printf("🔧 This is normal for JetStream cluster - connections may work anyway\n")
-			// For cluster mode, we'll proceed anyway as the server is running
-		} else {
-			fmt.Printf("❌ Server failed to start\n")
-			return fmt.Errorf("NATS server not ready for connections")
-		}
+	if !srv.ReadyForConnections(startTimeout) {
+		return fmt.Errorf("node %s start timeout (possible port conflict client:%d cluster:%d)", config.NodeID, config.ClientPort, config.ClusterPort)
 	}
-
-	// Server is ready
-	fmt.Printf("✅ NATS server is ready for connections\n")
-	if addr := srv.Addr(); addr != nil {
-		fmt.Printf("   Listening on: %s\n", addr.String())
-	}
-	fmt.Printf("   JetStream enabled: %v\n", opts.JetStream)
 
 	nm.node = &LocalNode{
 		ID:          config.NodeID,
@@ -170,9 +144,6 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	// Logging (kept same detail)
 	fmt.Printf("✅ Local node started: %s (Client: %s:%d, Cluster: %s:%d)\n",
 		config.NodeID, nm.host, config.ClientPort, nm.host, config.ClusterPort)
-	if opts.JetStream {
-		fmt.Printf("   JetStream: enabled\n")
-	}
 	fmt.Printf("   Node: %s, Import Allow: %v, Export Allow: %v\n",
 		config.NodeID,
 		config.ImportAllow,
@@ -180,95 +151,24 @@ func (nm *NodeManager) StartLocalNodeWithConfig(config *NodeConfig) error {
 	return nil
 }
 
-// prepareMinimalJetStreamOptions 准备最简化的JetStream配置
-func (nm *NodeManager) prepareMinimalJetStreamOptions(config *NodeConfig) (*server.Options, error) {
-	fmt.Printf("✅ Minimal JetStream options prepared\n")
-
-	opts := &server.Options{
-		Host: "0.0.0.0", // 绑定到所有接口
-		Port: config.ClientPort,
-
-		// 最基本的配置
-		ServerName: fmt.Sprintf("dchat-%s", nm.host),
-
-		// 禁用安全性
-		TLS:       false,
-		TLSVerify: false,
-
-		// JetStream配置 - 最小化
-		JetStream: true,
-		StoreDir:  "./jetstream_store",
-
-		// 集群配置 - JetStream集群必须设置name
-		Cluster: server.ClusterOpts{
-			Host: "0.0.0.0", // 绑定到所有接口
-			Port: config.ClusterPort,
-			Name: "dchat-cluster", // JetStream集群必需的名称
-		},
-
-		// 调试配置
-		Debug: true,
-		Trace: false, // 减少日志
-	}
-
-	// 🎯 关键修复：添加Routes配置以确保集群正常工作
-	if len(config.SeedRoutes) > 0 {
-		fmt.Printf("� Configuring Routes: %v\n", config.SeedRoutes)
-		routeURLs := make([]*url.URL, len(config.SeedRoutes))
-		for i, route := range config.SeedRoutes {
-			// 如果route不包含协议，添加nats://
-			if !strings.Contains(route, "://") {
-				route = "nats://" + route
-			}
-			u, err := url.Parse(route)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse seed route URL %s: %v", route, err)
-			}
-			routeURLs[i] = u
-		}
-		opts.Routes = routeURLs
-		fmt.Printf("✅ Routes configured: %d route(s)\n", len(routeURLs))
-	} else {
-		fmt.Printf("⚠️ No seed routes configured - this node will be isolated until other nodes connect\n")
-	}
-
-	fmt.Printf("�🔧 Server will bind to: %s:%d (cluster: %s:%d)\n",
-		opts.Host, opts.Port, opts.Cluster.Host, config.ClusterPort)
-	return opts, nil
-}
-
 // ensureNotStarted returns error if a node is already running.
 // prepareServerOptions orchestrates building server options from config via NodeConfig methods.
 func (nm *NodeManager) prepareServerOptions(config *NodeConfig) (*server.Options, error) {
 	opts := &server.Options{}
-
-	fmt.Printf("🔧 Step 1: Loading resolver config...\n")
 	if err := config.loadResolverConfig(opts); err != nil {
-		return nil, fmt.Errorf("load resolver config: %w", err)
+		return nil, err
 	}
-
-	fmt.Printf("🔧 Step 2: Applying local overrides...\n")
 	config.applyLocalOverrides(opts, nm)
-
-	fmt.Printf("🔧 Step 3: Applying route permissions...\n")
 	config.applyRoutePermissions(opts)
-
-	fmt.Printf("🔧 Step 4: Configuring seed routes...\n")
 	if err := config.configureSeedRoutes(opts); err != nil {
-		return nil, fmt.Errorf("configure seed routes: %w", err)
+		return nil, err
 	}
-
-	fmt.Printf("🔧 Step 5: Applying cluster TLS...\n")
 	// ⭐ 应用简化的集群TLS配置
 	if err := config.applyClusterTLS(opts, nm); err != nil {
 		return nil, fmt.Errorf("apply cluster TLS: %w", err)
 	}
-
-	fmt.Printf("🔧 Step 6: Enabling JetStream...\n")
 	// Enable JetStream for KV / stream features
 	opts.JetStream = true
-
-	fmt.Printf("✅ Server options prepared successfully\n")
 	return opts, nil
 }
 
