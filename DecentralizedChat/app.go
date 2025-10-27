@@ -141,7 +141,6 @@ func (a *App) SetUserInfo(nickname string) error {
 	return nil
 }
 
-// Direct / Group facade wrappers
 func (a *App) AddFriendKey(uid, pubB64 string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")

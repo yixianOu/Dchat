@@ -410,7 +410,3 @@ TODO:
 10. 支持ip自签名,insecure tls
 11. wails集成前端,检查
 12. sqlite持久化,随机请求历史信息
-
-## 操作日志
-
-18. 优化 PROJECT.txt 毕业设计文档：根据 INTERFACE_DOCS.md、README.md、TESTING_GUIDE.md 等现有文档，修正技术描述准确性（嵌入式 NATS Server、JetStream KV 密钥持久化、端口配置 4222/6222、懒加载优化性能等），移除过度夸大表述（如"生产级架构"改为"模块化设计"），补充具体实现细节（加密库、配置路径、测试用例等），确保文档内容与实际代码和技术方案一致。
