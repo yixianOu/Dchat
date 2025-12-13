@@ -1,11 +1,11 @@
-任务接收：给出去中心化（多节点 NATS Routes 集群）下基于 subject 的好友私聊与群聊设计。下面提供可直接实施的命名规范、权限策略、加密与扩展点。
+任务接收：给出去中心化（多节点 NATS Routes 集群，支持链式动态加入）下基于 subject 的好友私聊与群聊设计。下面提供可直接实施的命名规范、权限策略、加密与扩展点。
 
 ## 总体原则
 - 扁平、前缀明确：统一根前缀 dchat.
 - 区分数据面 (messages) 。
 - 订阅粒度最小化：客户端只订阅与自己相关的匹配模式，减少无关流量。
-- 私聊与群聊都可映射到 JetStream（历史 / 重放）。
-- 对称密钥 / 公钥分发继续放 KV（已存在 dchat_friends / dchat_groups）。
+- 私聊与群聊的消息通过 NATS Routes 传递，无需 JetStream。
+- 对称密钥 / 公钥分发存储在本地 SQLite 数据库（dchat_friends / dchat_groups 表）。
 - 全部消息主体加密（应用层），Subject 仅携带最少路由语义，不泄露内容。
 
 ## 标识与ID
@@ -62,18 +62,17 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 { "cid": "{gid}", "sender": "user_A", "ts": 1670000000, "nonce": "base64-12B", "cipher": "base64" }
 ```
 
-### 5. 加密与 KV 配合
-- 私聊：从 KV dchat_friends 获取对方 pub（FriendPubKeyRecord）。使用对方公钥加密发送的消息,使用自己的私钥解密接收的消息.
-- 群聊：KV dchat_groups[groupID] 仅存储 {sym}（32 字节对称密钥 base64），暂不支持 rekey；若需要剔除成员可手动生成新 gid 建新群。
+### 5. 加密与密钥存储
+- 私聊：从本地 SQLite dchat_friends 表获取对方 pub（FriendPubKeyRecord）。使用对方公钥加密发送的消息，使用自己的私钥解密接收的消息。
+- 群聊：从本地 SQLite dchat_groups 表查询 {sym}（32 字节对称密钥 base64），暂不支持 rekey；若需要剔除成员可手动生成新 gid 建新群。
 - 最终精简统一消息体：{cid,sender,ts,nonce,cipher}；算法通过 subject 前缀推断 (dm -> x25519-box, grp -> aes256-gcm)
 
-### 4. JetStream 建议（后续实现）
-| 流                | 绑定 Subjects                          |
-| ----------------- | -------------------------------------- |
-| DCHAT_DM          | dchat.dm.*.msg                         |
-| DCHAT_GRP         | dchat.grp.*.msg                        |
-| DCHAT_META (可选) | dchat.grp.*.meta.patch                 |
-| DCHAT_CTRL (可选) | dchat.grp.*.ctrl.* / dchat.dm.*.ctrl.* |
+### 4. 本地数据库表结构
+| 表名          | 字段                              | 说明                   |
+| ------------- | --------------------------------- | ---------------------- |
+| friends_keys  | uid (PK), pubkey, created_at      | 好友公钥存储          |
+| group_keys    | gid (PK), symkey, created_at      | 群组对称密钥存储       |
+| users         | id (PK), nickname, privkey_path   | 用户配置信息           |
 
 ### 6. 权限（Import/Export 或 Subscribe/Publish 控制）
 最小可行 Allow：
@@ -86,13 +85,13 @@ cid 计算：`cid = hex( SHA256( min(uidA,uidB) + ":" + max(uidA,uidB) ) )[0:16]
 ### 7. 私聊建立流程
 1. 用户选择好友 B（有其 pubKey；否则提示添加）。
 2. 计算 cid（排序 + hash）。
-3. 检查本地是否已有会话；若新建：订阅 dchat.dm.{cid}.msg。
+3. 检查本地 SQLite 是否已有会话记录；若新建：订阅 dchat.dm.{cid}.msg。
 4. 对方若未订阅：收到消息后本地自动补订阅（惰性建立）。
 
 ### 8. 群聊创建 / 加入（精简流程）
-1. 创建者：生成 gid + 随机 32 字节密钥 -> KV dchat_groups[gid] = {sym}
+1. 创建者：生成 gid + 随机 32 字节密钥 -> 存储到本地 SQLite dchat_groups 表中
 2. 分发：将 gid 及密钥安全发送给欲加入成员（点对点加密或线下）。
-3. 成员：从 KV 获取 {sym}，订阅 dchat.grp.{gid}.msg。
+3. 成员：从手动输入或文件导入获取 gid 和密钥，存储到本地 SQLite，订阅 dchat.grp.{gid}.msg。
 
 ### 9. 历史消息（延后）
 初期不做：需要时将 dchat.grp.*.msg 绑定 JetStream 流以支持回放；或实现简单本地缓存分享。

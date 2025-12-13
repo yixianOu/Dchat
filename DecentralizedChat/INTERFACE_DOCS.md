@@ -2,24 +2,24 @@
 
 ## 📋 项目概述
 
-这是一个基于 NATS JetStream 的**企业级去中心化聊天应用**，使用 Wails v2 框架连接 Go 后端和 React 前端，提供端到端加密的实时通信功能。
+这是一个基于 NATS Routes 集群的**企业级去中心化聊天应用**，使用 Wails v2 框架连接 Go 后端和 React 前端，提供端到端加密的实时通信功能。
 
 ### 核心特性
 - 🔒 **端到端加密**: X25519 + XSalsa20-Poly1305 (私聊) / AES-256-GCM (群聊)
-- 🌐 **去中心化网络**: NATS Routes 集群，无中央服务器
+- 🌐 **去中心化网络**: NATS Routes 集群，无中央服务器，支持链式动态加入
 - 🔑 **安全认证**: NSC + JWT 认证机制
-- 💾 **数据持久化**: JetStream KV 存储密钥和配置
+- 💾 **数据持久化**: SQLite 本地存储密钥和配置，支持完全动态链式组网
 - 🚀 **高性能**: 懒加载架构，内存缓存优化
 - 📱 **跨平台**: Wails 框架支持 Windows/macOS/Linux
 
 ## 🏗️ 系统架构
 
 ### 技术栈
-- **后端**: Go 1.21+ + NATS JetStream + Wails v2
+- **后端**: Go 1.21+ + NATS Routes 集群 + Wails v2
 - **前端**: React 18 + TypeScript + Vite
 - **加密**: NaCl (X25519+XSalsa20-Poly1305) + AES-256-GCM
-- **网络**: NATS 发布订阅 + Routes 集群
-- **存储**: JetStream KV (密钥持久化)
+- **网络**: NATS 发布订阅 + Routes 集群（支持动态链式加入）
+- **存储**: SQLite 本地存储（密钥和配置）
 
 ### 模块架构
 ```
@@ -192,9 +192,12 @@ interface NetworkStatus {
 - **安全强度**: **政府级** (FIPS 140-2)
 
 ### 密钥持久化 ⭐ *新功能*
-- **存储**: JetStream KV 桶 (`dchat_friends`, `dchat_groups`)
-- **策略**: 内存缓存 + KV持久化 + 懒加载
-- **恢复**: 应用重启自动恢复密钥状态
+- **存储**: SQLite 本地数据库 (`~/.dchat/keys.db`)
+- **策略**: 本地文件存储 + 内存缓存 + 懒加载
+- **表结构**:
+  - `friends_keys`：存储好友公钥 (uid, pubkey, created_at)
+  - `group_keys`：存储群组密钥 (gid, symkey, created_at)
+- **恢复**: 应用启动自动从 SQLite 加载密钥到内存缓存
 
 ### 身份认证
 - **协议**: NATS NSC + JWT
@@ -299,7 +302,7 @@ wails build -platform linux/amd64
 **核心功能**:
 - ✅ 多重认证 (JWT/.creds/Token/用户密码)
 - ✅ 自动重连和连接管理
-- ✅ JetStream KV存储 (密钥持久化)
+- ✅ SQLite 本地存储（密钥持久化）
 - ✅ 发布订阅 + JSON序列化
 - ✅ 连接统计和健康监控
 
@@ -350,9 +353,9 @@ chat.Service.handleEncrypted()
     ↓
 内存缓存 (立即可用)
     ↓
-JetStream KV持久化 (后台)
+SQLite 本地数据库持久化 (同步写入)
     ↓
-应用重启时懒加载恢复
+应用重启时自动从数据库加载密钥
 ```
 
 ## 🚀 性能和优化
@@ -389,7 +392,7 @@ JetStream KV持久化 (后台)
    - 查看集群健康状态
 
 4. **密钥丢失** ⭐ *已解决*:
-   - 现在密钥自动持久化到JetStream KV
+   - 现在密钥自动持久化到 SQLite 本地数据库
    - 应用重启自动恢复密钥状态
 
 ### 调试方法
@@ -401,7 +404,7 @@ JetStream KV持久化 (后台)
 2. **后端调试**:
    - Go应用日志输出
    - NATS服务器监控
-   - JetStream KV状态检查
+   - SQLite 数据库状态检查
 
 3. **网络调试**:
    - NATS消息流追踪
