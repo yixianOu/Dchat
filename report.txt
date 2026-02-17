@@ -26,7 +26,7 @@
 
 在跨平台应用开发方面，Electron、React Native 等框架已被广泛应用。Wails 框架作为一个新兴的 Go + Web 技术栈方案，具有更小的应用体积和更低的内存占用，正在获得关注。
 
-综合现有研究，本课题将 NATS 分布式消息系统、NaCl 端到端加密、JetStream 持久化存储和 Wails 跨平台框架有机结合，形成一个完整的去中心化加密聊天系统解决方案。
+综合现有研究，本课题将 NATS Routes 分布式消息系统、NaCl 端到端加密、本地 SQLite 持久化存储和 Wails 跨平台框架有机结合，形成一个完整的去中心化加密聊天系统解决方案。
 
 
 二、本课题的理论依据、研究内容和研究方法、步骤及进度安排
@@ -97,47 +97,26 @@
 
 （四）步骤及进度安排
 
-第一阶段：基础框架搭建和加密通信实现（4-5 周）
-  1. 开发环境配置和项目结构搭建
-     - 配置 Go 1.21+ 和 Node.js 开发环境
-     - 搭建 Wails v2 项目框架
-     - 集成 NATS Server 和 JetStream KV
-  2. 实现用户身份和密钥管理
-     - 实现用户配置管理模块
-     - 实现 Curve25519 密钥对生成
-     - 实现 JetStream KV 密钥存储
-  3. 实现端到端加密通信
-     - 实现 NaCl Box 加密解密（私聊）
-     - 实现 AES-256-GCM 加密解密（群聊）
-     - 实现消息主题订阅和发布
+第一阶段：需求分析与架构设计（2025/9/1 - 2025/9/30，4周）
+  1. 完成需求调研和文献阅读
+  2. 完成系统架构设计
 
-第二阶段：去中心化网络和功能完善（4-5 周）
-  1. 配置 NATS Routes 集群
-     - 配置客户端端口（4222）和集群端口（6222）
-     - 实现种子节点连接机制
-     - 测试多节点消息路由
-  2. 实现聊天功能
-     - 实现私聊发送和接收
-     - 实现群聊发送和接收
-     - 实现消息历史显示
-  3. 开发用户界面
-     - 开发聊天界面和会话列表
-     - 实现密钥管理界面
-     - 实现用户设置功能
+第二阶段：核心功能开发（2025/10/1 - 2026/1/31，16周）
+  1. 搭建基础框架（Wails + NATS + SQLite）
+  2. 实现端到端加密通信（私聊、群聊）
+  3. 实现密钥管理和存储
+  4. 配置 NATS Routes 集群
+  5. 实现聊天功能和用户界面
 
-第三阶段：测试、优化和部署（3 周）
+第三阶段：测试与优化（2026/2/1 - 2026/3/31，8周）
   1. 功能测试和调试
-     - 单节点基本功能测试
-     - 多节点通信测试
-     - 加密功能验证
   2. 跨平台编译和测试
-     - Windows 平台测试
-     - Linux 平台测试
-     - macOS 平台兼容性检查
-  3. 性能优化和文档编写
-     - 优化启动速度和消息延迟
-     - 编写 README 和技术文档
-     - 准备答辩材料
+  3. 性能优化
+
+第四阶段：文档编写与答辩准备（2026/4/1 - 2026/4/20，3周）
+  1. 编写项目文档和技术文档
+  2. 准备答辩 PPT 和演示材料
+  3. 最终检查和交付
 
 
 三、本课题的重点、难点，预期结果和成果形式
@@ -151,24 +130,24 @@
    重点是正确实现 NaCl Box 和 AES-256-GCM 加密算法，保证消息的安全性。
 
 3. 密钥管理和持久化
-   重点是设计合理的密钥生成、存储和交换机制，利用 JetStream KV 实现持久化。
+   重点是设计合理的密钥生成、存储和交换机制，利用 SQLite 实现持久化。
 
 4. 跨平台应用开发
    重点是掌握 Wails v2 框架，实现 Go 后端与 React 前端的无缝集成。
 
 （二）本课题的难点
 
-1. SQLite 密钥存储和跨节点访问问题
-   由于采用本地 SQLite 存储，密钥不跨节点共享。需要设计合理的密钥分发和管理机制，确保用户能在不同节点访问自己的密钥。
+1. 跨 NAT 网络通信和链式动态组网
+   NATS Routes 支持链式连接，但在实际网络中大部分节点在 NAT 后的局域网内，无法被直接访问。需要设计合理的公网引导节点 + 局域网客户端混合拓扑，同时保持完全的去中心化特性，确保任意节点故障不影响整体通信。
 
-2. 密钥安全性和易用性的平衡
-   需要在保证密钥安全（私钥文件权限 0600，SQLite 数据库加密）的同时，提供友好的用户界面和操作流程。
+2. 端到端加密和密钥管理
+   在去中心化环境中，私钥和密钥完全由用户本地管理，无法依赖中央服务器。需要设计安全的密钥生成、存储、分发和轮换机制，同时保证易用性，让用户能安全地在 SQLite 本地存储中管理密钥。
 
-3. 加密性能优化
-   需要在保证加密强度的前提下，将消息延迟控制在可接受范围内（< 100ms），优化 SQLite 查询性能。
+3. 去中心化状态一致性
+   在没有中央服务器的情况下，确保用户会话状态、群组信息、消息历史等在去中心化网络中的一致性是困难的。需要通过 NATS 消息路由和本地 SQLite 存储的结合来实现状态管理。
 
-4. 前后端类型安全集成
-   需要通过 Wails 框架实现 TypeScript 和 Go 的类型安全绑定，处理异步调用、数据库查询和错误处理。
+4. 跨平台应用框架集成
+   需要通过 Wails 框架实现 Go 后端与 React 前端的无缝集成，在保证安全性的同时，实现高效的数据绑定和事件处理，特别是在加密、密钥管理等敏感操作中。
 
 （三）预期结果
 
@@ -214,3 +193,16 @@
    - 毕业答辩 PPT
    - 应用功能演示
    - 去中心化网络特性演示（多节点通信、节点容错）
+
+
+参考文献
+
+Bernstein, D. J. (2006). Curve25519: New Diffie-Hellman Speed Records. In International Workshop on Public Key Cryptography (pp. 207-228). Springer, Berlin, Heidelberg.
+Lamport, L. (1998). The Part-Time Parliament. ACM Transactions on Computer Systems (TOCS), 16(2), 133-169.
+Tanenbaum, A. S., & Van Steen, M. (2006). Distributed Systems: Principles and Paradigms (2nd ed.). Prentice Hall.
+Coulouris, G., Dollimore, J., Kindberg, T., & Blair, G. (2011). Distributed Systems: Concepts and Design (5th ed.). Addison-Wesley.
+Kurose, J. F., & Ross, K. W. (2012). Computer Networking (6th ed.). Pearson.
+Menezes, A. J., Van Oorschot, P. C., & Vanstone, S. A. (1996). Handbook of Applied Cryptography. CRC Press.
+Stallings, W. (2016). Cryptography and Network Security: Principles and Practice (6th ed.). Pearson.
+Diffie, W., & Hellman, M. E. (1976). New Directions in Cryptography. IEEE Transactions on Information Theory, 22(6), 644-654.
+Rivest, R. L., Shamir, A., & Adleman, L. (1978). A Method for Obtaining Digital Signatures and Public-Key Cryptosystems. Communications of the ACM, 21(2), 120-126.
