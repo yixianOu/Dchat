@@ -223,27 +223,7 @@ func (n *P2PNode) QueryPeer(peerID string) (*PeerInfo, error) {
 	return &peer, nil
 }
 
-// ListPeers 列出所有在线节点
-func (n *P2PNode) ListPeers() (map[string]*PeerInfo, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/list", signalServerURL))
-	if err != nil {
-		return nil, fmt.Errorf("查询失败: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("服务器错误")
-	}
-
-	var peers map[string]*PeerInfo
-	if err := json.NewDecoder(resp.Body).Decode(&peers); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %v", err)
-	}
-
-	return peers, nil
-}
-
-// HolePunch 执行UDP打洞 (使用协议格式)
+// HolePunch 执行UDP打洞
 func (n *P2PNode) HolePunch(peer *PeerInfo) error {
 	fmt.Printf("\n🎯 开始UDP打洞到 %s\n", peer.NodeID)
 	fmt.Printf("   公网地址: %s\n", peer.PublicAddr)
@@ -253,21 +233,15 @@ func (n *P2PNode) HolePunch(peer *PeerInfo) error {
 	publicAddr, _ := net.ResolveUDPAddr("udp4", peer.PublicAddr)
 	localAddr, _ := net.ResolveUDPAddr("udp4", peer.LocalAddr)
 
-	// 构建打洞消息
-	holePunchMsg := &ProtocolMessage{
-		Type:    MsgTypeHolePunch,
-		Version: 1,
-		Data:    []byte(n.NodeID),
-	}
-	data := holePunchMsg.Encode()
+	holePunchMsg := []byte(fmt.Sprintf("HOLE_PUNCH:%s", n.NodeID))
 
 	// 同时向公网和内网地址发送打洞包
 	for i := 0; i < 10; i++ {
 		if publicAddr != nil {
-			n.conn.WriteToUDP(data, publicAddr)
+			n.conn.WriteToUDP(holePunchMsg, publicAddr)
 		}
 		if localAddr != nil {
-			n.conn.WriteToUDP(data, localAddr)
+			n.conn.WriteToUDP(holePunchMsg, localAddr)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -290,124 +264,34 @@ func (n *P2PNode) StartListening() {
 				return
 			}
 
-			data := buf[:num]
+			data := string(buf[:num])
 			n.handleMessage(addr, data)
 		}
 	}()
 }
 
-// MessageType 消息类型
-type MessageType byte
-
-const (
-	MsgTypeHolePunch MessageType = iota // 打洞消息
-	MsgTypeAck                          // 确认消息
-	MsgTypeData                         // 业务数据
-	MsgTypeHeartbeat                    // 心跳保活
-)
-
-// ProtocolMessage 协议消息格式
-// [1字节类型][1字节版本][2字节长度][N字节数据]
-type ProtocolMessage struct {
-	Type    MessageType
-	Version byte
-	Data    []byte
-}
-
-// Encode 编码消息
-func (m *ProtocolMessage) Encode() []byte {
-	buf := make([]byte, 4+len(m.Data))
-	buf[0] = byte(m.Type)
-	buf[1] = m.Version
-	buf[2] = byte(len(m.Data) >> 8)
-	buf[3] = byte(len(m.Data))
-	copy(buf[4:], m.Data)
-	return buf
-}
-
-// DecodeProtocolMessage 解码消息
-func DecodeProtocolMessage(data []byte) (*ProtocolMessage, error) {
-	if len(data) < 4 {
-		return nil, fmt.Errorf("消息太短")
-	}
-	msgLen := int(data[2])<<8 | int(data[3])
-	if len(data) < 4+msgLen {
-		return nil, fmt.Errorf("消息长度不匹配")
-	}
-	return &ProtocolMessage{
-		Type:    MessageType(data[0]),
-		Version: data[1],
-		Data:    data[4 : 4+msgLen],
-	}, nil
-}
-
-// handleMessage 处理消息 (支持共享端口)
-func (n *P2PNode) handleMessage(addr *net.UDPAddr, data []byte) {
-	// 尝试解析协议消息
-	msg, err := DecodeProtocolMessage(data)
-	if err != nil {
-		// 兼容旧格式：纯文本消息
-		n.handlePlainTextMessage(addr, string(data))
-		return
-	}
-
-	switch msg.Type {
-	case MsgTypeHolePunch:
-		// 打洞消息
-		peerID := string(msg.Data)
-		fmt.Printf("\n📨 收到打洞包 from %s@%s\n", peerID, addr)
-		n.mu.Lock()
-		n.connected = true
-		n.mu.Unlock()
-		// 回复确认
-		reply := &ProtocolMessage{
-			Type:    MsgTypeAck,
-			Version: 1,
-			Data:    []byte(n.NodeID),
-		}
-		n.conn.WriteToUDP(reply.Encode(), addr)
-
-	case MsgTypeAck:
-		// 打洞确认
-		peerID := string(msg.Data)
-		fmt.Printf("\n✅ 打洞确认 from %s@%s\n", peerID, addr)
-		n.mu.Lock()
-		n.connected = true
-		n.mu.Unlock()
-
-	case MsgTypeData:
-		// 业务数据
-		fmt.Printf("\n💬 [%s]: %s\n", addr, string(msg.Data))
-		n.mu.Lock()
-		n.msgCount++
-		n.mu.Unlock()
-
-	case MsgTypeHeartbeat:
-		// 心跳消息，更新连接状态
-		n.mu.Lock()
-		n.connected = true
-		n.mu.Unlock()
-	}
-}
-
-// handlePlainTextMessage 处理纯文本消息 (兼容模式)
-func (n *P2PNode) handlePlainTextMessage(addr *net.UDPAddr, data string) {
-	// 打洞消息 (旧格式)
+// handleMessage 处理消息
+func (n *P2PNode) handleMessage(addr *net.UDPAddr, data string) {
+	// 打洞消息
 	if len(data) > 11 && data[:11] == "HOLE_PUNCH:" {
 		peerID := data[11:]
 		fmt.Printf("\n📨 收到打洞包 from %s@%s\n", peerID, addr)
+
 		n.mu.Lock()
 		n.connected = true
 		n.mu.Unlock()
+
+		// 回复确认
 		reply := []byte(fmt.Sprintf("PUNCH_ACK:%s", n.NodeID))
 		n.conn.WriteToUDP(reply, addr)
 		return
 	}
 
-	// 确认消息 (旧格式)
+	// 确认消息
 	if len(data) > 10 && data[:10] == "PUNCH_ACK:" {
 		peerID := data[10:]
 		fmt.Printf("\n✅ 打洞确认 from %s@%s\n", peerID, addr)
+
 		n.mu.Lock()
 		n.connected = true
 		n.mu.Unlock()
@@ -421,66 +305,20 @@ func (n *P2PNode) handlePlainTextMessage(addr *net.UDPAddr, data string) {
 	n.mu.Unlock()
 }
 
-// SendMessage 发送业务消息 (使用协议格式)
+// SendMessage 发送消息
 func (n *P2PNode) SendMessage(peer *PeerInfo, message string) error {
-	addr, err := n.resolvePeerAddr(peer)
-	if err != nil {
-		return err
-	}
-
-	msg := &ProtocolMessage{
-		Type:    MsgTypeData,
-		Version: 1,
-		Data:    []byte(message),
-	}
-	_, err = n.conn.WriteToUDP(msg.Encode(), addr)
-	return err
-}
-
-// SendHolePunch 发送打洞消息 (使用协议格式)
-func (n *P2PNode) SendHolePunch(peer *PeerInfo) error {
-	addr, err := n.resolvePeerAddr(peer)
-	if err != nil {
-		return err
-	}
-
-	msg := &ProtocolMessage{
-		Type:    MsgTypeHolePunch,
-		Version: 1,
-		Data:    []byte(n.NodeID),
-	}
-	_, err = n.conn.WriteToUDP(msg.Encode(), addr)
-	return err
-}
-
-// SendHeartbeat 发送心跳消息
-func (n *P2PNode) SendHeartbeat(peer *PeerInfo) error {
-	addr, err := n.resolvePeerAddr(peer)
-	if err != nil {
-		return err
-	}
-
-	msg := &ProtocolMessage{
-		Type:    MsgTypeHeartbeat,
-		Version: 1,
-		Data:    []byte{1}, // 简单的心跳数据
-	}
-	_, err = n.conn.WriteToUDP(msg.Encode(), addr)
-	return err
-}
-
-// resolvePeerAddr 解析对等节点地址
-func (n *P2PNode) resolvePeerAddr(peer *PeerInfo) (*net.UDPAddr, error) {
 	// 优先使用公网地址
 	addr, err := net.ResolveUDPAddr("udp4", peer.PublicAddr)
 	if err != nil {
 		// 尝试内网地址
 		addr, err = net.ResolveUDPAddr("udp4", peer.LocalAddr)
 		if err != nil {
-			return nil, fmt.Errorf("无法解析地址: %v", err)
+			return fmt.Errorf("无法解析地址: %v", err)
 		}
 	}
-	return addr, nil
+
+	_, err = n.conn.WriteToUDP([]byte(message), addr)
+	return err
 }
 
 // IsConnected 检查是否已连接
@@ -582,8 +420,6 @@ func main() {
 	// 交互式命令
 	fmt.Println("\n命令:")
 	fmt.Println("  s - 显示状态")
-	fmt.Println("  l - 列出在线节点")
-	fmt.Println("  c <节点ID> - 连接到指定节点")
 	fmt.Println("  m <消息> - 发送消息给对等节点")
 	fmt.Println("  h - 再次打洞")
 	fmt.Println("  q - 退出")
@@ -622,41 +458,16 @@ func main() {
 				fmt.Println("正在退出...")
 				return
 
-			case input == "l":
-				peers, err := node.ListPeers()
-				if err != nil {
-					fmt.Printf("查询失败: %v\n", err)
-				} else {
-					fmt.Println("\n在线节点:")
-					for id, info := range peers {
-						if id != node.NodeID {
-							fmt.Printf("  - %s @ %s (%s)\n", id, info.PublicAddr, info.NATType)
-						}
-					}
-				}
-
-			case len(input) > 2 && input[:2] == "c ":
-				connectToID := input[2:]
-				fmt.Printf("\n正在连接 %s...\n", connectToID)
-				newPeer, err := node.QueryPeer(connectToID)
-				if err != nil {
-					fmt.Printf("连接失败: %v\n", err)
-				} else {
-					peer = newPeer
-					fmt.Printf("找到节点 %s，正在打洞...\n", connectToID)
-					node.HolePunch(peer)
-				}
-
 			case input == "h":
 				if peer != nil {
 					node.HolePunch(peer)
 				} else {
-					fmt.Println("未指定对等节点，使用 c <节点ID> 连接")
+					fmt.Println("未指定对等节点")
 				}
 
 			case len(input) > 2 && input[:2] == "m ":
 				if peer == nil {
-					fmt.Println("未指定对等节点，使用 c <节点ID> 连接")
+					fmt.Println("未指定对等节点")
 					continue
 				}
 				message := input[2:]
