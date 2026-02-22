@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"flag"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -595,11 +597,12 @@ func main() {
 	// 输入处理
 	inputChan := make(chan string)
 	go func() {
-		var input string
+		scanner := bufio.NewScanner(os.Stdin)
 		for {
 			fmt.Print("> ")
-			fmt.Scanln(&input)
-			inputChan <- input
+			if scanner.Scan() {
+				inputChan <- strings.TrimSpace(scanner.Text())
+			}
 		}
 	}()
 

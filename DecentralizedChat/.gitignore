@@ -4,3 +4,4 @@ frontend/dist
 *.md5
 nats-test-minimal
 jetstream_store
+test/dist

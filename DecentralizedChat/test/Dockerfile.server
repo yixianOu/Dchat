@@ -1,18 +1,17 @@
-# 信令服务器 Dockerfile
-# 构建: docker build -f Dockerfile.server -t p2p-signal-server .
-# 运行: docker run -d -p 8080:8080 --name signal-server p2p-signal-server
+# 信令服务器 Dockerfile（使用本地编译好的二进制文件）
+# 
+# 使用方法:
+# 1. 本地编译: make build
+# 2. 运行: docker run -d -p 8080:8080 --name signal-server p2p-signal-server
 
-FROM golang:1.24.4-alpine AS builder
+FROM busybox:latest
 
-WORKDIR /build
-COPY . .
-RUN go build -o signal_server ./cmd/signal_server/main.go
-
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
 WORKDIR /app
-COPY --from=builder /build/signal_server .
+
+# 复制本地编译好的二进制文件
+COPY dist/signal_server .
+
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8080/status || exit 1
+
 ENTRYPOINT ["./signal_server"]
 CMD ["-port", "8080"]

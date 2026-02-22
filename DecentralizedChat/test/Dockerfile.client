@@ -1,26 +1,19 @@
-# P2P节点客户端 Dockerfile（交互式）
-# 构建: docker build -f Dockerfile.client -t p2p-node .
-# 运行: docker run -it --rm --name p2p-node p2p-node
-# 带参数运行: docker run -it --rm p2p-node -node-id Alice -signal-server http://x.x.x.x:8080
+# P2P节点客户端 Dockerfile（使用本地编译好的二进制文件）
+# 
+# 使用方法:
+# 1. 本地编译: make build
+# 2. 运行: docker run -it --rm --name p2p-node p2p-node
+# 3. 容器内执行: /p2p_node -node-id Alice -signal-server http://x.x.x.x:8080
 
-FROM golang:1.24.4-alpine AS builder
+FROM busybox:latest
 
-WORKDIR /build
-COPY . .
-RUN go build -o p2p_node ./cmd/p2p_node/main.go
+WORKDIR /
 
-FROM alpine:latest
-
-# 安装 bash 和常用工具
-RUN apk --no-cache add bash ca-certificates
-
-WORKDIR /app
-
-# 复制二进制文件
-COPY --from=builder /build/p2p_node .
+# 复制本地编译好的二进制文件
+COPY dist/p2p_node .
 
 # 设置交互式环境
 ENV TERM=xterm-256color
 
-# 默认启动 bash，用户可以手动运行 p2p_node
-CMD ["/bin/bash"]
+# 默认启动 sh，用户可以手动运行 p2p_node
+CMD ["/bin/sh"]
