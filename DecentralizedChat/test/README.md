@@ -102,6 +102,22 @@ Bob:   内网=0.0.0.0:10002, 公网=120.239.59.111:2099, NAT=Cone NAT
 - 实际部署需要真实的信令服务器或DHT网络
 - 企业防火墙可能阻止UDP打洞
 
+## Docker 测试注意事项
+
+使用 Docker 进行跨设备测试时，**必须使用 `--network host` 模式**：
+
+```bash
+# 正确：使用 host 网络模式
+docker run -it --rm --network host p2p-node /p2p_node ...
+
+# 错误：使用端口映射（会导致 STUN 端口不一致）
+docker run -it --rm -p 10001:10001/udp p2p-node /p2p_node ...
+```
+
+**原因**：Docker 的端口映射会引入额外的 NAT 层，导致 STUN 获取的公网端口与容器监听端口不一致，UDP 打洞会失败。
+
+详见 [DOCKER_DEPLOY.md](./DOCKER_DEPLOY.md)
+
 ## 扩展方向
 
 1. **TURN中继** - 为Symmetric NAT提供后备方案
