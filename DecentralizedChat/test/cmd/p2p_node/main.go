@@ -28,8 +28,7 @@ import (
 var (
 	signalServerURL = "http://121.199.173.116:8080" // 公网信令服务器
 	stunServers     = []string{
-		"stun.l.google.com:19302",
-		"stun1.l.google.com:19302",
+		"stun.chat.bilibili.com:3478", // B站STUN服务器(国内可用)
 	}
 )
 
@@ -113,17 +112,21 @@ func (n *P2PNode) querySTUN(server string) (*net.UDPAddr, string, error) {
 	request[4], request[5], request[6], request[7] = 0x21, 0x12, 0xA4, 0x42 // Magic Cookie
 
 	// 使用监听连接发送请求（关键！）
-	n.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := n.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return nil, "", fmt.Errorf("设置写入超时失败: %v", err)
+	}
 	if _, err := n.conn.WriteToUDP(request, serverAddr); err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("发送STUN请求失败: %v", err)
 	}
 
 	// 读取响应
 	response := make([]byte, 512)
-	n.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if err := n.conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return nil, "", fmt.Errorf("设置读取超时失败: %v", err)
+	}
 	num, _, err := n.conn.ReadFromUDP(response)
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("读取STUN响应失败: %v", err)
 	}
 
 	// 解析XOR-MAPPED-ADDRESS
@@ -279,18 +282,24 @@ func (n *P2PNode) HolePunch(peer *PeerInfo) error {
 
 	// 同时向公网和内网地址发送打洞包
 	fmt.Printf("   正在发送打洞包...\n")
+	fmt.Printf("   本机地址: %s\n", n.LocalAddr)
+	fmt.Printf("   目标公网: %s, 目标内网: %s\n", publicAddr, localAddr)
+
+	// 清除写超时（UDP 写操作是异步的，不应该设置超时）
+	n.conn.SetWriteDeadline(time.Time{})
+
 	var publicSent, localSent int
 	for i := 0; i < 10; i++ {
 		if publicAddr != nil {
 			if _, err := n.conn.WriteToUDP(data, publicAddr); err != nil {
-				fmt.Printf("   ❌ 发送到公网地址失败 [%d]: %v\n", i, err)
+				fmt.Printf("   ❌ 发送到公网 [%s] 失败 [%d]: %v\n", publicAddr, i, err)
 			} else {
 				publicSent++
 			}
 		}
 		if localAddr != nil {
 			if _, err := n.conn.WriteToUDP(data, localAddr); err != nil {
-				fmt.Printf("   ❌ 发送到内网地址失败 [%d]: %v\n", i, err)
+				fmt.Printf("   ❌ 发送到内网 [%s] 失败 [%d]: %v\n", localAddr, i, err)
 			} else {
 				localSent++
 			}
@@ -298,7 +307,15 @@ func (n *P2PNode) HolePunch(peer *PeerInfo) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	fmt.Printf("   ✅ 打洞包发送完成 (公网:%d, 内网:%d)\n", publicSent, localSent)
+	fmt.Printf("   打洞包发送完成 (公网:%d/10, 内网:%d/10)\n", publicSent, localSent)
+	if publicSent == 0 && localSent == 0 {
+		fmt.Printf("   ❌ 所有打洞包都发送失败，请检查:\n")
+		fmt.Printf("      1. 防火墙是否阻止 UDP 出站\n")
+		fmt.Printf("      2. 路由器是否为 Symmetric NAT\n")
+		fmt.Printf("      3. 是否有运营商级 NAT\n")
+	} else {
+		fmt.Printf("   ✅ 打洞包已发送，等待对方响应...\n")
+	}
 	fmt.Printf("   ⚠️  注意: 打洞成功需要对方也同时向你发送打洞包\n")
 	return nil
 }

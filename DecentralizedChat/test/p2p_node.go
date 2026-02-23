@@ -26,8 +26,7 @@ import (
 var (
 	signalServerURL = "http://121.199.173.116:8080" // 公网信令服务器
 	stunServers     = []string{
-		"stun.l.google.com:19302",
-		"stun1.l.google.com:19302",
+		"stun.chat.bilibili.com:3478", // B站STUN服务器(国内可用)
 	}
 )
 

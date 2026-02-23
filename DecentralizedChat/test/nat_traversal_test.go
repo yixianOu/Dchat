@@ -31,9 +31,9 @@ import (
 // ============================================
 
 const (
-	// STUN服务器列表
-	STUNServer1 = "stun.l.google.com:19302"
-	STUNServer2 = "stun1.l.google.com:19302"
+	// STUN服务器列表 - 使用国内可访问的公共STUN服务器
+	STUNServer1 = "stun.chat.bilibili.com:3478" // B站STUN服务器(国内可用)
+	STUNServer2 = "stun.chat.bilibili.com:3478" // 备用(同一服务器)
 
 	// 测试配置
 	SignalFile       = "/tmp/p2p_signal_exchange.json"

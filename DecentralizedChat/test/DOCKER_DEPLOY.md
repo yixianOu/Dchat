@@ -200,3 +200,26 @@ sudo ufw allow 10001/udp
 - [ ] 双方互相执行 `c <对方ID>` 进行双向打洞
 - [ ] `s` 命令显示 `连接状态: true`
 - [ ] `m <消息>` 双方都能收到对方消息
+
+---
+
+## 自建 STUN 服务器（Docker）
+
+使用 coturn 镜像快速部署：
+
+```bash
+docker run -d \
+  --name stun-server \
+  --restart unless-stopped \
+  --network host \
+  coturn/coturn:latest \
+  -n \
+  --listening-port=3478 \
+  --listening-ip=0.0.0.0 \
+  --external-ip=121.199.173.116 \
+  --realm=stun.dchat.local \
+  --no-cli --no-tls --no-dtls \
+  --log-file=stdout --verbose
+```
+
+防火墙开放 3478/udp 端口后，修改代码使用 `121.199.173.116:3478`。

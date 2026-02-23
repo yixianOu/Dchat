@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  stun-server:
+    image: coturn/coturn:latest
+    container_name: stun-server
+    restart: unless-stopped
+    network_mode: host
+    command: >
+      -n
+      --listening-port=3478
+      --listening-ip=0.0.0.0
+      --external-ip=121.199.173.116
+      --realm=stun.dchat.local
+      --no-cli
+      --no-tls
+      --no-dtls
+      --log-file=stdout
+      --verbose
+    # 如需TURN中继功能，取消下面注释并设置用户名密码
+    # environment:
+    #   - TURN_USERNAME=admin
+    #   - TURN_PASSWORD=your_password
