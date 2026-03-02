@@ -25,8 +25,11 @@ type SimpleSetup struct {
 
 // EnsureSimpleSetup 简化版初始化：直接使用Go NATS库，无需NSC CLI
 func EnsureSimpleSetup(cfg *config.Config) error {
-	if cfg.Server.ResolverConf != "" {
-		return nil // 已初始化
+	// 检查是否已初始化（通过 UserCredsPath 判断）
+	if cfg.Keys.UserCredsPath != "" {
+		if _, err := os.Stat(cfg.Keys.UserCredsPath); err == nil {
+			return nil // 已初始化
+		}
 	}
 
 	confPath, err := config.GetConfigPath()
@@ -94,7 +97,6 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	cfg.Keys.UserCredsPath = credsPath
 	cfg.Keys.UserSeedPath = userSeedPath
 	cfg.Keys.UserPubKey = userPub
-	cfg.Server.ResolverConf = resolverPath
 
 	return config.SaveConfig(cfg)
 }

@@ -13,19 +13,17 @@ import (
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/nscsetup"
-	"DecentralizedChat/internal/routes"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
 type App struct {
-	ctx         context.Context
-	chatSvc     *chat.Service
-	natsSvc     *nats.Service
-	nodeManager *routes.NodeManager
-	config      *config.Config
-	mu          sync.RWMutex
+	ctx     context.Context
+	chatSvc *chat.Service
+	natsSvc *nats.Service
+	config  *config.Config
+	mu      sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -35,11 +33,6 @@ func NewApp() *App {
 
 // OnStartup is called when the app starts. The context is saved
 // so we can call the runtime methods
-const (
-	DefaultClientPort  = 4222
-	DefaultClusterPort = 6222
-)
-
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
 	// 1. 加载配置
@@ -48,20 +41,9 @@ func (a *App) OnStartup(ctx context.Context) {
 		log.Printf("load config failed: %v", err)
 		cfg = &config.Config{}
 	}
-	if cfg.Network.LocalIP == "" {
-		cfg.Network.LocalIP = "localhost"
+	if cfg.LeafNode.LocalHost == "" {
+		cfg.LeafNode.LocalHost = "127.0.0.1"
 	}
-
-	// 启用Routes集群，使用配置中的端口而不是硬编码
-	clientPort := cfg.Server.ClientPort
-	if clientPort == 0 {
-		clientPort = DefaultClientPort
-	}
-	clusterPort := cfg.Server.ClusterPort
-	if clusterPort == 0 {
-		clusterPort = DefaultClusterPort
-	}
-	cfg.EnableRoutes(cfg.Network.LocalIP, clientPort, clusterPort, []string{})
 
 	// 简化版NATS初始化：无需NSC CLI，直接使用Go库
 	if err := nscsetup.EnsureSimpleSetup(cfg); err != nil {
@@ -70,27 +52,12 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.config = cfg
 
-	// ⭐ 预先初始化NodeManager并设置NSC seed用于TLS证书生成
-	a.nodeManager = routes.NewNodeManager("dchat-network", a.config.Network.LocalIP)
-	if a.config.Keys.UserSeedPath != "" {
-		seed, err := a.getNSCUserSeed()
-		if err != nil {
-			log.Printf("failed to load NSC seed for NodeManager: %v", err)
-		} else {
-			a.nodeManager.SetNSCSeed(seed)
-			log.Println("NSC seed loaded for TLS certificate generation")
-		}
-	}
-
-	// ⭐ 启动NATS节点 - 使用统一的启动方法
-	if err := a.startNATSNode([]string{}); err != nil {
-		log.Printf("start NATS node failed: %v", err)
-		return
-	}
+	// TODO: Phase 3-5: 初始化并启动 LeafNode Manager
+	// 目前暂时直接连接本地 NATS（需要手动启动）
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
-		URL:       "nats://localhost:4223", // 使用localhost而不是IP
+		URL:       fmt.Sprintf("nats://%s:%d", cfg.LeafNode.LocalHost, cfg.LeafNode.LocalPort),
 		Name:      "DChatClient",
-		CredsFile: a.config.Keys.UserCredsPath, // 使用简化密钥系统生成的凭据文件
+		CredsFile: a.config.Keys.UserCredsPath,
 	})
 	if err != nil {
 		log.Printf("start nats client failed: %v", err)
@@ -98,12 +65,12 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.chatSvc = chat.NewService(a.natsSvc)
 
-	// ⭐ 设置默认的消息处理器，将解密后的消息推送给前端
+	// 设置默认的消息处理器，将解密后的消息推送给前端
 	a.chatSvc.OnDecrypted(func(msg *chat.DecryptedMessage) {
 		runtime.EventsEmit(a.ctx, "message:decrypted", msg)
 	})
 
-	// ⭐ 设置默认的错误处理器，将错误推送给前端
+	// 设置默认的错误处理器，将错误推送给前端
 	a.chatSvc.OnError(func(err error) {
 		runtime.EventsEmit(a.ctx, "message:error", map[string]interface{}{
 			"error":     err.Error(),
@@ -111,7 +78,7 @@ func (a *App) OnStartup(ctx context.Context) {
 		})
 	})
 
-	// ⭐ 自动加载NSC密钥用于聊天加密
+	// 自动加载NSC密钥用于聊天加密
 	if a.config.Keys.UserSeedPath != "" {
 		seed, err := a.getNSCUserSeed()
 		if err != nil {
@@ -128,7 +95,15 @@ func (a *App) OnStartup(ctx context.Context) {
 	if err := config.SaveConfig(a.config); err != nil {
 		log.Printf("save config warn: %v", err)
 	}
-	log.Println("DChat application started (minimal mode)")
+	log.Println("DChat application started (LeafNode mode - placeholder)")
+}
+
+// OnShutdown is called when the app stops
+func (a *App) OnShutdown(ctx context.Context) {
+	// TODO: Phase 5: Stop LeafNode Manager
+	if a.natsSvc != nil {
+		a.natsSvc.Close()
+	}
 }
 
 // SetUserInfo sets current user metadata
@@ -203,7 +178,7 @@ func (a *App) GetConversationID(peerID string) (string, error) {
 
 // GetNetworkStatus returns current network and cluster status
 func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
-	if a.natsSvc == nil || a.nodeManager == nil {
+	if a.natsSvc == nil {
 		return nil, fmt.Errorf("services not initialized")
 	}
 
@@ -212,23 +187,25 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 	// NATS客户端状态
 	result["nats"] = a.natsSvc.GetStats()
 
-	// 集群节点状态
-	result["cluster"] = a.nodeManager.GetClusterInfo()
+	// TODO: Phase 5: Add LeafNode status
+	result["leafnode"] = map[string]interface{}{
+		"status": "placeholder",
+		"note":   "LeafNode manager not implemented yet",
+	}
 
 	// 配置信息
 	if a.config != nil {
 		result["config"] = map[string]interface{}{
-			"local_ip":     a.config.Network.LocalIP,
-			"client_port":  a.config.Server.ClientPort,
-			"cluster_port": a.config.Server.ClusterPort,
-			"cluster_name": a.config.Server.ClusterName,
+			"local_host": a.config.LeafNode.LocalHost,
+			"local_port": a.config.LeafNode.LocalPort,
+			"hub_urls":   a.config.LeafNode.HubURLs,
 		}
 	}
 
 	return result, nil
 }
 
-// LoadNSCKeys 从NSC seed加载聊天密钥对 ⭐ 新增API
+// LoadNSCKeys 从NSC seed加载聊天密钥对
 func (a *App) LoadNSCKeys(nscSeed string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
@@ -236,7 +213,7 @@ func (a *App) LoadNSCKeys(nscSeed string) error {
 	return a.chatSvc.LoadNSCKeys(nscSeed)
 }
 
-// AddFriendNSCKey 通过NSC公钥添加好友 ⭐ 新增API
+// AddFriendNSCKey 通过NSC公钥添加好友
 func (a *App) AddFriendNSCKey(uid, nscPubKey string) error {
 	if a.chatSvc == nil {
 		return fmt.Errorf("chat service not initialized")
@@ -244,7 +221,7 @@ func (a *App) AddFriendNSCKey(uid, nscPubKey string) error {
 	return a.chatSvc.AddFriendNSCKey(uid, nscPubKey)
 }
 
-// getNSCUserSeed 获取当前用户的NSC seed (从配置中读取) 🔒 内部方法
+// getNSCUserSeed 获取当前用户的NSC seed (从配置中读取)
 func (a *App) getNSCUserSeed() (string, error) {
 	if a.config == nil {
 		return "", fmt.Errorf("config not loaded")
@@ -272,98 +249,4 @@ func (a *App) getNSCUserSeed() (string, error) {
 	}
 
 	return "", fmt.Errorf("NSC user seed path not configured")
-}
-
-// GetNetworkStats aggregates network statistics
-// （权限热重启、网络统计、凭据导出接口已移除，保持核心最小 API）
-
-// ⭐ SSL证书生成功能
-
-// GenerateSSLCertificate 生成自签名SSL证书 ⭐ 使用统一的证书生成
-func (a *App) GenerateSSLCertificate(hosts []string, ipStrings []string, validDays int) (map[string]interface{}, error) {
-	if a.nodeManager == nil {
-		return nil, fmt.Errorf("node manager not initialized")
-	}
-
-	// 直接使用NodeManager的证书生成（已集成NSC密钥系统）
-	certPEM, keyPEM, err := a.nodeManager.GenerateSimpleTLSCert()
-	if err != nil {
-		return nil, fmt.Errorf("generate certificate: %w", err)
-	}
-
-	return map[string]interface{}{
-		"cert_pem":    certPEM,
-		"private_pem": keyPEM,
-		"valid_days":  365, // 固定1年有效期
-		"hosts":       []string{"localhost", "*.local"},
-		"ips":         []string{"127.0.0.1", "::1"},
-	}, nil
-}
-
-// GetAllDerivedKeys 获取所有从NSC派生的密钥对 ⚠️ 调试功能，包含敏感信息
-func (a *App) GetAllDerivedKeys() (map[string]interface{}, error) {
-	if a.chatSvc == nil {
-		return nil, fmt.Errorf("chat service not initialized")
-	}
-
-	// 获取NSC seed
-	seed, err := a.getNSCUserSeed()
-	if err != nil {
-		return nil, fmt.Errorf("get NSC seed: %w", err)
-	}
-
-	// 创建密钥管理器
-	keyManager, err := chat.NewNSCKeyManager(seed)
-	if err != nil {
-		return nil, fmt.Errorf("create key manager: %w", err)
-	}
-
-	// 获取所有派生密钥
-	keys, err := keyManager.GetAllDerivedKeys()
-	if err != nil {
-		return nil, fmt.Errorf("get derived keys: %w", err)
-	}
-
-	// 转换为map[string]interface{}以便前端使用
-	// ⚠️ 注意：此方法返回敏感的私钥信息，仅用于调试
-	result := make(map[string]interface{})
-	for domain, keyPair := range keys {
-		result[string(domain)] = map[string]interface{}{
-			"private_key": "***HIDDEN***", // 🔒 隐藏私钥信息
-			"public_key":  keyPair.PublicKeyB64,
-			"key_type":    keyPair.KeyType,
-			"domain":      string(keyPair.Domain),
-		}
-	}
-
-	return result, nil
-}
-
-// ⭐ startNATSNode 统一的NATS节点启动方法
-func (a *App) startNATSNode(seedRoutes []string) error {
-	// NodeManager应该已经在OnStartup中初始化了
-	if a.nodeManager == nil {
-		return fmt.Errorf("NodeManager not initialized - should be set in OnStartup")
-	}
-
-	// 停止现有节点（如果有的话）
-	if a.nodeManager.IsRunning() {
-		if err := a.nodeManager.StopLocalNode(); err != nil {
-			return fmt.Errorf("stop existing node: %w", err)
-		}
-	}
-
-	// 创建节点配置
-	nodeID := fmt.Sprintf("dchat-%s", a.config.Network.LocalIP)
-	var nodeConfig *routes.NodeConfig
-
-	nodeConfig = a.nodeManager.CreateNodeConfigWithPermissions(nodeID, a.config.Server.ClientPort, a.config.Server.ClusterPort, seedRoutes, []string{"dchat.dm.*.msg", "dchat.grp.*.msg", "_INBOX.*"}, a.config.Server.EnableTLS)
-
-	// 设置resolver配置路径（如果已生成）
-	if a.config.Server.ResolverConf != "" {
-		nodeConfig.ResolverConfigPath = a.config.Server.ResolverConf
-	}
-
-	// 启动节点
-	return a.nodeManager.StartLocalNodeWithConfig(nodeConfig)
 }
