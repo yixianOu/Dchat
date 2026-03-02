@@ -11,6 +11,7 @@ import (
 
 	"DecentralizedChat/internal/chat"
 	"DecentralizedChat/internal/config"
+	"DecentralizedChat/internal/leafnode"
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/nscsetup"
 
@@ -19,11 +20,12 @@ import (
 
 // App struct
 type App struct {
-	ctx     context.Context
-	chatSvc *chat.Service
-	natsSvc *nats.Service
-	config  *config.Config
-	mu      sync.RWMutex
+	ctx         context.Context
+	chatSvc     *chat.Service
+	natsSvc     *nats.Service
+	leafnodeMgr *leafnode.Manager
+	config      *config.Config
+	mu          sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -52,10 +54,29 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.config = cfg
 
-	// TODO: Phase 3-5: 初始化并启动 LeafNode Manager
-	// 目前暂时直接连接本地 NATS（需要手动启动）
+	// 2. 初始化并启动 LeafNode Manager
+	leafnodeCfg := &leafnode.Config{
+		LocalHost:         cfg.LeafNode.LocalHost,
+		LocalPort:         cfg.LeafNode.LocalPort,
+		HubURLs:           cfg.LeafNode.HubURLs,
+		EnableTLS:         cfg.LeafNode.EnableTLS,
+		EnableJetStream:   cfg.LeafNode.EnableJetStream,
+		JetStreamStoreDir: cfg.LeafNode.JetStreamStoreDir,
+		CredsFile:         cfg.Keys.UserCredsPath,
+		ConnectTimeout:    10 * time.Second,
+	}
+	a.leafnodeMgr = leafnode.NewManager(leafnodeCfg)
+
+	log.Println("Starting LeafNode...")
+	if err := a.leafnodeMgr.Start(); err != nil {
+		log.Printf("start leafnode failed: %v", err)
+		return
+	}
+	log.Println("✅ LeafNode started successfully")
+
+	// 3. 创建本地 NATS Client（连接到本地 LeafNode）
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
-		URL:       fmt.Sprintf("nats://%s:%d", cfg.LeafNode.LocalHost, cfg.LeafNode.LocalPort),
+		URL:       a.leafnodeMgr.GetLocalNATSURL(),
 		Name:      "DChatClient",
 		CredsFile: a.config.Keys.UserCredsPath,
 	})
@@ -95,14 +116,16 @@ func (a *App) OnStartup(ctx context.Context) {
 	if err := config.SaveConfig(a.config); err != nil {
 		log.Printf("save config warn: %v", err)
 	}
-	log.Println("DChat application started (LeafNode mode - placeholder)")
+	log.Println("DChat application started (LeafNode mode)")
 }
 
 // OnShutdown is called when the app stops
 func (a *App) OnShutdown(ctx context.Context) {
-	// TODO: Phase 5: Stop LeafNode Manager
 	if a.natsSvc != nil {
 		a.natsSvc.Close()
+	}
+	if a.leafnodeMgr != nil {
+		a.leafnodeMgr.Stop()
 	}
 }
 
@@ -178,7 +201,7 @@ func (a *App) GetConversationID(peerID string) (string, error) {
 
 // GetNetworkStatus returns current network and cluster status
 func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
-	if a.natsSvc == nil {
+	if a.natsSvc == nil || a.leafnodeMgr == nil {
 		return nil, fmt.Errorf("services not initialized")
 	}
 
@@ -187,10 +210,13 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 	// NATS客户端状态
 	result["nats"] = a.natsSvc.GetStats()
 
-	// TODO: Phase 5: Add LeafNode status
+	// LeafNode 状态
 	result["leafnode"] = map[string]interface{}{
-		"status": "placeholder",
-		"note":   "LeafNode manager not implemented yet",
+		"connected":         a.leafnodeMgr.IsRunning(),
+		"hub_urls":          a.config.LeafNode.HubURLs,
+		"connected_hubs":    a.leafnodeMgr.GetConnectedHubCount(),
+		"local_url":         a.leafnodeMgr.GetLocalNATSURL(),
+		"jetstream_enabled": a.config.LeafNode.EnableJetStream,
 	}
 
 	// 配置信息
