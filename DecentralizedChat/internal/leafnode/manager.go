@@ -12,9 +12,10 @@ import (
 
 // Manager LeafNode 管理器
 type Manager struct {
-	config *config.LeafNodeConfig
-	server *server.Server
-	mu     sync.RWMutex
+	config        *config.LeafNodeConfig
+	server        *server.Server
+	mu            sync.RWMutex
+	listenPort    int // 实际监听的端口
 
 	// 连接状态
 	connectedHubCount int
@@ -63,9 +64,8 @@ func (m *Manager) Start() error {
 		return fmt.Errorf("leafnode failed to start within timeout")
 	}
 
-	// 5. TODO: 验证至少连接了一个 Hub
-	// 需要监控 outbound LeafNode 连接
-
+	// 保存实际监听的端口
+	m.listenPort = opts.Port
 	m.server = srv
 	return nil
 }
@@ -90,21 +90,29 @@ func (m *Manager) IsRunning() bool {
 
 // GetLocalNATSURL 获取本地 NATS 连接地址
 func (m *Manager) GetLocalNATSURL() string {
-	return fmt.Sprintf("nats://%s:%d", m.config.LocalHost, m.config.LocalPort)
-}
-
-// GetConnectedHubCount 获取已连接的 Hub 数量
-func (m *Manager) GetConnectedHubCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if m.server == nil {
-		return 0
+	host := m.config.LocalHost
+	if host == "" {
+		host = "127.0.0.1"
 	}
 
-	// TODO: 需要获取 outbound LeafNode 连接数
-	// NumLeafNodes() 返回的是 inbound 连接
-	return m.server.NumLeafNodes()
+	port := m.config.LocalPort
+
+	// 如果保存了实际监听端口，使用它
+	if m.listenPort != 0 {
+		port = m.listenPort
+	}
+
+	return fmt.Sprintf("nats://%s:%d", host, port)
+}
+
+// GetConfig 获取配置（只读）
+func (m *Manager) GetConfig() config.LeafNodeConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return *m.config
 }
 
 // 内部方法
@@ -117,9 +125,17 @@ func (m *Manager) parseHubURLs() ([]*server.RemoteLeafOpts, error) {
 		if err != nil {
 			continue // 跳过无效 URL
 		}
-		remotes = append(remotes, &server.RemoteLeafOpts{
+
+		remoteOpts := &server.RemoteLeafOpts{
 			URLs: []*url.URL{u},
-		})
+		}
+
+		// 如果配置了 CredsFile，添加到远程连接配置
+		if m.config.CredsFile != "" {
+			remoteOpts.Credentials = m.config.CredsFile
+		}
+
+		remotes = append(remotes, remoteOpts)
 	}
 
 	return remotes, nil

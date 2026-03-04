@@ -478,26 +478,20 @@ type Config struct {
 
 ### Phase 2: LeafNode 配置模块（1天）
 
-#### 2.1 创建 leafnode 包
+#### 2.1 配置定义（已合并到 config 包）
+
+**说明**: LeafNode 配置已合并到 `internal/config/config.go` 中，不再有单独的 `leafnode/config.go` 文件。
 
 **目录结构：**
 ```
 internal/leafnode/
-├── config.go    # 配置定义
 └── manager.go   # 管理器
 ```
 
-#### 2.2 配置定义
-
-**文件**: `internal/leafnode/config.go`
-
+**LeafNodeConfig 定义在 `internal/config/config.go`**:
 ```go
-package leafnode
-
-import "time"
-
-// Config LeafNode 配置
-type Config struct {
+// LeafNodeConfig LeafNode 配置
+type LeafNodeConfig struct {
     // 本地监听地址
     LocalHost string
     LocalPort int
@@ -506,34 +500,33 @@ type Config struct {
     // 按优先级排序，先尝试第一个，失败则尝试第二个
     HubURLs []string
 
-    // 认证
+    // 认证（用于连接 Hub）
     CredsFile string
 
     // TLS
     EnableTLS bool
 
-    // SQLite 本地存储
-    SQLitePath string
-
     // 连接超时
     ConnectTimeout time.Duration
 }
 
-// DefaultConfig 默认配置
-func DefaultConfig() *Config {
-    return &Config{
+// DefaultLeafNodeConfig 返回默认的 LeafNode 配置
+func DefaultLeafNodeConfig() *LeafNodeConfig {
+    return &LeafNodeConfig{
         LocalHost: "127.0.0.1",
         LocalPort: 4222,
         HubURLs: []string{
             "nats://hub1.dchat.example.com:7422",
             "nats://hub2.dchat.example.com:7422",
         },
+        CredsFile:      "",
         EnableTLS:      false,
-        SQLitePath:     "", // 默认 ~/.dchat/chat.db
         ConnectTimeout: 10 * time.Second,
     }
 }
 ```
+
+**注意**: `SQLitePath` 是 `Config` 结构体的顶层字段，不属于 `LeafNodeConfig`，因为 LeafNode manager 不使用它。
 
 ---
 
@@ -700,16 +693,18 @@ func (m *Manager) buildServerOptions(remotes []*server.RemoteLeafOpts) *server.O
 - 删除 `ServerOptionsLite` 结构体
 - 删除 `Server` 字段
 - 新增 `LeafNode` 字段
+- 新增 `SQLitePath` 顶层字段（不属于 LeafNodeConfig，因为 LeafNode manager 不使用它）
 
 **新增的 LeafNodeConfig：**
 ```go
 // LeafNodeConfig LeafNode 配置
 type LeafNodeConfig struct {
-    LocalHost  string   `json:"local_host"`
-    LocalPort  int      `json:"local_port"`
-    HubURLs    []string `json:"hub_urls"`
-    EnableTLS  bool     `json:"enable_tls"`
-    SQLitePath string   `json:"sqlite_path"`
+    LocalHost      string        `json:"local_host"`
+    LocalPort      int           `json:"local_port"`
+    HubURLs        []string      `json:"hub_urls"`
+    CredsFile      string        `json:"creds_file"`
+    EnableTLS      bool          `json:"enable_tls"`
+    ConnectTimeout time.Duration `json:"connect_timeout"`
 }
 ```
 
@@ -727,9 +722,11 @@ var defaultConfig = Config{
             "nats://hub1.dchat.example.com:7422",
             "nats://hub2.dchat.example.com:7422",
         },
-        EnableTLS:  false,
-        SQLitePath: "", // 默认 ~/.dchat/chat.db
+        CredsFile:      "",
+        EnableTLS:      false,
+        ConnectTimeout: 10 * time.Second,
     },
+    SQLitePath: "", // 默认 ~/.dchat/chat.db，顶层字段
     Keys: KeysConfig{
         // ... 保持不变
     },

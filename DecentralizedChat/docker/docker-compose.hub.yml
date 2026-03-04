@@ -1,0 +1,22 @@
+# DChat Hub Docker Compose
+# 用于启动启用了 JetStream 的 NATS Hub
+
+version: "3.8"
+
+services:
+  nats-hub:
+    image: nats:latest
+    container_name: dchat-hub
+    restart: unless-stopped
+    ports:
+      - "4222:4222"   # NATS 客户端端口
+      - "7422:7422"   # LeafNode 连接端口
+      - "8222:8222"   # HTTP 监控端口（可选）
+    volumes:
+      - ./hub.conf:/etc/nats/hub.conf:ro
+      - jetstream-data:/var/lib/nats/jetstream
+    command: -c /etc/nats/hub.conf
+
+volumes:
+  jetstream-data:
+    driver: local

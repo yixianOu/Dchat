@@ -4,6 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 每次修改代码都要写e2e集成go test（不需要单元测试）。
 你可以在测试里面直接启动go内嵌nats服务器进行测试。
 如果e2e集成测试失败了，就说明代码逻辑有问题，你要写bug说明文档。
+你要检查你写的e2e集成test是否满足docs/refactor.md的要求，你不能照着代码写测试，你要按照需求写测试，如果测试没通过就要报告代码的问题
 
 ## Project Overview
 

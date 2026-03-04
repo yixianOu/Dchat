@@ -239,12 +239,11 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 
 	// LeafNode 状态
 	result["leafnode"] = map[string]interface{}{
-		"connected":      a.leafnodeMgr.IsRunning(),
-		"hub_urls":       a.config.LeafNode.HubURLs,
-		"connected_hubs": a.leafnodeMgr.GetConnectedHubCount(),
-		"local_url":      a.leafnodeMgr.GetLocalNATSURL(),
-		"sqlite_path":    a.config.SQLitePath,
-		"storage_ready":  a.storage != nil,
+		"connected":     a.leafnodeMgr.IsRunning(),
+		"hub_urls":      a.config.LeafNode.HubURLs,
+		"local_url":     a.leafnodeMgr.GetLocalNATSURL(),
+		"sqlite_path":   a.config.SQLitePath,
+		"storage_ready": a.storage != nil,
 	}
 
 	// 配置信息
