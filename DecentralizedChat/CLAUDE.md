@@ -1,6 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+每次修改代码都要写e2e集成go test（不需要单元测试）
 
 ## Project Overview
 

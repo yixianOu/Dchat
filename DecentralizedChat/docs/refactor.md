@@ -1,5 +1,61 @@
 # LeafNode 架构重构计划
 
+## 重要更新：持久化方案决策（2026-03-04）
+
+经过实际测试验证，我们对持久化方案做出以下调整：
+
+| 层级 | 技术方案 | 说明 |
+|------|----------|------|
+| **本地历史消息** | **SQLite** | 不使用 JetStream，原因见下文 |
+| **Hub 离线消息** | **JetStream** | 继续使用 JetStream |
+| **实时消息** | NATS Core + LeafNode | 不变 |
+
+### 为什么本地不用 JetStream？
+
+**JetStream 的局限性：**
+- ❌ 查询能力有限 - 只能按 subject/sequence 消费
+- ❌ 无法实现聊天应用常用功能：
+  - 按会话查询历史消息
+  - 按时间范围筛选
+  - 全文搜索消息内容
+  - 分页显示
+  - 标记已读/未读状态
+
+**SQLite 的优势：**
+- ✅ 强大的 SQL 查询能力
+- ✅ 支持索引，查询性能好
+- ✅ 成熟稳定，工具丰富
+- ✅ 可以轻松实现聊天应用的所有需求
+
+### 更新后的架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    LeafNode (用户设备)                   │
+│                                                          │
+│  ┌──────────────────┐      ┌───────────────────────┐   │
+│  │  NATS Core       │      │  SQLite (本地历史)    │   │
+│  │  (实时消息)      │─────▶│  - 会话表            │   │
+│  │                 │      │  - 消息表            │   │
+│  └──────────────────┘      │  - 索引: 时间/发送者 │   │
+│              │             └───────────────────────┘   │
+└──────────────┼──────────────────────────────────────────┘
+               │
+         LeafNode 连接
+               │
+┌──────────────▼──────────────────────────────────────────┐
+│                    Hub (公网服务器)                      │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  JetStream (离线消息暂存)                         │  │
+│  │  - Stream: OFFLINE_MSGS                          │  │
+│  │  - TTL: 7天                                       │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 一、为什么用 LeafNode 代替 Routes？
 
 ### 1.1 Routes 架构的问题
@@ -316,50 +372,65 @@ chat.Service.handleEncrypted()
 
 #### 消息持久化流程
 
-**本地历史消息（JetStream Stream）：**
+**本地历史消息（SQLite）：**
 ```
 收到解密后的消息
     │
-    ├─> Step 1: 构造 HistoryMessageRecord
-    │     ├─> cid: 会话 ID
-    │     ├─> sender: 发送者
-    │     ├─> content: 消息内容
-    │     ├─> ts: 时间戳
-    │     └─> is_group: 是否群聊
+    ├─> Step 1: 实时显示在 UI
     │
-    ├─> Step 2: JSON 序列化
-    │
-    ├─> Step 3: 发布到 JetStream Stream
-    │     └─> 主题: "dchat.history.{cid}"
-    │
-    └─> Step 4: Stream 持久化
-          ├─> Storage: FileStorage
-          ├─> Retention: LimitsPolicy
-          ├─> MaxAge: 30 天
-          └─> MaxMsgs: 10 万条
+    └─> Step 2: 异步写入 SQLite
+          ├─> 表: messages
+          ├─> 字段: id, cid, sender_id, sender_nickname,
+          │       content, timestamp, is_read, is_group
+          └─> 索引: (cid, timestamp DESC), (sender_id)
 ```
 
-**查询历史消息：**
+**查询历史消息（SQLite）：**
 ```
 前端请求历史消息
     │
     ↓
-app.GetMessageHistory(cid, limit)
+app.GetMessageHistory(cid, limit, before_ts)
     │
     ↓
-nats.Service.GetMessagesFromHistory(cid, limit)
-    ├─> Step 1: 获取 JetStream Context
-    ├─> Step 2: 创建 OrderedConsumer
-    │     └─> 主题: "dchat.history.{cid}"
-    ├─> Step 3: 按顺序获取消息
-    │     ├─> 从旧到新
-    │     ├─> 最多 limit 条
-    │     └─> 超时: 500ms
-    ├─> Step 4: 反序列化每条消息
-    └─> Step 5: 构造 chat.DecryptedMessage 列表
+chat.Service.GetHistory(cid, limit, before_ts)
+    ├─> Step 1: SQL 查询
+    │     └─> SELECT * FROM messages
+    │            WHERE cid = ? AND timestamp < ?
+    │            ORDER BY timestamp DESC LIMIT ?
+    ├─> Step 2: 扫描行到 Message 结构体
+    └─> Step 3: 反转顺序（从旧到新显示）
     │
     ↓
 返回给前端显示
+```
+
+**SQLite Schema 设计：**
+```sql
+-- 会话表
+CREATE TABLE conversations (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL, -- 'dm' or 'group'
+    last_message_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 消息表
+CREATE TABLE messages (
+    id TEXT PRIMARY KEY,
+    cid TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    sender_nickname TEXT,
+    content TEXT NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    is_read BOOLEAN DEFAULT 0,
+    is_group BOOLEAN DEFAULT 0,
+    FOREIGN KEY (cid) REFERENCES conversations(id)
+);
+
+-- 索引
+CREATE INDEX idx_messages_cid_time ON messages(cid, timestamp DESC);
+CREATE INDEX idx_messages_sender ON messages(sender_id);
 ```
 
 ---
@@ -441,9 +512,8 @@ type Config struct {
     // TLS
     EnableTLS bool
 
-    // JetStream
-    EnableJetStream bool
-    JetStreamStoreDir string
+    // SQLite 本地存储
+    SQLitePath string
 
     // 连接超时
     ConnectTimeout time.Duration
@@ -458,10 +528,9 @@ func DefaultConfig() *Config {
             "nats://hub1.dchat.example.com:7422",
             "nats://hub2.dchat.example.com:7422",
         },
-        EnableTLS:        false,
-        EnableJetStream:   true,
-        JetStreamStoreDir: "",
-        ConnectTimeout:    10 * time.Second,
+        EnableTLS:      false,
+        SQLitePath:     "", // 默认 ~/.dchat/chat.db
+        ConnectTimeout: 10 * time.Second,
     }
 }
 ```
@@ -614,16 +683,7 @@ func (m *Manager) buildServerOptions(remotes []*server.RemoteLeafOpts) *server.O
         NoSigs: true,
     }
 
-    // 启用 JetStream
-    if m.config.EnableJetStream {
-        opts.JetStream = true
-        opts.JetStreamMaxMemory = 256 * 1024 * 1024 // 256MB
-        opts.JetStreamMaxStore = 1 * 1024 * 1024 * 1024 // 1GB
-        if m.config.JetStreamStoreDir != "" {
-            opts.StoreDir = m.config.JetStreamStoreDir
-        }
-    }
-
+    // LeafNode 不需要本地 JetStream（用 SQLite 代替）
     return opts
 }
 ```
@@ -645,12 +705,11 @@ func (m *Manager) buildServerOptions(remotes []*server.RemoteLeafOpts) *server.O
 ```go
 // LeafNodeConfig LeafNode 配置
 type LeafNodeConfig struct {
-    LocalHost         string   `json:"local_host"`
-    LocalPort         int      `json:"local_port"`
-    HubURLs           []string `json:"hub_urls"`
-    EnableTLS         bool     `json:"enable_tls"`
-    EnableJetStream    bool     `json:"enable_jetstream"`
-    JetStreamStoreDir string   `json:"jetstream_store_dir"`
+    LocalHost  string   `json:"local_host"`
+    LocalPort  int      `json:"local_port"`
+    HubURLs    []string `json:"hub_urls"`
+    EnableTLS  bool     `json:"enable_tls"`
+    SQLitePath string   `json:"sqlite_path"`
 }
 ```
 
@@ -668,8 +727,8 @@ var defaultConfig = Config{
             "nats://hub1.dchat.example.com:7422",
             "nats://hub2.dchat.example.com:7422",
         },
-        EnableTLS:      false,
-        EnableJetStream: true,
+        EnableTLS:  false,
+        SQLitePath: "", // 默认 ~/.dchat/chat.db
     },
     Keys: KeysConfig{
         // ... 保持不变
@@ -696,6 +755,7 @@ type App struct {
     chatSvc        *chat.Service
     natsSvc        *nats.Service
     leafnodeMgr    *leafnode.Manager  // 替换 nodeManager
+    storage        *storage.Storage    // 新增：SQLite 本地存储
     config         *config.Config
     mu             sync.RWMutex
 }
@@ -751,16 +811,102 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 
 ---
 
-### Phase 6: 更新 nats/client.go（1天）
+### Phase 6: 创建本地存储模块（2天）
 
-#### 6.1 新增 JetStream Stream 历史消息存储
+#### 6.1 创建 SQLite 本地存储包
+
+**目录结构：**
+```
+internal/
+└── storage/
+    ├── sqlite.go       # SQLite 实现
+    ├── schema.go       # 数据库 schema 和迁移
+    └── types.go        # 数据类型定义
+```
+
+#### 6.2 Schema 和迁移
+
+**文件**: `internal/storage/schema.go`
+
+```go
+package storage
+
+const schema = `
+CREATE TABLE IF NOT EXISTS conversations (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    last_message_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    cid TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    sender_nickname TEXT,
+    content TEXT NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    is_read BOOLEAN DEFAULT 0,
+    is_group BOOLEAN DEFAULT 0,
+    FOREIGN KEY (cid) REFERENCES conversations(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_cid_time ON messages(cid, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+`
+```
+
+#### 6.3 Storage 接口
+
+**文件**: `internal/storage/sqlite.go`
+
+```go
+package storage
+
+import (
+    "database/sql"
+    "time"
+
+    _ "modernc.org/sqlite"
+)
+
+type Storage struct {
+    db *sql.DB
+}
+
+func NewSQLiteStorage(path string) (*Storage, error) {
+    db, err := sql.Open("sqlite", path)
+    if err != nil {
+        return nil, err
+    }
+    // 执行 schema 初始化
+    _, err = db.Exec(schema)
+    if err != nil {
+        return nil, err
+    }
+    return &Storage{db: db}, nil
+}
+
+func (s *Storage) SaveMessage(msg *StoredMessage) error {
+    // INSERT OR REPLACE INTO messages ...
+}
+
+func (s *Storage) GetMessages(cid string, limit int, before *time.Time) ([]*StoredMessage, error) {
+    // SELECT * FROM messages WHERE cid = ? AND timestamp < ? ORDER BY ...
+}
+
+func (s *Storage) MarkAsRead(cid string, before time.Time) error {
+    // UPDATE messages SET is_read = 1 WHERE cid = ? AND timestamp < ?
+}
+```
 
 **详细实现参考：** 见前文"3.4 消息持久化流程"
 
 **关键方法：**
-- `PutMessageToHistory(msg)` - 保存消息到 Stream
-- `GetMessagesFromHistory(cid, limit)` - 从 Stream 查询历史
-- `ensureHistoryStream()` - 确保 Stream 存在
+- `SaveMessage(msg)` - 保存消息到 SQLite
+- `GetMessages(cid, limit, before)` - 查询历史消息
+- `MarkAsRead(cid, before)` - 标记已读
+- `SearchMessages(query)` - 全文搜索
 
 ---
 
@@ -779,10 +925,12 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
   - 测试连接状态
   - 测试多 Hub 配置
 
-- [ ] `internal/nats/client_test.go`
-  - 测试 JetStream Stream 创建
+- [ ] `internal/storage/sqlite_test.go`
+  - 测试数据库初始化
   - 测试消息保存/查询
-  - 测试消息过期
+  - 测试分页查询
+  - 测试标记已读
+  - 测试全文搜索
 
 - [ ] `internal/config/config_test.go`
   - 测试配置加载/保存
@@ -887,10 +1035,10 @@ DecentralizedChat/
 | Phase 3: LeafNode 管理 | 2 天 | Manager 实现和测试 |
 | Phase 4: 配置系统 | 1 天 | 更新 config.go |
 | Phase 5: 重构 app.go | 2 天 | 更新启动流程 |
-| Phase 6: 更新 nats/client.go | 1 天 | JetStream Stream 实现 |
+| Phase 6: SQLite 本地存储 | 2 天 | storage 包实现和测试 |
 | Phase 7: 测试验证 | 2 天 | 单元测试 + 集成测试 |
 | Phase 8: 文档更新 | 1 天 | 更新和新增文档 |
-| **总计** | **10.5 天** | 约 2 周 |
+| **总计** | **11.5 天** | 约 2 周 |
 
 ---
 
@@ -913,9 +1061,41 @@ DecentralizedChat/
 | 多 Hub 支持 | LeafNode 配置多个 Remote Hub，高可用 |
 | Hub 自动切换 | 一个 Hub 故障自动切换到其他 Hub |
 | JetStream (Hub) | 存储暂未被接收的消息（离线消息） |
-| JetStream (本地) | 本地消息历史存储（Stream） + 键值对存储（密钥等） |
-| 历史消息查询 | 支持查询历史消息（JetStream Stream） |
+| SQLite (本地) | 本地消息历史存储，支持灵活查询 |
+| 历史消息查询 | 按会话、时间范围、发送者查询（SQL） |
+| 全文搜索 | 支持搜索消息内容（SQL LIKE） |
+| 已读状态 | 支持标记消息已读/未读 |
 | 无需 NAT 穿透 | LeafNode 主动连接，无需公网 IP |
 | 配置简单 | 用户只需配置 Hub 地址列表 |
 | 移动端友好 | 手机可以正常使用 |
+
+---
+
+## 九、测试验证结果总结
+
+根据 `.vscode/leaf-node/cmd/test-leafnode-jetstream/` 中的实际测试：
+
+### 测试结论
+
+| 测试 | 结果 |
+|------|------|
+| 纯 JetStream 单机 | ✅ 通过 |
+| LeafNode 本地 JetStream | ✅ 通过（功能正常，但查询能力有限） |
+| Hub 端 JetStream | ✅ 通过（适合离线消息暂存） |
+| 完整架构集成 | ✅ 通过 |
+
+### JetStream 启用关键配置
+
+```go
+opts := &server.Options{
+    ServerName: "my-server",   // 必须设置！
+    JetStream: true,             // 必须显式设置为 true！
+    JetStreamMaxMemory: 256 * 1024 * 1024,
+    JetStreamMaxStore: 1 * 1024 * 1024 * 1024,
+    StoreDir: "/path/to/store",
+}
+```
+
+注意：不要设置 Cluster 配置（单机模式），否则 JetStream 可能无法启动。
+
 
