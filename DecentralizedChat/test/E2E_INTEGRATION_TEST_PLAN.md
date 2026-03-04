@@ -1,7 +1,7 @@
 # DecentralizedChat E2E 集成测试计划
 
 **日期**: 2026-03-04
-**更新**: 完成 nscsetup 测试，所有 4 个核心模块测试已完成
+**更新**: 完成 nscsetup 测试，所有 5 个核心模块测试已完成
 
 ---
 
@@ -15,12 +15,13 @@
 
 ---
 
-## 测试范围（4 个核心模块）
+## 测试范围（5 个核心模块）
 
 ### 1. internal/leafnode - LeafNode 管理器
 ### 2. internal/nats - NATS 客户端
 ### 3. internal/nscsetup - NSC 简化设置
 ### 4. internal/storage - SQLite 存储
+### 5. 测试chat消息加密解密
 
 ---
 
