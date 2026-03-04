@@ -5,12 +5,14 @@ import (
 	"net/url"
 	"sync"
 
+	"DecentralizedChat/internal/config"
+
 	"github.com/nats-io/nats-server/v2/server"
 )
 
 // Manager LeafNode 管理器
 type Manager struct {
-	config *Config
+	config *config.LeafNodeConfig
 	server *server.Server
 	mu     sync.RWMutex
 
@@ -20,7 +22,7 @@ type Manager struct {
 }
 
 // NewManager 创建管理器
-func NewManager(cfg *Config) *Manager {
+func NewManager(cfg *config.LeafNodeConfig) *Manager {
 	return &Manager{
 		config: cfg,
 	}

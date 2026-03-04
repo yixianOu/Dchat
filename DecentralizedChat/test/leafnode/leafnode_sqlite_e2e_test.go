@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/leafnode"
 	"DecentralizedChat/internal/storage"
 )
@@ -31,7 +32,7 @@ func TestLeafNode_SQLite_FullArchitecture_E2E(t *testing.T) {
 	// ===== Step 2: 配置 LeafNode =====
 	t.Log("Step 2: 配置 LeafNode...")
 
-	leafnodeCfg := &leafnode.Config{
+	leafnodeCfg := &config.LeafNodeConfig{
 		LocalHost:      testHost,
 		LocalPort:      0, // 随机端口
 		HubURLs:        []string{"nats://localhost:7422"},
@@ -282,7 +283,7 @@ func TestLeafNode_Config_E2E(t *testing.T) {
 	t.Log("")
 
 	// 测试默认配置
-	cfg := leafnode.DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 	if cfg.LocalHost != "127.0.0.1" {
 		t.Errorf("默认 LocalHost = %q, want 127.0.0.1", cfg.LocalHost)
 	}

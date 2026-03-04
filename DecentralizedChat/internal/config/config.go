@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Config struct {
@@ -25,11 +26,13 @@ type UserConfig struct {
 
 // LeafNodeConfig LeafNode 配置
 type LeafNodeConfig struct {
-	LocalHost  string   `json:"local_host"`
-	LocalPort  int      `json:"local_port"`
-	HubURLs    []string `json:"hub_urls"`
-	EnableTLS  bool     `json:"enable_tls"`
-	SQLitePath string   `json:"sqlite_path"`
+	LocalHost      string        `json:"local_host"`
+	LocalPort      int           `json:"local_port"`
+	HubURLs        []string      `json:"hub_urls"`
+	CredsFile      string        `json:"creds_file"`
+	EnableTLS      bool          `json:"enable_tls"`
+	SQLitePath     string        `json:"sqlite_path"`
+	ConnectTimeout time.Duration `json:"connect_timeout"`
 }
 
 type UIConfig struct {
@@ -55,11 +58,13 @@ var defaultConfig = Config{
 		Avatar:   "",
 	},
 	LeafNode: LeafNodeConfig{
-		LocalHost:  "127.0.0.1",
-		LocalPort:  4222,
-		HubURLs:    []string{"nats://hub1.dchat.example.com:7422"},
-		EnableTLS:  false,
-		SQLitePath: "", // 默认 ~/.dchat/chat.db
+		LocalHost:      "127.0.0.1",
+		LocalPort:      4222,
+		HubURLs:        []string{"nats://hub1.dchat.example.com:7422"},
+		CredsFile:      "",
+		EnableTLS:      false,
+		SQLitePath:     "", // 默认 ~/.dchat/chat.db
+		ConnectTimeout: 10 * time.Second,
 	},
 	UI: UIConfig{
 		Theme:    "dark",
@@ -74,6 +79,19 @@ var defaultConfig = Config{
 		Account:       "",
 		User:          "Anonymous", // 默认与user.nickname保持一致
 	},
+}
+
+// DefaultLeafNodeConfig 返回默认的 LeafNode 配置
+func DefaultLeafNodeConfig() *LeafNodeConfig {
+	return &LeafNodeConfig{
+		LocalHost:      "127.0.0.1",
+		LocalPort:      4222,
+		HubURLs:        []string{"nats://hub1.dchat.example.com:7422", "nats://hub2.dchat.example.com:7422"},
+		CredsFile:      "",
+		EnableTLS:      false,
+		SQLitePath:     "",
+		ConnectTimeout: 10 * time.Second,
+	}
 }
 
 func GetConfigPath() (string, error) {

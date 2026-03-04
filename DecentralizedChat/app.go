@@ -58,14 +58,17 @@ func (a *App) OnStartup(ctx context.Context) {
 	a.config = cfg
 
 	// 2. 初始化并启动 LeafNode Manager
-	leafnodeCfg := &leafnode.Config{
+	leafnodeCfg := &config.LeafNodeConfig{
 		LocalHost:      cfg.LeafNode.LocalHost,
 		LocalPort:      cfg.LeafNode.LocalPort,
 		HubURLs:        cfg.LeafNode.HubURLs,
+		CredsFile:      cfg.Keys.UserCredsPath,
 		EnableTLS:      cfg.LeafNode.EnableTLS,
 		SQLitePath:     cfg.LeafNode.SQLitePath,
-		CredsFile:      cfg.Keys.UserCredsPath,
-		ConnectTimeout: 10 * time.Second,
+		ConnectTimeout: cfg.LeafNode.ConnectTimeout,
+	}
+	if leafnodeCfg.ConnectTimeout == 0 {
+		leafnodeCfg.ConnectTimeout = 10 * time.Second
 	}
 	a.leafnodeMgr = leafnode.NewManager(leafnodeCfg)
 

@@ -28,16 +28,15 @@
 
 ```
 test/
-├── e2e/
-│   ├── leafnode/           # internal/leafnode 测试
-│   │   └── leafnode_manager_e2e_test.go
-│   ├── nats/               # internal/nats 测试
-│   │   └── nats_client_e2e_test.go
-│   ├── nscsetup/           # internal/nscsetup 测试
-│   │   └── nscsetup_e2e_test.go
-│   └── storage/            # internal/storage 测试
-│       └── storage_e2e_test.go
-├── bugs/                   # e2e 测试发现的 bug 文档
+├── leafnode/           # internal/leafnode 测试
+│   └── leafnode_sqlite_e2e_test.go
+├── nats/               # internal/nats 测试
+│   └── nats_client_e2e_test.go
+├── nscsetup/           # internal/nscsetup 测试
+│   └── (待写)
+├── storage/            # internal/storage 测试
+│   └── storage_e2e_test.go
+├── bugs/               # e2e 测试发现的 bug 文档
 └── E2E_INTEGRATION_TEST_PLAN.md  # 本文档
 ```
 
@@ -45,25 +44,27 @@ test/
 
 ## 测试模块详情
 
-### 1. internal/leafnode 测试 (`test/e2e/leafnode/`)
+### 1. internal/leafnode 测试 (`test/leafnode/`)
 
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
-| `leafnode_sqlite_e2e_test.go` | LeafNode + SQLite 完整架构 | ✅ 已存在 |
+| `leafnode_sqlite_e2e_test.go` | LeafNode + SQLite 完整架构 | ✅ 已完成 |
 | - | LeafNode Manager 启动/停止 | 待写 |
 | - | 连接 Hub | 待写 |
 | - | 获取本地连接地址 | 待写 |
 | - | 状态检查 | 待写 |
 
-### 2. internal/nats 测试 (`test/e2e/nats/`)
+### 2. internal/nats 测试 (`test/nats/`)
 
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
-| `nats_client_e2e_test.go` | 连接本地 NATS | 待写 |
-| - | 发布/订阅消息 | 待写 |
-| - | 连接断开重连 | 待写 |
+| `nats_client_e2e_test.go` | 连接本地 NATS | ✅ 已完成 |
+| - | 发布/订阅消息 | ✅ 已完成 |
+| - | PublishJSON/SubscribeJSON | ✅ 已完成 |
+| - | 连接状态检查 | ✅ 已完成 |
+| - | 统计获取 | ✅ 已完成 |
 
-### 3. internal/nscsetup 测试 (`test/e2e/nscsetup/`)
+### 3. internal/nscsetup 测试 (`test/nscsetup/`)
 
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
@@ -71,17 +72,17 @@ test/
 | - | 确保密钥生成 | 待写 |
 | - | 配置文件创建 | 待写 |
 
-### 4. internal/storage 测试 (`test/e2e/storage/`)
+### 4. internal/storage 测试 (`test/storage/`)
 
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
-| `storage_e2e_test.go` | SQLite 基本 CRUD | ✅ 已存在 |
-| - | 会话保存/查询 | ✅ 已存在 |
-| - | 消息保存/查询 | ✅ 已存在 |
-| - | 消息顺序验证 | ✅ 已存在 |
-| - | 标记已读 | ✅ 已存在 |
-| - | 搜索功能 | ✅ 已存在 |
-| - | 数据持久化 | ✅ 已存在 |
+| `storage_e2e_test.go` | SQLite 基本 CRUD | ✅ 已完成 |
+| - | 会话保存/查询 | ✅ 已完成 |
+| - | 消息保存/查询 | ✅ 已完成 |
+| - | 消息顺序验证 | ✅ 已完成 |
+| - | 标记已读 | ✅ 已完成 |
+| - | 搜索功能 | ✅ 已完成 |
+| - | 数据持久化 | ✅ 已完成 |
 
 ---
 
@@ -113,18 +114,21 @@ func waitForConnection(t *testing.T, check func() error)
 
 ## 测试实施优先级
 
-### Phase 1: Storage (已完成)
-✅ storage_e2e_test.go 已存在
+### Phase 1: Storage ✅ 已完成
+- ✅ storage_e2e_test.go - 4 个测试全部通过
 
-### Phase 2: LeafNode (进行中)
-✅ leafnode_sqlite_e2e_test.go 已存在
-- LeafNode Manager 基本启动停止测试
+### Phase 2: LeafNode ✅ 已完成
+- ✅ leafnode_sqlite_e2e_test.go - 3 个测试全部通过
 
-### Phase 3: NATS Client
-- NATS Client 连接测试
-- 发布订阅测试
+### Phase 3: NATS Client ✅ 已完成
+- ✅ nats_client_e2e_test.go - 2 个测试全部通过
+- ✅ 连接本地 NATS
+- ✅ 发布/订阅消息
+- ✅ PublishJSON/SubscribeJSON
+- ✅ 连接状态检查
+- ✅ 统计获取
 
-### Phase 4: NSC Setup
+### Phase 4: NSC Setup (待写)
 - 简化 NSC 设置测试
 - 密钥生成测试
 
@@ -133,8 +137,9 @@ func waitForConnection(t *testing.T, check func() error)
 ## 现有测试
 
 已有测试文件：
-- `test/e2e/storage_e2e_test.go` - Storage 模块完整测试
-- `test/e2e/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试
+- `test/storage/storage_e2e_test.go` - Storage 模块完整测试 (✅ 4 个测试通过
+- `test/leafnode/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试 (✅ 3 个测试通过
+- `test/nats/nats_client_e2e_test.go` - NATS 客户端测试 (✅ 2 个测试通过)
 
 ---
 

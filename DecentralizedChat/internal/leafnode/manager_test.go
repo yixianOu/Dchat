@@ -3,12 +3,14 @@ package leafnode
 import (
 	"testing"
 	"time"
+
+	"DecentralizedChat/internal/config"
 )
 
 func TestDefaultConfig(t *testing.T) {
 	t.Log("=== Test: DefaultConfig ===")
 
-	cfg := DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 
 	if cfg.LocalHost != "127.0.0.1" {
 		t.Errorf("Default LocalHost = %q, want %q", cfg.LocalHost, "127.0.0.1")
@@ -26,7 +28,7 @@ func TestDefaultConfig(t *testing.T) {
 func TestNewManager(t *testing.T) {
 	t.Log("=== Test: NewManager ===")
 
-	cfg := DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 	cfg.LocalPort = 0 // Use random port for testing
 
 	mgr := NewManager(cfg)
@@ -46,7 +48,7 @@ func TestNewManager(t *testing.T) {
 func TestManager_StartStop(t *testing.T) {
 	t.Log("=== Test: Manager Start/Stop ===")
 
-	cfg := DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 	cfg.LocalPort = 0     // Random port
 	cfg.HubURLs = []string{} // No hub for local test
 	cfg.ConnectTimeout = 5 * time.Second
@@ -89,7 +91,7 @@ func TestManager_StartStop(t *testing.T) {
 func TestManager_GetConnectedHubCount(t *testing.T) {
 	t.Log("=== Test: GetConnectedHubCount ===")
 
-	cfg := DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 	cfg.LocalPort = 0
 	cfg.HubURLs = []string{}
 
@@ -107,7 +109,7 @@ func TestManager_GetConnectedHubCount(t *testing.T) {
 func TestManager_parseHubURLs(t *testing.T) {
 	t.Log("=== Test: parseHubURLs ===")
 
-	cfg := DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 	cfg.HubURLs = []string{
 		"nats://hub1.example.com:7422",
 		"nats://hub2.example.com:7422",
@@ -132,7 +134,7 @@ func TestManager_parseHubURLs(t *testing.T) {
 func TestManager_buildServerOptions(t *testing.T) {
 	t.Log("=== Test: buildServerOptions ===")
 
-	cfg := DefaultConfig()
+	cfg := config.DefaultLeafNodeConfig()
 	cfg.LocalHost = "127.0.0.1"
 	cfg.LocalPort = 9999
 
