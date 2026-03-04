@@ -1,5 +1,5 @@
 // 验证 LeafNode 模式下 JetStream 的实际可用性
-package main
+package leafnode_avail_test
 
 import (
 	"fmt"
@@ -250,6 +250,3 @@ func TestLeafNodeWithClusterPortJetStream(t *testing.T) {
 	}
 }
 
-func main() {
-	fmt.Println("Run this with: go test -v test_jetstream_availability.go")
-}
