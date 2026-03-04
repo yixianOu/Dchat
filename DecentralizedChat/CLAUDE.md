@@ -1,7 +1,9 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-每次修改代码都要写e2e集成go test（不需要单元测试）
+每次修改代码都要写e2e集成go test（不需要单元测试）。
+你可以在测试里面直接启动go内嵌nats服务器进行测试。
+如果e2e集成测试失败了，就说明代码逻辑有问题，你要写bug说明文档。
 
 ## Project Overview
 
