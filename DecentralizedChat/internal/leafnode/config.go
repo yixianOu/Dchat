@@ -18,9 +18,8 @@ type Config struct {
 	// TLS
 	EnableTLS bool
 
-	// JetStream
-	EnableJetStream   bool
-	JetStreamStoreDir string
+	// SQLite 本地存储路径
+	SQLitePath string
 
 	// 连接超时
 	ConnectTimeout time.Duration
@@ -29,15 +28,14 @@ type Config struct {
 // DefaultConfig 默认配置
 func DefaultConfig() *Config {
 	return &Config{
-		LocalHost: "127.0.0.1",
-		LocalPort: 4222,
+		LocalHost:    "127.0.0.1",
+		LocalPort:    4222,
 		HubURLs: []string{
 			"nats://hub1.dchat.example.com:7422",
 			"nats://hub2.dchat.example.com:7422",
 		},
-		EnableTLS:         false,
-		EnableJetStream:   true,
-		JetStreamStoreDir: "",
-		ConnectTimeout:    10 * time.Second,
+		EnableTLS:      false,
+		SQLitePath:     "",
+		ConnectTimeout: 10 * time.Second,
 	}
 }

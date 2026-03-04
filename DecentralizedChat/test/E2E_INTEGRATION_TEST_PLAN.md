@@ -1,0 +1,155 @@
+# DecentralizedChat E2E 集成测试计划
+
+**日期**: 2026-03-04
+**更新**: 调整测试范围为 4 个核心模块
+
+---
+
+## 概述
+本计划描述了 DecentralizedChat 项目的 e2e 集成测试策略。
+
+根据 CLAUDE.md 的要求：
+- **只写 e2e 集成测试**，不需要单元测试
+- 测试使用内嵌 NATS 服务器
+- 如果 e2e 测试失败说明代码逻辑有问题，需要写 bug 说明文档
+
+---
+
+## 测试范围（4 个核心模块）
+
+### 1. internal/leafnode - LeafNode 管理器
+### 2. internal/nats - NATS 客户端
+### 3. internal/nscsetup - NSC 简化设置
+### 4. internal/storage - SQLite 存储
+
+---
+
+## 目录结构
+
+```
+test/
+├── e2e/
+│   ├── leafnode/           # internal/leafnode 测试
+│   │   └── leafnode_manager_e2e_test.go
+│   ├── nats/               # internal/nats 测试
+│   │   └── nats_client_e2e_test.go
+│   ├── nscsetup/           # internal/nscsetup 测试
+│   │   └── nscsetup_e2e_test.go
+│   └── storage/            # internal/storage 测试
+│       └── storage_e2e_test.go
+├── bugs/                   # e2e 测试发现的 bug 文档
+└── E2E_INTEGRATION_TEST_PLAN.md  # 本文档
+```
+
+---
+
+## 测试模块详情
+
+### 1. internal/leafnode 测试 (`test/e2e/leafnode/`)
+
+| 测试文件 | 测试内容 | 状态 |
+|-----------|---------|------|
+| `leafnode_sqlite_e2e_test.go` | LeafNode + SQLite 完整架构 | ✅ 已存在 |
+| - | LeafNode Manager 启动/停止 | 待写 |
+| - | 连接 Hub | 待写 |
+| - | 获取本地连接地址 | 待写 |
+| - | 状态检查 | 待写 |
+
+### 2. internal/nats 测试 (`test/e2e/nats/`)
+
+| 测试文件 | 测试内容 | 状态 |
+|-----------|---------|------|
+| `nats_client_e2e_test.go` | 连接本地 NATS | 待写 |
+| - | 发布/订阅消息 | 待写 |
+| - | 连接断开重连 | 待写 |
+
+### 3. internal/nscsetup 测试 (`test/e2e/nscsetup/`)
+
+| 测试文件 | 测试内容 | 状态 |
+|-----------|---------|------|
+| `nscsetup_e2e_test.go` | 简化 NSC 设置 | 待写 |
+| - | 确保密钥生成 | 待写 |
+| - | 配置文件创建 | 待写 |
+
+### 4. internal/storage 测试 (`test/e2e/storage/`)
+
+| 测试文件 | 测试内容 | 状态 |
+|-----------|---------|------|
+| `storage_e2e_test.go` | SQLite 基本 CRUD | ✅ 已存在 |
+| - | 会话保存/查询 | ✅ 已存在 |
+| - | 消息保存/查询 | ✅ 已存在 |
+| - | 消息顺序验证 | ✅ 已存在 |
+| - | 标记已读 | ✅ 已存在 |
+| - | 搜索功能 | ✅ 已存在 |
+| - | 数据持久化 | ✅ 已存在 |
+
+---
+
+## 测试工具和约定
+
+### 测试辅助函数
+
+所有测试使用以下约定：
+
+```go
+// 启动内嵌 NATS Hub
+func startTestHub(t *testing.T) (*server.Server, string)
+
+// 启动内嵌 NATS Spoke
+func startTestSpoke(t *testing.T, hubURL string) (*server.Server, string)
+
+// 等待连接就绪
+func waitForConnection(t *testing.T, check func() error)
+```
+
+### 测试命名约定
+
+- 测试函数名格式：`Test<Module>_<Scenario>_E2E`
+- 每个测试独立，不依赖其他测试
+- 使用 `t.TempDir()` 做临时存储
+- 测试结束清理所有资源
+
+---
+
+## 测试实施优先级
+
+### Phase 1: Storage (已完成)
+✅ storage_e2e_test.go 已存在
+
+### Phase 2: LeafNode (进行中)
+✅ leafnode_sqlite_e2e_test.go 已存在
+- LeafNode Manager 基本启动停止测试
+
+### Phase 3: NATS Client
+- NATS Client 连接测试
+- 发布订阅测试
+
+### Phase 4: NSC Setup
+- 简化 NSC 设置测试
+- 密钥生成测试
+
+---
+
+## 现有测试
+
+已有测试文件：
+- `test/e2e/storage_e2e_test.go` - Storage 模块完整测试
+- `test/e2e/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试
+
+---
+
+## Bug 报告
+
+如果 e2e 测试发现 bug，在 `test/bugs/` 目录下写 bug 文档，格式：
+
+```
+test/bugs/BUG_<BUG_ID>.md
+
+内容：
+- 问题描述
+- 复现步骤
+- 测试代码
+- 预期行为
+- 实际行为
+```
+

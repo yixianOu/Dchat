@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"DecentralizedChat/internal/leafnode"
 	"DecentralizedChat/internal/nats"
 	"DecentralizedChat/internal/nscsetup"
+	"DecentralizedChat/internal/storage"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -24,6 +26,7 @@ type App struct {
 	chatSvc     *chat.Service
 	natsSvc     *nats.Service
 	leafnodeMgr *leafnode.Manager
+	storage     *storage.Storage
 	config      *config.Config
 	mu          sync.RWMutex
 }
@@ -56,14 +59,13 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// 2. 初始化并启动 LeafNode Manager
 	leafnodeCfg := &leafnode.Config{
-		LocalHost:         cfg.LeafNode.LocalHost,
-		LocalPort:         cfg.LeafNode.LocalPort,
-		HubURLs:           cfg.LeafNode.HubURLs,
-		EnableTLS:         cfg.LeafNode.EnableTLS,
-		EnableJetStream:   cfg.LeafNode.EnableJetStream,
-		JetStreamStoreDir: cfg.LeafNode.JetStreamStoreDir,
-		CredsFile:         cfg.Keys.UserCredsPath,
-		ConnectTimeout:    10 * time.Second,
+		LocalHost:      cfg.LeafNode.LocalHost,
+		LocalPort:      cfg.LeafNode.LocalPort,
+		HubURLs:        cfg.LeafNode.HubURLs,
+		EnableTLS:      cfg.LeafNode.EnableTLS,
+		SQLitePath:     cfg.LeafNode.SQLitePath,
+		CredsFile:      cfg.Keys.UserCredsPath,
+		ConnectTimeout: 10 * time.Second,
 	}
 	a.leafnodeMgr = leafnode.NewManager(leafnodeCfg)
 
@@ -74,7 +76,27 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	log.Println("✅ LeafNode started successfully")
 
-	// 3. 创建本地 NATS Client（连接到本地 LeafNode）
+	// 3. 初始化 SQLite 本地存储
+	sqlitePath := cfg.LeafNode.SQLitePath
+	if sqlitePath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			sqlitePath = filepath.Join(homeDir, ".dchat", "chat.db")
+		}
+	}
+	if sqlitePath != "" {
+		// 确保目录存在
+		if err := os.MkdirAll(filepath.Dir(sqlitePath), 0755); err == nil {
+			a.storage, err = storage.NewSQLiteStorage(sqlitePath)
+			if err != nil {
+				log.Printf("init storage failed: %v", err)
+			} else {
+				log.Println("✅ SQLite storage initialized")
+			}
+		}
+	}
+
+	// 4. 创建本地 NATS Client（连接到本地 LeafNode）
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
 		URL:       a.leafnodeMgr.GetLocalNATSURL(),
 		Name:      "DChatClient",
@@ -126,6 +148,9 @@ func (a *App) OnShutdown(ctx context.Context) {
 	}
 	if a.leafnodeMgr != nil {
 		a.leafnodeMgr.Stop()
+	}
+	if a.storage != nil {
+		a.storage.Close()
 	}
 }
 
@@ -212,11 +237,12 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 
 	// LeafNode 状态
 	result["leafnode"] = map[string]interface{}{
-		"connected":         a.leafnodeMgr.IsRunning(),
-		"hub_urls":          a.config.LeafNode.HubURLs,
-		"connected_hubs":    a.leafnodeMgr.GetConnectedHubCount(),
-		"local_url":         a.leafnodeMgr.GetLocalNATSURL(),
-		"jetstream_enabled": a.config.LeafNode.EnableJetStream,
+		"connected":      a.leafnodeMgr.IsRunning(),
+		"hub_urls":       a.config.LeafNode.HubURLs,
+		"connected_hubs": a.leafnodeMgr.GetConnectedHubCount(),
+		"local_url":      a.leafnodeMgr.GetLocalNATSURL(),
+		"sqlite_path":    a.config.LeafNode.SQLitePath,
+		"storage_ready":  a.storage != nil,
 	}
 
 	// 配置信息

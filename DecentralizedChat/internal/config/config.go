@@ -25,12 +25,11 @@ type UserConfig struct {
 
 // LeafNodeConfig LeafNode 配置
 type LeafNodeConfig struct {
-	LocalHost         string   `json:"local_host"`
-	LocalPort         int      `json:"local_port"`
-	HubURLs           []string `json:"hub_urls"`
-	EnableTLS         bool     `json:"enable_tls"`
-	EnableJetStream   bool     `json:"enable_jetstream"`
-	JetStreamStoreDir string   `json:"jetstream_store_dir"`
+	LocalHost  string   `json:"local_host"`
+	LocalPort  int      `json:"local_port"`
+	HubURLs    []string `json:"hub_urls"`
+	EnableTLS  bool     `json:"enable_tls"`
+	SQLitePath string   `json:"sqlite_path"`
 }
 
 type UIConfig struct {
@@ -56,11 +55,11 @@ var defaultConfig = Config{
 		Avatar:   "",
 	},
 	LeafNode: LeafNodeConfig{
-		LocalHost:       "127.0.0.1",
-		LocalPort:       4222,
-		HubURLs:         []string{"nats://hub1.dchat.example.com:7422"},
-		EnableTLS:       false,
-		EnableJetStream: true,
+		LocalHost:  "127.0.0.1",
+		LocalPort:  4222,
+		HubURLs:    []string{"nats://hub1.dchat.example.com:7422"},
+		EnableTLS:  false,
+		SQLitePath: "", // 默认 ~/.dchat/chat.db
 	},
 	UI: UIConfig{
 		Theme:    "dark",

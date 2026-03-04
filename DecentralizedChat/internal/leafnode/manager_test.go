@@ -19,9 +19,6 @@ func TestDefaultConfig(t *testing.T) {
 	if len(cfg.HubURLs) == 0 {
 		t.Error("Default HubURLs is empty, want at least one")
 	}
-	if cfg.EnableJetStream != true {
-		t.Error("Default EnableJetStream = false, want true")
-	}
 
 	t.Log("✅ DefaultConfig test passed")
 }
@@ -138,7 +135,6 @@ func TestManager_buildServerOptions(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.LocalHost = "127.0.0.1"
 	cfg.LocalPort = 9999
-	cfg.EnableJetStream = true
 
 	mgr := NewManager(cfg)
 
@@ -153,8 +149,9 @@ func TestManager_buildServerOptions(t *testing.T) {
 	if opts.Port != cfg.LocalPort {
 		t.Errorf("opts.Port = %d, want %d", opts.Port, cfg.LocalPort)
 	}
-	if opts.JetStream != cfg.EnableJetStream {
-		t.Errorf("opts.JetStream = %v, want %v", opts.JetStream, cfg.EnableJetStream)
+	// LeafNode doesn't use JetStream locally (uses SQLite instead)
+	if opts.JetStream != false {
+		t.Errorf("opts.JetStream = %v, want false", opts.JetStream)
 	}
 
 	t.Log("✅ buildServerOptions test passed")
