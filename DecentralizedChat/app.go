@@ -64,7 +64,6 @@ func (a *App) OnStartup(ctx context.Context) {
 		HubURLs:        cfg.LeafNode.HubURLs,
 		CredsFile:      cfg.Keys.UserCredsPath,
 		EnableTLS:      cfg.LeafNode.EnableTLS,
-		SQLitePath:     cfg.LeafNode.SQLitePath,
 		ConnectTimeout: cfg.LeafNode.ConnectTimeout,
 	}
 	if leafnodeCfg.ConnectTimeout == 0 {
@@ -80,7 +79,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	log.Println("✅ LeafNode started successfully")
 
 	// 3. 初始化 SQLite 本地存储
-	sqlitePath := cfg.LeafNode.SQLitePath
+	sqlitePath := cfg.SQLitePath
 	if sqlitePath == "" {
 		homeDir, err := os.UserHomeDir()
 		if err == nil {
@@ -244,7 +243,7 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 		"hub_urls":       a.config.LeafNode.HubURLs,
 		"connected_hubs": a.leafnodeMgr.GetConnectedHubCount(),
 		"local_url":      a.leafnodeMgr.GetLocalNATSURL(),
-		"sqlite_path":    a.config.LeafNode.SQLitePath,
+		"sqlite_path":    a.config.SQLitePath,
 		"storage_ready":  a.storage != nil,
 	}
 

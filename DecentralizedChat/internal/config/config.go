@@ -12,10 +12,11 @@ import (
 )
 
 type Config struct {
-	User     UserConfig     `json:"user"`
-	LeafNode LeafNodeConfig `json:"leafnode"`
-	UI       UIConfig       `json:"ui"`
-	Keys     KeysConfig     `json:"keys"`
+	User       UserConfig     `json:"user"`
+	LeafNode   LeafNodeConfig `json:"leafnode"`
+	SQLitePath string         `json:"sqlite_path"`
+	UI         UIConfig       `json:"ui"`
+	Keys       KeysConfig     `json:"keys"`
 }
 
 type UserConfig struct {
@@ -31,7 +32,6 @@ type LeafNodeConfig struct {
 	HubURLs        []string      `json:"hub_urls"`
 	CredsFile      string        `json:"creds_file"`
 	EnableTLS      bool          `json:"enable_tls"`
-	SQLitePath     string        `json:"sqlite_path"`
 	ConnectTimeout time.Duration `json:"connect_timeout"`
 }
 
@@ -63,9 +63,9 @@ var defaultConfig = Config{
 		HubURLs:        []string{"nats://hub1.dchat.example.com:7422"},
 		CredsFile:      "",
 		EnableTLS:      false,
-		SQLitePath:     "", // 默认 ~/.dchat/chat.db
 		ConnectTimeout: 10 * time.Second,
 	},
+	SQLitePath: "", // 默认 ~/.dchat/chat.db
 	UI: UIConfig{
 		Theme:    "dark",
 		Language: "zh-CN",
@@ -89,12 +89,15 @@ func DefaultLeafNodeConfig() *LeafNodeConfig {
 		HubURLs:        []string{"nats://hub1.dchat.example.com:7422", "nats://hub2.dchat.example.com:7422"},
 		CredsFile:      "",
 		EnableTLS:      false,
-		SQLitePath:     "",
 		ConnectTimeout: 10 * time.Second,
 	}
 }
 
-func GetConfigPath() (string, error) {
+// GetConfigPathFunc 类型用于获取配置路径的函数
+type GetConfigPathFunc func() (string, error)
+
+// DefaultGetConfigPath 默认的获取配置路径函数
+var DefaultGetConfigPath GetConfigPathFunc = func() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -107,6 +110,9 @@ func GetConfigPath() (string, error) {
 
 	return filepath.Join(configDir, "config.json"), nil
 }
+
+// GetConfigPath 获取配置文件路径（可被测试重写）
+var GetConfigPath = DefaultGetConfigPath
 
 func LoadConfig() (*Config, error) {
 	configPath, err := GetConfigPath()

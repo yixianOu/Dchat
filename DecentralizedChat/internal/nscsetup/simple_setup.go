@@ -14,13 +14,13 @@ import (
 
 // SimpleSetup 简化版NATS设置，无需NSC CLI
 type SimpleSetup struct {
-	operatorKey nkeys.KeyPair
-	accountKey  nkeys.KeyPair
-	userKey     nkeys.KeyPair
+	OperatorKey nkeys.KeyPair
+	AccountKey  nkeys.KeyPair
+	UserKey     nkeys.KeyPair
 
-	operatorJWT string
-	accountJWT  string
-	userJWT     string
+	OperatorJWT string
+	AccountJWT  string
+	UserJWT     string
 }
 
 // EnsureSimpleSetup 简化版初始化：直接使用Go NATS库，无需NSC CLI
@@ -51,36 +51,36 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 
 	// 1. 生成或加载密钥对
 	setup := &SimpleSetup{}
-	if err := setup.ensureKeys(confDir); err != nil {
+	if err := setup.EnsureKeys(confDir); err != nil {
 		return fmt.Errorf("ensure keys: %w", err)
 	}
 
 	// 2. 生成JWT链
-	if err := setup.generateJWTs(cfg); err != nil {
+	if err := setup.GenerateJWTs(cfg); err != nil {
 		return fmt.Errorf("generate JWTs: %w", err)
 	}
 
 	// 3. 生成resolver配置
 	resolverPath := filepath.Join(confDir, "simple_resolver.conf")
-	if err := setup.generateResolverConfig(resolverPath); err != nil {
+	if err := setup.GenerateResolverConfig(resolverPath); err != nil {
 		return fmt.Errorf("generate resolver config: %w", err)
 	}
 
 	// 4. 生成creds文件
 	credsPath := filepath.Join(confDir, "user.creds")
-	if err := setup.generateCreds(credsPath); err != nil {
+	if err := setup.GenerateCreds(credsPath); err != nil {
 		return fmt.Errorf("generate creds: %w", err)
 	}
 
 	// 5. 保存用户seed
 	userSeedPath := filepath.Join(confDir, "user.seed")
-	userSeed, _ := setup.userKey.Seed()
+	userSeed, _ := setup.UserKey.Seed()
 	if err := os.WriteFile(userSeedPath, userSeed, 0600); err != nil {
 		return fmt.Errorf("save user seed: %w", err)
 	}
 
 	// 6. 更新配置
-	userPub, _ := setup.userKey.PublicKey()
+	userPub, _ := setup.UserKey.PublicKey()
 
 	// 设置默认值（如果配置为空）
 	if cfg.Keys.Operator == "" {
@@ -101,27 +101,27 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	return config.SaveConfig(cfg)
 }
 
-// ensureKeys 生成或加载密钥对
-func (s *SimpleSetup) ensureKeys(confDir string) error {
+// EnsureKeys 生成或加载密钥对
+func (s *SimpleSetup) EnsureKeys(confDir string) error {
 	var err error
 
 	// 操作者密钥
 	operatorKeyFile := filepath.Join(confDir, "operator.nk")
-	s.operatorKey, err = loadOrGenerateOperatorKey(operatorKeyFile)
+	s.OperatorKey, err = LoadOrGenerateOperatorKey(operatorKeyFile)
 	if err != nil {
 		return fmt.Errorf("operator key: %w", err)
 	}
 
 	// 账户密钥
 	accountKeyFile := filepath.Join(confDir, "account.nk")
-	s.accountKey, err = loadOrGenerateAccountKey(accountKeyFile)
+	s.AccountKey, err = LoadOrGenerateAccountKey(accountKeyFile)
 	if err != nil {
 		return fmt.Errorf("account key: %w", err)
 	}
 
 	// 用户密钥
 	userKeyFile := filepath.Join(confDir, "user.nk")
-	s.userKey, err = loadOrGenerateUserKey(userKeyFile)
+	s.UserKey, err = LoadOrGenerateUserKey(userKeyFile)
 	if err != nil {
 		return fmt.Errorf("user key: %w", err)
 	}
@@ -129,25 +129,25 @@ func (s *SimpleSetup) ensureKeys(confDir string) error {
 	return nil
 }
 
-// generateJWTs 生成JWT链
-func (s *SimpleSetup) generateJWTs(cfg *config.Config) error {
+// GenerateJWTs 生成JWT链
+func (s *SimpleSetup) GenerateJWTs(cfg *config.Config) error {
 	now := time.Now()
 
 	// 1. 操作者JWT
-	operatorPub, _ := s.operatorKey.PublicKey()
+	operatorPub, _ := s.OperatorKey.PublicKey()
 	operatorClaims := jwt.NewOperatorClaims(operatorPub)
 	operatorClaims.Name = cfg.Keys.Operator // 使用配置中的值
 	operatorClaims.IssuedAt = now.Unix()
 
 	// 设置系统账户
-	accountPub, _ := s.accountKey.PublicKey()
+	accountPub, _ := s.AccountKey.PublicKey()
 	operatorClaims.SystemAccount = accountPub
 
-	operatorJWT, err := operatorClaims.Encode(s.operatorKey)
+	operatorJWT, err := operatorClaims.Encode(s.OperatorKey)
 	if err != nil {
 		return fmt.Errorf("encode operator JWT: %w", err)
 	}
-	s.operatorJWT = operatorJWT
+	s.OperatorJWT = operatorJWT
 
 	// 2. 账户JWT
 	accountClaims := jwt.NewAccountClaims(accountPub)
@@ -159,14 +159,14 @@ func (s *SimpleSetup) generateJWTs(cfg *config.Config) error {
 	accountClaims.Limits.Conn = -1 // 无限连接
 	accountClaims.Limits.Subs = -1 // 无限订阅
 
-	accountJWT, err := accountClaims.Encode(s.operatorKey)
+	accountJWT, err := accountClaims.Encode(s.OperatorKey)
 	if err != nil {
 		return fmt.Errorf("encode account JWT: %w", err)
 	}
-	s.accountJWT = accountJWT
+	s.AccountJWT = accountJWT
 
 	// 3. 用户JWT
-	userPub, _ := s.userKey.PublicKey()
+	userPub, _ := s.UserKey.PublicKey()
 	userClaims := jwt.NewUserClaims(userPub)
 	userClaims.Name = cfg.Keys.User // 使用配置中的值
 	userClaims.IssuedAt = now.Unix()
@@ -177,18 +177,18 @@ func (s *SimpleSetup) generateJWTs(cfg *config.Config) error {
 	userClaims.Pub.Allow = []string{subjectPrefix, "_INBOX.>"}
 	userClaims.Sub.Allow = []string{subjectPrefix, "_INBOX.>"}
 
-	userJWT, err := userClaims.Encode(s.accountKey)
+	userJWT, err := userClaims.Encode(s.AccountKey)
 	if err != nil {
 		return fmt.Errorf("encode user JWT: %w", err)
 	}
-	s.userJWT = userJWT
+	s.UserJWT = userJWT
 
 	return nil
 }
 
-// generateResolverConfig 生成NATS配置文件，指向accounts目录
-func (s *SimpleSetup) generateResolverConfig(resolverPath string) error {
-	accountPub, _ := s.accountKey.PublicKey()
+// GenerateResolverConfig 生成NATS配置文件，指向accounts目录
+func (s *SimpleSetup) GenerateResolverConfig(resolverPath string) error {
+	accountPub, _ := s.AccountKey.PublicKey()
 
 	// 创建accounts目录
 	confDir := filepath.Dir(resolverPath)
@@ -199,7 +199,7 @@ func (s *SimpleSetup) generateResolverConfig(resolverPath string) error {
 
 	// 写入账户JWT文件
 	accountFile := filepath.Join(accountsDir, accountPub+".jwt")
-	if err := os.WriteFile(accountFile, []byte(s.accountJWT), 0644); err != nil {
+	if err := os.WriteFile(accountFile, []byte(s.AccountJWT), 0644); err != nil {
 		return fmt.Errorf("write account JWT: %w", err)
 	}
 
@@ -215,14 +215,14 @@ system_account: %q
 
 # JWT-based authentication
 operator: %q
-`, accountsDir, accountPub, s.operatorJWT)
+`, accountsDir, accountPub, s.OperatorJWT)
 
 	return os.WriteFile(resolverPath, []byte(natsConfig), 0644)
 }
 
-// generateCreds 生成creds文件
-func (s *SimpleSetup) generateCreds(credsPath string) error {
-	userSeed, _ := s.userKey.Seed()
+// GenerateCreds 生成creds文件
+func (s *SimpleSetup) GenerateCreds(credsPath string) error {
+	userSeed, _ := s.UserKey.Seed()
 
 	creds := fmt.Sprintf(`-----BEGIN NATS USER JWT-----
 %s
@@ -237,13 +237,13 @@ NKEYs are sensitive and should be treated as secrets.
 ------END USER NKEY SEED------
 
 *************************************************************
-`, s.userJWT, string(userSeed))
+`, s.UserJWT, string(userSeed))
 
 	return os.WriteFile(credsPath, []byte(creds), 0600)
 }
 
 // 密钥生成辅助函数
-func loadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
+func LoadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
 	if data, err := os.ReadFile(filename); err == nil {
 		if key, err := nkeys.FromSeed(data); err == nil {
 			return key, nil
@@ -267,7 +267,7 @@ func loadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
 	return key, nil
 }
 
-func loadOrGenerateAccountKey(filename string) (nkeys.KeyPair, error) {
+func LoadOrGenerateAccountKey(filename string) (nkeys.KeyPair, error) {
 	if data, err := os.ReadFile(filename); err == nil {
 		if key, err := nkeys.FromSeed(data); err == nil {
 			return key, nil
@@ -291,7 +291,7 @@ func loadOrGenerateAccountKey(filename string) (nkeys.KeyPair, error) {
 	return key, nil
 }
 
-func loadOrGenerateUserKey(filename string) (nkeys.KeyPair, error) {
+func LoadOrGenerateUserKey(filename string) (nkeys.KeyPair, error) {
 	if data, err := os.ReadFile(filename); err == nil {
 		if key, err := nkeys.FromSeed(data); err == nil {
 			return key, nil

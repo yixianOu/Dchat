@@ -1,7 +1,7 @@
 # DecentralizedChat E2E 集成测试计划
 
 **日期**: 2026-03-04
-**更新**: 调整测试范围为 4 个核心模块
+**更新**: 完成 nscsetup 测试，所有 4 个核心模块测试已完成
 
 ---
 
@@ -33,7 +33,7 @@ test/
 ├── nats/               # internal/nats 测试
 │   └── nats_client_e2e_test.go
 ├── nscsetup/           # internal/nscsetup 测试
-│   └── (待写)
+│   └── nscsetup_e2e_test.go
 ├── storage/            # internal/storage 测试
 │   └── storage_e2e_test.go
 ├── bugs/               # e2e 测试发现的 bug 文档
@@ -68,9 +68,10 @@ test/
 
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
-| `nscsetup_e2e_test.go` | 简化 NSC 设置 | 待写 |
-| - | 确保密钥生成 | 待写 |
-| - | 配置文件创建 | 待写 |
+| `nscsetup_e2e_test.go` | 简化 NSC 设置 | ✅ 已完成 |
+| - | 确保密钥生成 | ✅ 已完成 |
+| - | 配置文件创建 | ✅ 已完成 |
+| - | JWT 生成验证 | ✅ 已完成 |
 
 ### 4. internal/storage 测试 (`test/storage/`)
 
@@ -128,18 +129,21 @@ func waitForConnection(t *testing.T, check func() error)
 - ✅ 连接状态检查
 - ✅ 统计获取
 
-### Phase 4: NSC Setup (待写)
-- 简化 NSC 设置测试
-- 密钥生成测试
+### Phase 4: NSC Setup ✅ 已完成
+- ✅ nscsetup_e2e_test.go - 3 个测试全部通过
+- ✅ 简化 NSC 设置测试
+- ✅ 密钥生成测试
+- ✅ JWT 生成验证
 
 ---
 
 ## 现有测试
 
 已有测试文件：
-- `test/storage/storage_e2e_test.go` - Storage 模块完整测试 (✅ 4 个测试通过
-- `test/leafnode/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试 (✅ 3 个测试通过
+- `test/storage/storage_e2e_test.go` - Storage 模块完整测试 (✅ 4 个测试通过)
+- `test/leafnode/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试 (✅ 3 个测试通过)
 - `test/nats/nats_client_e2e_test.go` - NATS 客户端测试 (✅ 2 个测试通过)
+- `test/nscsetup/nscsetup_e2e_test.go` - NSC 简化设置测试 (✅ 3 个测试通过)
 
 ---
 

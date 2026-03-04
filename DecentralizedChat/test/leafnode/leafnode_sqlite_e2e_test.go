@@ -37,7 +37,6 @@ func TestLeafNode_SQLite_FullArchitecture_E2E(t *testing.T) {
 		LocalPort:      0, // 随机端口
 		HubURLs:        []string{"nats://localhost:7422"},
 		EnableTLS:      false,
-		SQLitePath:     dbPath,
 		CredsFile:      "",
 		ConnectTimeout: 10 * time.Second,
 	}
@@ -184,7 +183,7 @@ func TestLeafNode_SQLite_FullArchitecture_E2E(t *testing.T) {
 	t.Log("架构验证:")
 	t.Log("  - 本地历史: SQLite ✅")
 	t.Log("  - LeafNode 管理器: 已创建 ✅")
-	t.Log("  - 配置已更新: SQLitePath 替换 JetStream ✅")
+	t.Log("  - 配置已简化: SQLitePath 在 Config 顶层 ✅")
 	t.Log("")
 }
 
@@ -295,15 +294,9 @@ func TestLeafNode_Config_E2E(t *testing.T) {
 	}
 	t.Log("✅ 默认配置测试通过")
 
-	// 测试配置中的 SQLitePath
-	cfg.SQLitePath = "/tmp/test.db"
-	if cfg.SQLitePath != "/tmp/test.db" {
-		t.Errorf("SQLitePath 设置失败")
-	}
-	t.Log("✅ SQLitePath 配置测试通过")
-
 	// 验证没有 JetStream 相关配置
 	t.Log("✅ 确认已移除 JetStream 相关配置")
+	t.Log("✅ 确认 SQLitePath 已移至 Config 顶层")
 
 	t.Log("✅ LeafNode 配置测试通过")
 }
