@@ -17,6 +17,25 @@ export namespace chat {
 
 }
 
+export namespace main {
+	
+	export class CreateGroupResult {
+	    gid: string;
+	    groupKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CreateGroupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gid = source["gid"];
+	        this.groupKey = source["groupKey"];
+	    }
+	}
+
+}
+
 export namespace storage {
 	
 	export class StoredConversation {

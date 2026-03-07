@@ -70,17 +70,14 @@ async function startDirectChat() {
 
 async function joinGroupChat() {
   try {
-    // 1. 添加群组对称密钥
+    // 1. 加入群组（新API：只需传入群ID和密钥，自动存储）
     const groupId = 'group_abcdef';
     const groupSymmetricKey = 'base64EncodedGroupSymmetricKey';
-    await addGroupKey(groupId, groupSymmetricKey);
-    
-    // 2. 加入群组
-    await joinGroup(groupId);
-    
-    // 3. 发送群组消息
+    await joinGroup(groupId, groupSymmetricKey);
+
+    // 2. 发送群组消息
     await sendGroup(groupId, 'Hello everyone!');
-    
+
     console.log('群聊已加入');
   } catch (error) {
     console.error('群聊加入失败:', error);
