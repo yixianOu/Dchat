@@ -119,14 +119,6 @@ JetStream 用于暂存离线消息，配置说明：
 - `max_memory_store`: 内存存储限制（字节）
 - `max_file_store`: 文件存储限制（字节）
 
-### 生产环境建议
-
-1. **启用认证**: 生产环境应使用 NATS 账户系统认证
-2. **启用 TLS**: 生产环境应启用 TLS 加密
-3. **数据持久化**: 确保 `store_dir` 有足够的磁盘空间
-4. **高可用**: 部署多个 Hub 并配置集群
-5. **Systemd 服务**: 使用 systemd 管理 NATS Server 进程
-
 ## Systemd 服务配置（推荐）
 
 创建 `/etc/systemd/system/dchat-hub.service`：

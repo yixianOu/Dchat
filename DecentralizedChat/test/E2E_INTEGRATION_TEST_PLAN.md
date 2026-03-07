@@ -50,10 +50,10 @@ test/
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
 | `leafnode_sqlite_e2e_test.go` | LeafNode + SQLite 完整架构 | ✅ 已完成 |
-| - | LeafNode Manager 启动/停止 | 待写 |
-| - | 连接 Hub | 待写 |
-| - | 获取本地连接地址 | 待写 |
-| - | 状态检查 | 待写 |
+| - | LeafNode Manager 启动/停止 | ✅ 已完成 |
+| - | 连接 Hub | ✅ 已完成 |
+| - | 获取本地连接地址 | ✅ 已完成 |
+| - | 状态检查 | ✅ 已完成 |
 
 ### 2. internal/nats 测试 (`test/nats/`)
 

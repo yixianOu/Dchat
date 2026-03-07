@@ -2,6 +2,7 @@
 package e2e_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -9,9 +10,41 @@ import (
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/leafnode"
 	"DecentralizedChat/internal/storage"
+
+	gnats "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats-server/v2/server"
 )
 
 const testHost = "127.0.0.1"
+
+// 启动测试 Hub（作为 LeafNode 的远程服务器）
+func startTestHub(t *testing.T) (*server.Server, string, int) {
+	t.Helper()
+
+	opts := &server.Options{
+		Host:               testHost,
+		Port:               -1,
+		HTTPPort:           -1,
+		LeafNode:           server.LeafNodeOpts{Host: testHost, Port: -1},
+		ServerName:         "test-hub",
+		JetStream:          false,
+		NoLog:              true,
+		NoSigs:             true,
+	}
+
+	s, err := server.NewServer(opts)
+	if err != nil {
+		t.Fatalf("启动 Hub 失败: %v", err)
+	}
+	s.Start()
+	if !s.ReadyForConnections(10 * time.Second) {
+		t.Fatal("Hub 未在超时时间内就绪")
+	}
+
+	clientURL := fmt.Sprintf("nats://%s:%d", testHost, opts.Port)
+	leafnodePort := opts.LeafNode.Port
+	return s, clientURL, leafnodePort
+}
 
 func TestLeafNode_SQLite_FullArchitecture_E2E(t *testing.T) {
 	t.Log("=== E2E 测试: LeafNode + SQLite 完整架构 ===")
@@ -299,4 +332,292 @@ func TestLeafNode_Config_E2E(t *testing.T) {
 	t.Log("✅ 确认 SQLitePath 已移至 Config 顶层")
 
 	t.Log("✅ LeafNode 配置测试通过")
+}
+
+// 测试 LeafNode 启动和停止功能
+func TestLeafNode_StartStop_E2E(t *testing.T) {
+	t.Log("=== E2E 测试: LeafNode 启动/停止 ===")
+	t.Log("")
+
+	// 先启动一个测试 Hub
+	hub, _, hubLeafPort := startTestHub(t)
+	defer hub.Shutdown()
+	t.Logf("✅ 测试 Hub 启动成功，LeafNode 端口: %d", hubLeafPort)
+
+	// 配置 LeafNode 连接到 Hub
+	hubURL := fmt.Sprintf("nats://%s:%d", testHost, hubLeafPort)
+	leafnodeCfg := &config.LeafNodeConfig{
+		LocalHost:      testHost,
+		LocalPort:      0, // 随机端口
+		HubURLs:        []string{hubURL},
+		EnableTLS:      false,
+		CredsFile:      "",
+		ConnectTimeout: 10 * time.Second,
+	}
+
+	mgr := leafnode.NewManager(leafnodeCfg)
+	if mgr == nil {
+		t.Fatal("NewManager 返回 nil")
+	}
+	t.Log("✅ LeafNode 管理器创建成功")
+
+	// 测试启动前状态
+	if mgr.IsRunning() {
+		t.Error("启动前 IsRunning 应该返回 false")
+	}
+	t.Log("✅ 启动前状态正确: 未运行")
+
+	// 测试启动
+	err := mgr.Start()
+	if err != nil {
+		t.Fatalf("启动 LeafNode 失败: %v", err)
+	}
+	defer mgr.Stop()
+	t.Log("✅ LeafNode 启动成功")
+
+	// 测试启动后状态
+	if !mgr.IsRunning() {
+		t.Error("启动后 IsRunning 应该返回 true")
+	}
+	t.Log("✅ 启动后状态正确: 运行中")
+
+	// 测试重复启动
+	err = mgr.Start()
+	if err == nil {
+		t.Error("重复启动应该返回错误")
+	} else {
+		t.Logf("✅ 重复启动正确返回错误: %v", err)
+	}
+
+	// 测试停止
+	mgr.Stop()
+	t.Log("✅ LeafNode 停止成功")
+
+	// 测试停止后状态
+	if mgr.IsRunning() {
+		t.Error("停止后 IsRunning 应该返回 false")
+	}
+	t.Log("✅ 停止后状态正确: 未运行")
+
+	// 测试重复停止（应该不会 panic）
+	mgr.Stop()
+	t.Log("✅ 重复停止无异常")
+
+	t.Log("")
+	t.Log("=== 启动/停止测试通过 ✅ ===")
+}
+
+// 测试 LeafNode 获取本地连接地址
+func TestLeafNode_GetLocalNATSURL_E2E(t *testing.T) {
+	t.Log("=== E2E 测试: LeafNode 获取本地连接地址 ===")
+	t.Log("")
+
+	// 启动测试 Hub
+	hub, _, hubLeafPort := startTestHub(t)
+	defer hub.Shutdown()
+
+	hubURL := fmt.Sprintf("nats://%s:%d", testHost, hubLeafPort)
+
+	// 测试 1: 固定端口
+	t.Log("测试 1: 固定端口配置")
+	cfg1 := &config.LeafNodeConfig{
+		LocalHost:      testHost,
+		LocalPort:      42222,
+		HubURLs:        []string{hubURL},
+		ConnectTimeout: 10 * time.Second,
+	}
+	mgr1 := leafnode.NewManager(cfg1)
+	urlBeforeStart := mgr1.GetLocalNATSURL()
+	expectedURLBefore := fmt.Sprintf("nats://%s:%d", testHost, 42222)
+	if urlBeforeStart != expectedURLBefore {
+		t.Errorf("启动前 URL 不匹配: got %q, want %q", urlBeforeStart, expectedURLBefore)
+	}
+	t.Logf("✅ 启动前 URL 正确: %s", urlBeforeStart)
+
+	// 启动后应该返回实际监听端口
+	err := mgr1.Start()
+	if err != nil {
+		t.Fatalf("启动失败: %v", err)
+	}
+	defer mgr1.Stop()
+
+	urlAfterStart := mgr1.GetLocalNATSURL()
+	if urlAfterStart != expectedURLBefore {
+		t.Errorf("启动后 URL 不匹配: got %q, want %q", urlAfterStart, expectedURLBefore)
+	}
+	t.Logf("✅ 启动后 URL 正确: %s", urlAfterStart)
+
+	// 测试 2: 随机端口
+	t.Log("")
+	t.Log("测试 2: 随机端口配置 (LocalPort=0)")
+	cfg2 := &config.LeafNodeConfig{
+		LocalHost:      testHost,
+		LocalPort:      0,
+		HubURLs:        []string{hubURL},
+		ConnectTimeout: 10 * time.Second,
+	}
+	mgr2 := leafnode.NewManager(cfg2)
+	urlBeforeStart2 := mgr2.GetLocalNATSURL()
+	expectedURLBefore2 := fmt.Sprintf("nats://%s:%d", testHost, 0)
+	if urlBeforeStart2 != expectedURLBefore2 {
+		t.Errorf("启动前 URL 不匹配: got %q, want %q", urlBeforeStart2, expectedURLBefore2)
+	}
+	t.Logf("✅ 启动前 URL 正确: %s", urlBeforeStart2)
+
+	// 启动后应该返回实际监听的随机端口
+	err = mgr2.Start()
+	if err != nil {
+		t.Fatalf("启动失败: %v", err)
+	}
+	defer mgr2.Stop()
+
+	urlAfterStart2 := mgr2.GetLocalNATSURL()
+	if urlAfterStart2 == expectedURLBefore2 || urlAfterStart2 == "nats://127.0.0.1:0" {
+		t.Error("启动后应该返回实际监听的端口，而不是 0")
+	}
+	t.Logf("✅ 启动后实际 URL: %s", urlAfterStart2)
+
+	// 测试连接到这个地址
+	nc, err := gnats.Connect(urlAfterStart2)
+	if err != nil {
+		t.Fatalf("无法连接到 LeafNode 地址 %q: %v", urlAfterStart2, err)
+	}
+	defer nc.Close()
+	t.Log("✅ 可以成功连接到返回的本地地址")
+
+	t.Log("")
+	t.Log("=== 获取本地连接地址测试通过 ✅ ===")
+}
+
+// 测试 LeafNode 连接到 Hub 功能
+func TestLeafNode_ConnectHub_E2E(t *testing.T) {
+	t.Log("=== E2E 测试: LeafNode 连接 Hub ===")
+	t.Log("")
+
+	// 启动测试 Hub
+	hub, hubClientURL, hubLeafPort := startTestHub(t)
+	defer hub.Shutdown()
+	t.Logf("✅ Hub 启动成功，客户端地址: %s, LeafNode 端口: %d", hubClientURL, hubLeafPort)
+
+	// 测试 1: 正常连接
+	t.Log("测试 1: 正常连接到 Hub")
+	hubURL := fmt.Sprintf("nats://%s:%d", testHost, hubLeafPort)
+	cfg := &config.LeafNodeConfig{
+		LocalHost:      testHost,
+		LocalPort:      0,
+		HubURLs:        []string{hubURL},
+		ConnectTimeout: 10 * time.Second,
+	}
+
+	mgr := leafnode.NewManager(cfg)
+	err := mgr.Start()
+	if err != nil {
+		t.Fatalf("启动 LeafNode 失败: %v", err)
+	}
+	defer mgr.Stop()
+	t.Log("✅ LeafNode 启动成功，已连接到 Hub")
+
+	// 验证可以连接到本地 LeafNode
+	leafURL := mgr.GetLocalNATSURL()
+	ncLeaf, err := gnats.Connect(leafURL)
+	if err != nil {
+		t.Fatalf("连接 LeafNode 失败: %v", err)
+	}
+	defer ncLeaf.Close()
+	t.Log("✅ 可以成功连接到本地 LeafNode")
+
+	// 等待一会儿确保 LeafNode 到 Hub 的连接完全建立
+	time.Sleep(500 * time.Millisecond)
+
+	// 验证状态是运行中
+	if !mgr.IsRunning() {
+		t.Error("LeafNode 应该正在运行")
+	}
+	t.Log("✅ LeafNode 连接 Hub 后状态正常")
+
+	// 测试 2: 无效 Hub 地址
+	t.Log("")
+	t.Log("测试 2: 无效 Hub 地址")
+	badCfg := &config.LeafNodeConfig{
+		LocalHost:      testHost,
+		LocalPort:      0,
+		HubURLs:        []string{"nats://invalid-host:9999"},
+		ConnectTimeout: 2 * time.Second,
+	}
+	badMgr := leafnode.NewManager(badCfg)
+	err = badMgr.Start()
+	if err == nil {
+		t.Error("连接无效 Hub 应该失败")
+		badMgr.Stop()
+	} else {
+		t.Logf("✅ 连接无效 Hub 正确返回错误: %v", err)
+	}
+
+	t.Log("")
+	t.Log("=== 连接 Hub 测试通过 ✅ ===")
+}
+
+// 测试 LeafNode 状态检查
+func TestLeafNode_StatusCheck_E2E(t *testing.T) {
+	t.Log("=== E2E 测试: LeafNode 状态检查 ===")
+	t.Log("")
+
+	// 启动测试 Hub
+	hub, _, hubLeafPort := startTestHub(t)
+	defer hub.Shutdown()
+
+	hubURL := fmt.Sprintf("nats://%s:%d", testHost, hubLeafPort)
+	cfg := &config.LeafNodeConfig{
+		LocalHost:      testHost,
+		LocalPort:      0,
+		HubURLs:        []string{hubURL},
+		ConnectTimeout: 10 * time.Second,
+	}
+
+	mgr := leafnode.NewManager(cfg)
+
+	// 检查初始状态
+	if mgr.IsRunning() {
+		t.Error("初始状态应该未运行")
+	}
+	t.Log("✅ 初始状态: 未运行")
+
+	// 获取配置
+	config := mgr.GetConfig()
+	if config.LocalHost != testHost {
+		t.Errorf("配置不匹配: LocalHost got %q, want %q", config.LocalHost, testHost)
+	}
+	if config.LocalPort != 0 {
+		t.Errorf("配置不匹配: LocalPort got %d, want %d", config.LocalPort, 0)
+	}
+	t.Log("✅ 配置读取正确")
+
+	// 启动后检查
+	err := mgr.Start()
+	if err != nil {
+		t.Fatalf("启动失败: %v", err)
+	}
+	defer mgr.Stop()
+
+	if !mgr.IsRunning() {
+		t.Error("启动后应该正在运行")
+	}
+	t.Log("✅ 运行状态: 运行中")
+
+	// 运行时获取配置
+	config2 := mgr.GetConfig()
+	if config2.LocalHost != testHost {
+		t.Errorf("运行时配置不匹配")
+	}
+	t.Log("✅ 运行时配置读取正确")
+
+	// 停止后检查
+	mgr.Stop()
+	if mgr.IsRunning() {
+		t.Error("停止后应该未运行")
+	}
+	t.Log("✅ 停止后状态: 未运行")
+
+	t.Log("")
+	t.Log("=== 状态检查测试通过 ✅ ===")
 }
