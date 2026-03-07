@@ -9,8 +9,8 @@ import (
 
 	"DecentralizedChat/internal/nats"
 
-	gnats "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats-server/v2/server"
+	gnats "github.com/nats-io/nats.go"
 )
 
 const testHost = "127.0.0.1"
@@ -103,7 +103,7 @@ func TestNATSClient_ConnectPublishSubscribe_E2E(t *testing.T) {
 	t.Logf("📊 连接状态: %v", stats["connected"])
 	t.Log("✅ 统计获取成功")
 
-	err = svc.Close()
+	svc.Close()
 	t.Log("✅ 连接关闭成功")
 
 	t.Log("")

@@ -1,3 +1,4 @@
+// Package leafnode 实现了 LeafNode 管理器，负责启动和管理本地 NATS Server 作为 LeafNode，并连接到远程 Hub
 package leafnode
 
 import (

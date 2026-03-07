@@ -1,3 +1,4 @@
+// Package config 负责管理应用的配置，包括用户信息、LeafNode连接配置、UI设置和密钥路径等
 package config
 
 import (

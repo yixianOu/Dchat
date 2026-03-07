@@ -1,3 +1,4 @@
+// Package nscsetup 提供了一个简化版的 NATS 设置工具，直接使用 Go NATS 库生成密钥和 JWT，无需依赖 NSC CLI
 package nscsetup
 
 import (
@@ -245,7 +246,7 @@ NKEYs are sensitive and should be treated as secrets.
 	return os.WriteFile(credsPath, []byte(creds), 0600)
 }
 
-// 密钥生成辅助函数
+// LoadOrGenerateOperatorKey 密钥生成辅助函数
 func LoadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
 	if data, err := os.ReadFile(filename); err == nil {
 		if key, err := nkeys.FromSeed(data); err == nil {

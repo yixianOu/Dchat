@@ -1,3 +1,4 @@
+// Package storage 实现了本地消息存储模块，使用 SQLite 数据库存储聊天记录和会话信息
 package storage
 
 const schema = `

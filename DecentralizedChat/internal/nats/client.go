@@ -1,3 +1,4 @@
+// Package nats 实现了 NATS 客户端服务，封装了连接管理、消息发布订阅以及 JetStream KV 存储等功能
 package nats
 
 import (

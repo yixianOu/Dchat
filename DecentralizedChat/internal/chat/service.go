@@ -1,3 +1,4 @@
+// Package chat 实现了核心的加密消息收发逻辑，支持私聊和群聊两种模式
 package chat
 
 import (
@@ -27,7 +28,7 @@ type User struct {
 type encWire struct {
 	CID    string `json:"cid"`
 	Sender string `json:"sender"`
-	Ts     int64  `json:"ts"`
+	TS     int64  `json:"ts"`
 	Nonce  string `json:"nonce"`
 	Cipher string `json:"cipher"`
 }
@@ -36,7 +37,7 @@ type encWire struct {
 type DecryptedMessage struct {
 	CID     string    // 会话 cid 或 群 gid
 	Sender  string    // 发送者 uid
-	Ts      time.Time // 原始发送秒级时间戳转时间
+	TS      time.Time // 原始发送秒级时间戳转时间
 	Plain   string    // 解密后明文
 	IsGroup bool      // 是否群聊
 	RawWire encWire   // 原始载荷
@@ -400,7 +401,7 @@ func (s *Service) SendDirect(peerID, content string) error {
 	wire := encWire{
 		CID:    cid,
 		Sender: from,
-		Ts:     time.Now().Unix(),
+		TS:     time.Now().Unix(),
 		Nonce:  nonceB64,
 		Cipher: cipherB64,
 	}
@@ -432,7 +433,7 @@ func (s *Service) SendGroup(gid, content string) error {
 	wire := encWire{
 		CID:    gid,
 		Sender: from,
-		Ts:     time.Now().Unix(),
+		TS:     time.Now().Unix(),
 		Nonce:  nonceB64,
 		Cipher: cipherB64,
 	}
@@ -499,7 +500,7 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 	msg := &DecryptedMessage{
 		CID:     w.CID,
 		Sender:  w.Sender,
-		Ts:      time.Unix(w.Ts, 0),
+		TS:      time.Unix(w.TS, 0),
 		Plain:   string(pt),
 		IsGroup: isGroup,
 		RawWire: w,
