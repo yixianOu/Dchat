@@ -231,13 +231,12 @@ const App: React.FC = () => {
           {/* ✅ 新增：网络状态显示 */}
           {networkStatus && (
             <div className="network-status">
-              <div className={`status-indicator ${networkStatus.nats.connected ? 'online' : 'offline'}`}>
-                {networkStatus.nats.connected ? '🟢 在线' : '🔴 离线'}
+              <div className={`status-indicator ${networkStatus.nats?.connected ? 'online' : 'offline'}`}>
+                {networkStatus.nats?.connected ? '🟢 在线' : '🔴 离线'}
               </div>
               <div className="network-info">
                 <small>
-                  节点: {networkStatus.cluster.nodeCount} | 
-                  消息: {networkStatus.nats.stats.InMsgs}↓ {networkStatus.nats.stats.OutMsgs}↑
+                  消息: {networkStatus.nats?.stats?.InMsgs || 0}↓ {networkStatus.nats?.stats?.OutMsgs || 0}↑
                 </small>
               </div>
             </div>
