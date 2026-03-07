@@ -28,6 +28,222 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  padding: 10px 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  justify-content: space-between;
+}
+
+.user-info span {
+  color: #dcddde;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.user-info button {
+  background: #4f545c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.user-info button:hover {
+  background: #5d6269;
+}
+
+/* 功能按钮区域 */
+.chat-controls {
+  padding: 15px 20px;
+  border-bottom: 1px solid #3f4458;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-controls button {
+  width: 100%;
+  padding: 10px 14px;
+  background: #3f4458;
+  color: #dcddde;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  font-weight: 500;
+}
+
+.chat-controls button:hover {
+  background: #4a5065;
+  color: white;
+  transform: translateX(2px);
+}
+
+.chat-controls button:active {
+  background: #5865f2;
+}
+
+/* 会话列表 */
+.sessions-list {
+  flex: 1;
+  padding: 15px 20px;
+  overflow-y: auto;
+}
+
+.sessions-list h4 {
+  margin: 0 0 15px 0;
+  color: #8e9297;
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.session-item {
+  padding: 10px 14px;
+  margin: 4px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #b9bbbe;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-item:hover {
+  background: #393c4a;
+  color: #dcddde;
+  transform: translateX(2px);
+}
+
+.session-item.active {
+  background: #5865f2;
+  color: white;
+}
+
+.session-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.last-message {
+  font-size: 12px;
+  color: #8e9297;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item.active .last-message {
+  color: #e3e5e8;
+  opacity: 0.9;
+}
+
+/* 模态框通用样式 */
+.modal-content {
+  background: #36393f;
+  padding: 24px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  color: white;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.modal-content h3 {
+  margin: 0 0 20px 0;
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #b9bbbe;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 14px;
+  background: #40444b;
+  border: 1px solid #202225;
+  border-radius: 4px;
+  color: #dcddde;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  border-color: #5865f2;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.modal-actions button {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.modal-actions button:first-child {
+  background: #4f545c;
+  color: white;
+}
+
+.modal-actions button:first-child:hover {
+  background: #5d6269;
+}
+
+.modal-actions button:last-child {
+  background: #5865f2;
+  color: white;
+}
+
+.modal-actions button:last-child:hover {
+  background: #4752c4;
+}
+
+/* 设置弹窗 */
+.settings-modal, .key-manager-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 
 .status-indicator {
@@ -40,54 +256,6 @@
   color: #b9bbbe;
 }
 
-.rooms-list {
-  flex: 1;
-  padding: 20px;
-}
-
-.rooms-list h4 {
-  margin: 0 0 15px 0;
-  color: #8e9297;
-  font-size: 12px;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.room-item {
-  padding: 8px 12px;
-  margin: 2px 0;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  color: #b9bbbe;
-}
-
-.room-item:hover {
-  background: #393c4a;
-  color: #dcddde;
-}
-
-.room-item.active {
-  background: #5865f2;
-  color: white;
-}
-
-.join-room-btn {
-  width: 100%;
-  padding: 10px;
-  margin-top: 15px;
-  background: #5865f2;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.join-room-btn:hover {
-  background: #4752c4;
-}
 
 .main-content {
   flex: 1;

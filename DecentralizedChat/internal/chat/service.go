@@ -145,7 +145,7 @@ func (s *Service) AddFriendNSCKey(uid, nscPubKey string) error {
 	return nil
 }
 
-// getFriendKey 获取好友公钥，优先从内存缓存，如果没有则从KV查询
+// getFriendKey 获取好友公钥，优先从内存缓存，如果没有则从本地SQLite查询
 func (s *Service) getFriendKey(uid string) (string, error) {
 	if uid == "" {
 		return "", errors.New("uid empty")
@@ -159,8 +159,11 @@ func (s *Service) getFriendKey(uid string) (string, error) {
 	}
 	s.mu.RUnlock()
 
-	// 2. 内存中没有，从KV存储查询
-	pubKey, err := s.nats.GetFriendPubKey(uid)
+	// 2. 内存中没有，从本地SQLite查询
+	if s.storage == nil {
+		return "", errors.New("storage not initialized")
+	}
+	pubKey, err := s.storage.GetFriendPubKey(uid)
 	if err != nil {
 		return "", fmt.Errorf("friend key not found: %w", err)
 	}
@@ -173,7 +176,7 @@ func (s *Service) getFriendKey(uid string) (string, error) {
 	return pubKey, nil
 }
 
-// getGroupKey 获取群组对称密钥，优先从内存缓存，如果没有则从KV查询
+// getGroupKey 获取群组对称密钥，优先从内存缓存，如果没有则从本地SQLite查询
 func (s *Service) getGroupKey(gid string) (string, error) {
 	if gid == "" {
 		return "", errors.New("gid empty")
@@ -187,8 +190,11 @@ func (s *Service) getGroupKey(gid string) (string, error) {
 	}
 	s.mu.RUnlock()
 
-	// 2. 内存中没有，从KV存储查询
-	symKey, err := s.nats.GetGroupSymKey(gid)
+	// 2. 内存中没有，从本地SQLite查询
+	if s.storage == nil {
+		return "", errors.New("storage not initialized")
+	}
+	symKey, err := s.storage.GetGroupSymKey(gid)
 	if err != nil {
 		return "", fmt.Errorf("group key not found: %w", err)
 	}
@@ -232,7 +238,7 @@ func (s *Service) SetKeyPair(privB64, pubB64 string) {
 	s.mu.Unlock()
 }
 
-// AddFriendKey 缓存好友公钥并持久化到KV存储
+// AddFriendKey 缓存好友公钥并持久化到本地SQLite存储
 func (s *Service) AddFriendKey(uid, pubB64 string) {
 	if uid == "" || pubB64 == "" {
 		return
@@ -241,13 +247,15 @@ func (s *Service) AddFriendKey(uid, pubB64 string) {
 	s.friendPubKeys[uid] = pubB64
 	s.mu.Unlock()
 
-	// 持久化到JetStream KV（最佳努力，失败不影响内存缓存）
-	if err := s.nats.PutFriendPubKey(uid, pubB64); err != nil {
-		s.dispatchError(fmt.Errorf("failed to persist friend key: %w", err))
+	// 持久化到本地SQLite（最佳努力，失败不影响内存缓存）
+	if s.storage != nil {
+		if err := s.storage.SaveFriendPubKey(uid, pubB64); err != nil {
+			s.dispatchError(fmt.Errorf("failed to persist friend key: %w", err))
+		}
 	}
 }
 
-// AddGroupKey 缓存群对称密钥并持久化到KV存储
+// AddGroupKey 缓存群对称密钥并持久化到本地SQLite存储
 func (s *Service) AddGroupKey(gid, symB64 string) {
 	if gid == "" || symB64 == "" {
 		return
@@ -256,9 +264,11 @@ func (s *Service) AddGroupKey(gid, symB64 string) {
 	s.groupSymKeys[gid] = symB64
 	s.mu.Unlock()
 
-	// 持久化到JetStream KV（最佳努力，失败不影响内存缓存）
-	if err := s.nats.PutGroupSymKey(gid, symB64); err != nil {
-		s.dispatchError(fmt.Errorf("failed to persist group key: %w", err))
+	// 持久化到本地SQLite（最佳努力，失败不影响内存缓存）
+	if s.storage != nil {
+		if err := s.storage.SaveGroupSymKey(gid, symB64); err != nil {
+			s.dispatchError(fmt.Errorf("failed to persist group key: %w", err))
+		}
 	}
 }
 

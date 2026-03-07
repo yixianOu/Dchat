@@ -23,4 +23,18 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_cid_time ON messages(cid, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+
+-- 好友公钥存储表
+CREATE TABLE IF NOT EXISTS friend_pub_keys (
+    user_id TEXT PRIMARY KEY,
+    pub_key TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 群聊对称密钥存储表
+CREATE TABLE IF NOT EXISTS group_sym_keys (
+    group_id TEXT PRIMARY KEY,
+    sym_key TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 `

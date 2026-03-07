@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -155,4 +156,48 @@ func (s *Storage) SearchMessages(query string, limit int) ([]*StoredMessage, err
 	}
 
 	return messages, rows.Err()
+}
+
+// SaveFriendPubKey 保存好友公钥
+func (s *Storage) SaveFriendPubKey(userID, pubKey string) error {
+	_, err := s.db.Exec(`
+		INSERT OR REPLACE INTO friend_pub_keys
+		(user_id, pub_key)
+		VALUES (?, ?)
+	`, userID, pubKey)
+	return err
+}
+
+// GetFriendPubKey 获取好友公钥
+func (s *Storage) GetFriendPubKey(userID string) (string, error) {
+	var pubKey string
+	err := s.db.QueryRow(`
+		SELECT pub_key FROM friend_pub_keys WHERE user_id = ?
+	`, userID).Scan(&pubKey)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("friend pub key not found: %s", userID)
+	}
+	return pubKey, err
+}
+
+// SaveGroupSymKey 保存群聊对称密钥
+func (s *Storage) SaveGroupSymKey(groupID, symKey string) error {
+	_, err := s.db.Exec(`
+		INSERT OR REPLACE INTO group_sym_keys
+		(group_id, sym_key)
+		VALUES (?, ?)
+	`, groupID, symKey)
+	return err
+}
+
+// GetGroupSymKey 获取群聊对称密钥
+func (s *Storage) GetGroupSymKey(groupID string) (string, error) {
+	var symKey string
+	err := s.db.QueryRow(`
+		SELECT sym_key FROM group_sym_keys WHERE group_id = ?
+	`, groupID).Scan(&symKey)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("group sym key not found: %s", groupID)
+	}
+	return symKey, err
 }
