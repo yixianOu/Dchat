@@ -190,12 +190,7 @@ func (a *App) JoinDirect(peerID string) error {
 	return a.chatSvc.JoinDirect(peerID)
 }
 
-func (a *App) JoinGroup(gid string) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	return a.chatSvc.JoinGroup(gid)
-}
+// 旧方法已废弃，请使用带groupKey参数的JoinGroup
 
 func (a *App) SendDirect(peerID, content string) error {
 	if a.chatSvc == nil {
@@ -297,6 +292,25 @@ func (a *App) GetConversation(conversationID string) (*storage.StoredConversatio
 		return nil, fmt.Errorf("chat service not initialized")
 	}
 	return a.chatSvc.GetConversation(conversationID)
+}
+
+// CreateGroup 创建新群聊，返回群ID和群密钥
+func (a *App) CreateGroup() (gid string, groupKey string, err error) {
+	if a.chatSvc == nil {
+		return "", "", fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.CreateGroup()
+}
+
+// JoinGroup 加入群聊，需要群ID和群密钥
+func (a *App) JoinGroup(gid, groupKey string) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	// 存储群密钥
+	a.chatSvc.AddGroupKey(gid, groupKey)
+	// 订阅群消息
+	return a.chatSvc.JoinGroup(gid)
 }
 
 // SearchMessages 搜索消息

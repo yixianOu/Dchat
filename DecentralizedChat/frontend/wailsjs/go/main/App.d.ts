@@ -11,6 +11,8 @@ export function AddFriendNSCKey(arg1:string,arg2:string):Promise<void>;
 
 export function AddGroupKey(arg1:string,arg2:string):Promise<void>;
 
+export function CreateGroup():Promise<string>;
+
 export function GetConversation(arg1:string):Promise<storage.StoredConversation>;
 
 export function GetConversationID(arg1:string):Promise<string>;
@@ -23,7 +25,7 @@ export function GetUser():Promise<chat.User>;
 
 export function JoinDirect(arg1:string):Promise<void>;
 
-export function JoinGroup(arg1:string):Promise<void>;
+export function JoinGroup(arg1:string,arg2:string):Promise<void>;
 
 export function LoadNSCKeys(arg1:string):Promise<void>;
 

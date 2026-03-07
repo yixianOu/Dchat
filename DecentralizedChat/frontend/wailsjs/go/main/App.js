@@ -14,6 +14,10 @@ export function AddGroupKey(arg1, arg2) {
   return window['go']['main']['App']['AddGroupKey'](arg1, arg2);
 }
 
+export function CreateGroup() {
+  return window['go']['main']['App']['CreateGroup']();
+}
+
 export function GetConversation(arg1) {
   return window['go']['main']['App']['GetConversation'](arg1);
 }
@@ -38,8 +42,8 @@ export function JoinDirect(arg1) {
   return window['go']['main']['App']['JoinDirect'](arg1);
 }
 
-export function JoinGroup(arg1) {
-  return window['go']['main']['App']['JoinGroup'](arg1);
+export function JoinGroup(arg1, arg2) {
+  return window['go']['main']['App']['JoinGroup'](arg1, arg2);
 }
 
 export function LoadNSCKeys(arg1) {

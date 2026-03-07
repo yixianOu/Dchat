@@ -262,6 +262,31 @@ func (s *Service) AddGroupKey(gid, symB64 string) {
 	}
 }
 
+// CreateGroup 创建新群聊，返回群ID和群密钥
+func (s *Service) CreateGroup() (gid string, groupKey string, err error) {
+	// 1. 生成256位AES群密钥
+	groupKey, err = GenerateGroupKey()
+	if err != nil {
+		return "", "", fmt.Errorf("generate group key: %w", err)
+	}
+
+	// 2. 生成唯一群ID（16位，足够区分）
+	timestamp := []byte(fmt.Sprintf("%d%s", time.Now().UnixNano(), s.user.ID))
+	hash := sha256.Sum256(timestamp)
+	gid = hex.EncodeToString(hash[:])[:16]
+
+	// 3. 本地存储群密钥
+	s.AddGroupKey(gid, groupKey)
+
+	// 4. 自动订阅群主题
+	err = s.JoinGroup(gid)
+	if err != nil {
+		return "", "", fmt.Errorf("join group: %w", err)
+	}
+
+	return gid, groupKey, nil
+}
+
 // deriveCID 生成私聊 cid
 func deriveCID(a, b string) string {
 	if a > b {
