@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/nats-io/nkeys"
 	"golang.org/x/crypto/curve25519"
+	"filippo.io/edwards25519"
 )
 
 // NSCKeyManager 处理NSC密钥和所有派生密钥的统一管理器
@@ -97,21 +99,45 @@ func (km *NSCKeyManager) deriveKeyMaterial(domain KeyDomain, salt []byte) ([32]b
 	return hash, nil
 }
 
-// GetChatKeyPair 获取聊天加密密钥对 (X25519) - 改进版
-func (km *NSCKeyManager) GetChatKeyPair() (privB64, pubB64 string, err error) {
-	// 使用统一派生方法
-	keyMaterial, err := km.deriveKeyMaterial(DomainChat, nil)
-	if err != nil {
-		return "", "", fmt.Errorf("derive chat key material: %w", err)
-	}
+// Ed25519PrivateKeyToX25519 将Ed25519私钥转换为X25519私钥
+func Ed25519PrivateKeyToX25519(ed25519Priv ed25519.PrivateKey) []byte {
+	hash := sha512.Sum512(ed25519Priv[:32])
+	hash[0] &= 248
+	hash[31] &= 127
+	hash[31] |= 64
+	return hash[:32]
+}
 
-	// 生成X25519密钥对
-	x25519Pub, err := curve25519.X25519(keyMaterial[:], curve25519.Basepoint)
+// GetChatKeyPair 获取聊天加密密钥对 (X25519) - 从NSC Ed25519密钥直接转换
+func (km *NSCKeyManager) GetChatKeyPair() (privB64, pubB64 string, err error) {
+	// 从NSC seed解析Ed25519私钥
+	userKey, err := nkeys.FromSeed([]byte(km.userSeed))
+	if err != nil {
+		return "", "", fmt.Errorf("parse nkey from seed: %w", err)
+	}
+	// 从seed直接生成标准Ed25519私钥（正确方式）
+	seedStr, err := userKey.Seed()
+	if err != nil {
+		return "", "", fmt.Errorf("get seed: %w", err)
+	}
+	// 解码NKey seed得到原始32字节Ed25519 seed
+	rawSeed, err := nkeys.Decode(nkeys.PrefixByteSeed, []byte(seedStr))
+	if err != nil {
+		return "", "", fmt.Errorf("decode seed: %w", err)
+	}
+	// 去掉第一个字节的前缀，后面32字节是真正的seed
+	ed25519Priv := ed25519.NewKeyFromSeed(rawSeed[1:])
+
+	// 转换为X25519私钥
+	x25519Priv := Ed25519PrivateKeyToX25519(ed25519Priv)
+
+	// 计算X25519公钥
+	x25519Pub, err := curve25519.X25519(x25519Priv, curve25519.Basepoint)
 	if err != nil {
 		return "", "", fmt.Errorf("generate X25519 public key: %w", err)
 	}
 
-	return base64.StdEncoding.EncodeToString(keyMaterial[:]),
+	return base64.StdEncoding.EncodeToString(x25519Priv),
 		base64.StdEncoding.EncodeToString(x25519Pub), nil
 }
 
@@ -226,29 +252,27 @@ func (km *NSCKeyManager) GetAllDerivedKeys() (map[KeyDomain]*DerivedKeyPair, err
 	return keys, nil
 }
 
-// GetChatPubKeyFromNSCPub 从NSC公钥派生聊天公钥 - 改进版
-// 这个函数用于获取其他用户的聊天公钥（只有NSC公钥的情况）
+// GetChatPubKeyFromNSCPub 从NSC公钥派生聊天公钥 - 修复版，和私钥转换逻辑严格配对
 func GetChatPubKeyFromNSCPub(nscPubKey string) (string, error) {
-	if !strings.HasPrefix(nscPubKey, "U") {
+	if !strings.HasPrefix(nscPubKey, "U") || len(nscPubKey) < 2 {
 		return "", errors.New("invalid NSC user public key format")
 	}
 
-	// 验证NSC公钥格式
-	_, err := nkeys.FromPublicKey(nscPubKey)
+	// 1. 解码NSC公钥（nkeys库自动处理base32解码、CRC校验）
+	raw, err := nkeys.Decode(nkeys.PrefixByteUser, []byte(nscPubKey))
 	if err != nil {
-		return "", fmt.Errorf("invalid NSC public key: %w", err)
+		return "", fmt.Errorf("decode NSC public key: %w", err)
 	}
 
-	// 使用确定性派生方法
-	// 注意：这种方法要求对方也使用相同的派生逻辑
-	input := append([]byte(nscPubKey), []byte(DomainChat)...)
-	hash := sha256.Sum256(input)
+	// 2. raw就是32字节的Ed25519公钥
+	ed25519Pub := raw
 
-	// 使用hash作为X25519私钥，计算对应公钥
-	x25519Pub, err := curve25519.X25519(hash[:], curve25519.Basepoint)
+	// 3. 标准Ed25519公钥转X25519公钥（RFC7748标准）
+	p, err := edwards25519.NewIdentityPoint().SetBytes(ed25519Pub)
 	if err != nil {
-		return "", fmt.Errorf("derive X25519 public key: %w", err)
+		return "", fmt.Errorf("invalid Ed25519 public key: %w, raw bytes: %x", err, ed25519Pub)
 	}
+	x25519Pub := p.BytesMontgomery()
 
 	return base64.StdEncoding.EncodeToString(x25519Pub), nil
 }

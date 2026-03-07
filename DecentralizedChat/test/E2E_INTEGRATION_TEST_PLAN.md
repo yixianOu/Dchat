@@ -26,7 +26,13 @@
 ### 2. internal/nats - NATS 客户端
 ### 3. internal/nscsetup - NSC 简化设置
 ### 4. internal/storage - SQLite 存储
-### 5. 测试chat消息加密解密
+### 5. internal/chat - Chat 消息加密解密 ✅ 已完成
+| 测试文件 | 测试内容 | 状态 |
+|-----------|---------|------|
+| `chat_encryption_e2e_test.go` | 私聊端到端加密解密 | ✅ 已完成 |
+| - | 群聊端到端加密解密 | ✅ 已完成 |
+| - | 加密错误场景处理 | ✅ 已完成 |
+| - | NSC密钥派生功能 | ✅ 已完成 |
 
 ---
 
@@ -143,6 +149,13 @@ func waitForConnection(t *testing.T, check func() error)
 - ✅ 密钥生成测试
 - ✅ JWT 生成验证
 
+### Phase 5: Chat Encryption ✅ 已完成
+- ✅ chat_encryption_e2e_test.go - 4 个测试全部通过
+- ✅ 私聊端到端加密解密
+- ✅ 群聊端到端加密解密
+- ✅ 加密错误场景处理
+- ✅ NSC密钥派生功能
+
 ---
 
 ## 现有测试
@@ -153,13 +166,10 @@ func waitForConnection(t *testing.T, check func() error)
 - `test/leafnode/leafnode_p2p_hub_test.go` - LeafNode P2P 公网 Hub 通信测试 (✅ 1 个测试通过)
 - `test/nats/nats_client_e2e_test.go` - NATS 客户端测试 (✅ 2 个测试通过)
 - `test/nscsetup/nscsetup_e2e_test.go` - NSC 简化设置测试 (✅ 3 个测试通过)
+- `test/chat/chat_encryption_e2e_test.go` - Chat 消息加密解密测试 (✅ 4 个测试通过)
 
 ### 待完成测试
-- **internal/chat - Chat 消息加密解密模块**：测试已编写，发现2个bug：
-  - ❌ 私聊加密解密失败（decrypt failed）
-  - ❌ NSC密钥派生测试失败（无效的测试公钥）
-  - ✅ 群聊加密解密通过
-  - ✅ 错误场景测试通过
+- 所有核心模块测试已全部完成 ✅
 
 ---
 
