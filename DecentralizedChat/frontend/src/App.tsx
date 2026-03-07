@@ -5,9 +5,11 @@ import {
   setUserInfo,
   getUser,
   addFriendKey,
-  addGroupKey, 
-  joinDirect, 
+  addFriendNSCKey,
+  addGroupKey,
+  joinDirect,
   joinGroup,
+  createGroup,
   onDecrypted,
   onError,
   getConversationID,  // ✅ 新增功能
@@ -120,17 +122,39 @@ const App: React.FC = () => {
   };
 
   const handleAddFriend = async () => {
-    const uid = prompt('输入好友 ID:');
-    const pubKey = prompt('输入好友公钥 (Base64):');
-    if (uid && pubKey) {
+    const uid = prompt('输入好友备注名:');
+    const nscPubKey = prompt('输入好友的NSC公钥 (U开头的公开身份ID):');
+    if (uid && nscPubKey) {
       try {
-        await addFriendKey(uid, pubKey);
-        setFriends(prev => [...prev, { id: uid, nickname: uid, publicKey: pubKey }]);
-        alert('好友添加成功');
+        // 新的方法：仅用NSC公钥添加好友，自动派生聊天公钥
+        await addFriendNSCKey(uid, nscPubKey);
+        setFriends(prev => [...prev, { id: uid, nickname: uid, publicKey: nscPubKey }]);
+        alert('好友添加成功！无需交换密钥，可直接发送加密消息');
       } catch (error) {
         console.error('添加好友失败:', error);
-        alert('添加好友失败');
+        alert('添加好友失败，请检查NSC公钥格式是否正确');
       }
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    try {
+      const { gid, groupKey } = await createGroup();
+      setGroups(prev => [...prev, { id: gid, name: `群聊 ${gid.slice(0, 8)}`, symmetricKey: groupKey }]);
+
+      const newSession: ChatSession = {
+        id: gid,
+        name: `群聊 ${gid.slice(0, 8)}`,
+        isGroup: true
+      };
+      setSessions(prev => [...prev, newSession]);
+      setCurrentSession(newSession);
+
+      // 展示群ID和密钥给用户
+      alert(`群创建成功！\n群ID: ${gid}\n群密钥: ${groupKey}\n请将这些信息分享给要加入的好友。`);
+    } catch (error) {
+      console.error('创建群失败:', error);
+      alert('创建群失败');
     }
   };
 
@@ -139,13 +163,13 @@ const App: React.FC = () => {
     const symKey = prompt('输入群组对称密钥 (Base64):');
     if (gid && symKey) {
       try {
-        await addGroupKey(gid, symKey);
-        await joinGroup(gid);
-        setGroups(prev => [...prev, { id: gid, name: `群聊 ${gid}`, symmetricKey: symKey }]);
-        
+        // 新的joinGroup已经包含了addGroupKey逻辑，不需要单独调用
+        await joinGroup(gid, symKey);
+        setGroups(prev => [...prev, { id: gid, name: `群聊 ${gid.slice(0, 8)}`, symmetricKey: symKey }]);
+
         const newSession: ChatSession = {
           id: gid,
-          name: `群聊 ${gid}`,
+          name: `群聊 ${gid.slice(0, 8)}`,
           isGroup: true
         };
         setSessions(prev => [...prev, newSession]);
@@ -153,7 +177,7 @@ const App: React.FC = () => {
         alert('加入群组成功');
       } catch (error) {
         console.error('加入群组失败:', error);
-        alert('加入群组失败');
+        alert('加入群组失败，请检查群ID和密钥是否正确');
       }
     }
   };
@@ -222,6 +246,7 @@ const App: React.FC = () => {
         
         <div className="chat-controls">
           <button onClick={handleAddFriend}>添加好友</button>
+          <button onClick={handleCreateGroup}>创建群聊</button>
           <button onClick={handleJoinGroup}>加入群组</button>
           <button onClick={handleStartDirectChat}>开始私聊</button>
           <button onClick={() => setShowKeyManager(true)}>密钥管理</button>

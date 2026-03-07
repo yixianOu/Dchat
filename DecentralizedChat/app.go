@@ -20,6 +20,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// CreateGroupResult 创建群聊返回结果
+type CreateGroupResult struct {
+	Gid      string `json:"gid"`
+	GroupKey string `json:"groupKey"`
+}
+
 // App struct
 type App struct {
 	ctx         context.Context
@@ -295,11 +301,18 @@ func (a *App) GetConversation(conversationID string) (*storage.StoredConversatio
 }
 
 // CreateGroup 创建新群聊，返回群ID和群密钥
-func (a *App) CreateGroup() (gid string, groupKey string, err error) {
+func (a *App) CreateGroup() (*CreateGroupResult, error) {
 	if a.chatSvc == nil {
-		return "", "", fmt.Errorf("chat service not initialized")
+		return nil, fmt.Errorf("chat service not initialized")
 	}
-	return a.chatSvc.CreateGroup()
+	gid, groupKey, err := a.chatSvc.CreateGroup()
+	if err != nil {
+		return nil, err
+	}
+	return &CreateGroupResult{
+		Gid:      gid,
+		GroupKey: groupKey,
+	}, nil
 }
 
 // JoinGroup 加入群聊，需要群ID和群密钥
