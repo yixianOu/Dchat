@@ -1,7 +1,7 @@
 # DecentralizedChat E2E 集成测试计划
 
 **日期**: 2026-03-04
-**更新**: 完成 nscsetup 测试，所有 5 个核心模块测试已完成
+**更新**: 2026-03-07 完成 LeafNode 全部功能测试 + P2P 公网 Hub 通信测试，仅剩 chat 消息加密解密模块未测试
 
 ---
 
@@ -30,7 +30,8 @@
 ```
 test/
 ├── leafnode/           # internal/leafnode 测试
-│   └── leafnode_sqlite_e2e_test.go
+│   ├── leafnode_sqlite_e2e_test.go
+│   └── leafnode_p2p_hub_test.go
 ├── nats/               # internal/nats 测试
 │   └── nats_client_e2e_test.go
 ├── nscsetup/           # internal/nscsetup 测试
@@ -50,6 +51,7 @@ test/
 | 测试文件 | 测试内容 | 状态 |
 |-----------|---------|------|
 | `leafnode_sqlite_e2e_test.go` | LeafNode + SQLite 完整架构 | ✅ 已完成 |
+| `leafnode_p2p_hub_test.go` | 两个 LeafNode 通过公网 Hub 通信 | ✅ 已完成 |
 | - | LeafNode Manager 启动/停止 | ✅ 已完成 |
 | - | 连接 Hub | ✅ 已完成 |
 | - | 获取本地连接地址 | ✅ 已完成 |
@@ -142,9 +144,13 @@ func waitForConnection(t *testing.T, check func() error)
 
 已有测试文件：
 - `test/storage/storage_e2e_test.go` - Storage 模块完整测试 (✅ 4 个测试通过)
-- `test/leafnode/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试 (✅ 3 个测试通过)
+- `test/leafnode/leafnode_sqlite_e2e_test.go` - LeafNode + SQLite 集成测试 (✅ 7 个测试通过)
+- `test/leafnode/leafnode_p2p_hub_test.go` - LeafNode P2P 公网 Hub 通信测试 (✅ 1 个测试通过)
 - `test/nats/nats_client_e2e_test.go` - NATS 客户端测试 (✅ 2 个测试通过)
 - `test/nscsetup/nscsetup_e2e_test.go` - NSC 简化设置测试 (✅ 3 个测试通过)
+
+### 待完成测试
+- **internal/chat - Chat 消息加密解密模块**：唯一剩余未测试的核心模块
 
 ---
 
