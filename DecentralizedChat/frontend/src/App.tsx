@@ -13,7 +13,8 @@ import {
   onDecrypted,
   onError,
   getConversationID,  // ✅ 新增功能
-  getNetworkStatus    // ✅ 新增功能
+  getNetworkStatus,    // ✅ 新增功能
+  getMessages         // ✅ 新增：获取历史消息
 } from './services/dchatAPI';
 import { User, DecryptedMessage, ChatSession, Friend, Group, NetworkStatus } from './types';
 import './App.css';
@@ -102,12 +103,36 @@ const App: React.FC = () => {
 
     // 立即检查一次
     checkNetworkStatus();
-    
+
     // 每30秒检查一次网络状态
     const interval = setInterval(checkNetworkStatus, 30000);
-    
+
     return () => clearInterval(interval);
   }, []);
+
+  // ✅ 切换会话时加载本地历史消息
+  useEffect(() => {
+    const loadSessionHistory = async () => {
+      if (!currentSession) return;
+
+      try {
+        const historyMessages = await getMessages(currentSession.id, 50, null as any);
+        const converted = historyMessages.reverse().map((msg: any) => ({
+          CID: msg.conversation_id,
+          Sender: msg.sender_nickname || msg.sender_id,
+          Ts: String(msg.timestamp),
+          Plain: msg.content,
+          IsGroup: msg.is_group,
+          Subject: ''
+        }));
+        setMessages(converted);
+      } catch (error) {
+        console.error('加载历史消息失败:', error);
+      }
+    };
+
+    loadSessionHistory();
+  }, [currentSession?.id]);
 
   const handleSetNickname = async () => {
     try {
@@ -278,6 +303,7 @@ const App: React.FC = () => {
             sessionId={currentSession.id}
             isGroup={currentSession.isGroup}
             messages={getSessionMessages(currentSession.id)}
+            onMessagesUpdate={(newMsg) => setMessages(prev => [...prev, newMsg])}
           />
         ) : (
           <div className="no-session">

@@ -198,3 +198,25 @@ sudo journalctl -u dchat-hub -f
 nats account info --server localhost:4222
 nats stream ls --server localhost:4222
 ```
+```bash
+  #执行以下命令直接创建用于持久化所有群聊消息的Stream：
+  nats stream create DChatGroups \
+    --server 121.199.173.116:4222 \
+    --subjects "dchat.grp.*.msg" \
+    --storage file \
+    --retention limits \
+    --max-msgs-per-subject 1000 \
+    --max-age 30d \
+    --replicas 1 \
+    --discard old
+
+  #需要持久化私聊消息，创建另一个Stream：
+  nats stream create DChatDirect \
+    --server 121.199.173.116:4222 \
+    --subjects "dchat.dm.*.msg" \
+    --storage file \
+    --retention limits \
+    --max-msgs-per-subject 1000 \
+    --max-age 30d \
+    --replicas 1    
+```    

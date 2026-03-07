@@ -29,6 +29,7 @@ export interface ChatRoomProps {
   sessionId: string;
   isGroup?: boolean;
   messages: DecryptedMessage[];
+  onMessagesUpdate?: (newMessage: DecryptedMessage) => void;
 }
 
 // 聊天会话信息

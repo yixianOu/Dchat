@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { sendDirect, sendGroup } from '../services/dchatAPI';
+import { sendDirect, sendGroup, getMessages } from '../services/dchatAPI';
 import { DecryptedMessage, ChatRoomProps } from '../types';
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ roomName, sessionId, isGroup = false, messages }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ roomName, sessionId, isGroup = false, messages, onMessagesUpdate }) => {
   const [newMessage, setNewMessage] = useState<string>('');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -16,6 +16,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomName, sessionId, isGroup = fals
         await sendDirect(sessionId, newMessage);
       }
       setNewMessage('');
+
+      // Send successful, fetch latest message to update display
+      try {
+        const latest = await getMessages(sessionId, 1, null as any);
+        if (latest && latest.length > 0 && onMessagesUpdate) {
+          const converted = {
+            CID: latest[0].conversation_id,
+            Sender: latest[0].sender_nickname || latest[0].sender_id,
+            Ts: String(latest[0].timestamp),
+            Plain: latest[0].content,
+            IsGroup: latest[0].is_group,
+            Subject: ''
+          };
+          onMessagesUpdate(converted);
+        }
+      } catch (fetchError) {
+        console.warn('Failed to fetch latest message:', fetchError);
+      }
     } catch (error) {
       console.error('发送消息失败:', error);
       alert('发送消息失败');
