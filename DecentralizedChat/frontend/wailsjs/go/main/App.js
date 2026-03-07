@@ -14,16 +14,16 @@ export function AddGroupKey(arg1, arg2) {
   return window['go']['main']['App']['AddGroupKey'](arg1, arg2);
 }
 
-export function GenerateSSLCertificate(arg1, arg2, arg3) {
-  return window['go']['main']['App']['GenerateSSLCertificate'](arg1, arg2, arg3);
-}
-
-export function GetAllDerivedKeys() {
-  return window['go']['main']['App']['GetAllDerivedKeys']();
+export function GetConversation(arg1) {
+  return window['go']['main']['App']['GetConversation'](arg1);
 }
 
 export function GetConversationID(arg1) {
   return window['go']['main']['App']['GetConversationID'](arg1);
+}
+
+export function GetMessages(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetMessages'](arg1, arg2, arg3);
 }
 
 export function GetNetworkStatus() {
@@ -44,6 +44,18 @@ export function JoinGroup(arg1) {
 
 export function LoadNSCKeys(arg1) {
   return window['go']['main']['App']['LoadNSCKeys'](arg1);
+}
+
+export function MarkAsRead(arg1, arg2) {
+  return window['go']['main']['App']['MarkAsRead'](arg1, arg2);
+}
+
+export function OnShutdown(arg1) {
+  return window['go']['main']['App']['OnShutdown'](arg1);
+}
+
+export function SearchMessages(arg1, arg2) {
+  return window['go']['main']['App']['SearchMessages'](arg1, arg2);
 }
 
 export function SendDirect(arg1, arg2) {

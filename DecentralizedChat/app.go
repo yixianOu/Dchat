@@ -108,7 +108,8 @@ func (a *App) OnStartup(ctx context.Context) {
 		log.Printf("start nats client failed: %v", err)
 		return
 	}
-	a.chatSvc = chat.NewService(a.natsSvc)
+	// 把storage实例传给chat服务
+	a.chatSvc = chat.NewService(a.natsSvc, a.storage)
 
 	// 设置默认的消息处理器，将解密后的消息推送给前端
 	a.chatSvc.OnDecrypted(func(msg *chat.DecryptedMessage) {
@@ -272,6 +273,38 @@ func (a *App) AddFriendNSCKey(uid, nscPubKey string) error {
 		return fmt.Errorf("chat service not initialized")
 	}
 	return a.chatSvc.AddFriendNSCKey(uid, nscPubKey)
+}
+
+// GetMessages 获取会话历史消息
+func (a *App) GetMessages(conversationID string, limit int, before *time.Time) ([]*storage.StoredMessage, error) {
+	if a.chatSvc == nil {
+		return nil, fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.GetMessages(conversationID, limit, before)
+}
+
+// MarkAsRead 标记会话消息已读
+func (a *App) MarkAsRead(conversationID string, before time.Time) error {
+	if a.chatSvc == nil {
+		return fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.MarkAsRead(conversationID, before)
+}
+
+// GetConversation 获取会话信息
+func (a *App) GetConversation(conversationID string) (*storage.StoredConversation, error) {
+	if a.chatSvc == nil {
+		return nil, fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.GetConversation(conversationID)
+}
+
+// SearchMessages 搜索消息
+func (a *App) SearchMessages(query string, limit int) ([]*storage.StoredMessage, error) {
+	if a.chatSvc == nil {
+		return nil, fmt.Errorf("chat service not initialized")
+	}
+	return a.chatSvc.SearchMessages(query, limit)
 }
 
 // getNSCUserSeed 获取当前用户的NSC seed (从配置中读取)

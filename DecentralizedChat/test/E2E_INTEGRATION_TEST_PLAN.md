@@ -1,7 +1,12 @@
 # DecentralizedChat E2E 集成测试计划
 
 **日期**: 2026-03-04
-**更新**: 2026-03-07 完成 LeafNode 全部功能测试 + P2P 公网 Hub 通信测试，仅剩 chat 消息加密解密模块未测试
+**更新**: 2026-03-07 完成所有核心模块E2E测试：
+- ✅ LeafNode全部功能测试 + P2P公网Hub通信测试
+- ✅ NATS客户端模块测试
+- ✅ NSC Setup模块测试
+- ✅ Storage模块测试
+- ✅ Chat消息加密解密模块测试（已编写，发现2个bug）
 
 ---
 
@@ -150,7 +155,11 @@ func waitForConnection(t *testing.T, check func() error)
 - `test/nscsetup/nscsetup_e2e_test.go` - NSC 简化设置测试 (✅ 3 个测试通过)
 
 ### 待完成测试
-- **internal/chat - Chat 消息加密解密模块**：唯一剩余未测试的核心模块
+- **internal/chat - Chat 消息加密解密模块**：测试已编写，发现2个bug：
+  - ❌ 私聊加密解密失败（decrypt failed）
+  - ❌ NSC密钥派生测试失败（无效的测试公钥）
+  - ✅ 群聊加密解密通过
+  - ✅ 错误场景测试通过
 
 ---
 

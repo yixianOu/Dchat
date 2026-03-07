@@ -14,6 +14,7 @@ import (
 	"time"
 
 	natsservice "DecentralizedChat/internal/nats"
+	"DecentralizedChat/internal/storage"
 
 	"github.com/nats-io/nats.go"
 )
@@ -44,9 +45,10 @@ type DecryptedMessage struct {
 	Subject string    // 原始 NATS subject
 }
 
-// Service 精简：仅支持私聊/群聊加密收发，无本地房间/历史存储。
+// Service 支持私聊/群聊加密收发和本地消息存储
 type Service struct {
-	nats *natsservice.Service
+	nats    *natsservice.Service
+	storage *storage.Storage // 本地存储
 
 	mu sync.RWMutex
 
@@ -73,10 +75,11 @@ type Service struct {
 }
 
 // NewService create minimal service
-func NewService(n *natsservice.Service) *Service {
+func NewService(n *natsservice.Service, s *storage.Storage) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Service{
+	svc := &Service{
 		nats:          n,
+		storage:       s,
 		user:          &User{ID: generateUserID(), Nickname: "Anonymous"},
 		friendPubKeys: make(map[string]string),
 		groupSymKeys:  make(map[string]string),
@@ -90,7 +93,7 @@ func NewService(n *natsservice.Service) *Service {
 
 	// 移除预加载逻辑，改为按需查询
 
-	return s
+	return svc
 }
 
 // LoadNSCKeys 从NSC seed加载密钥对用于聊天加密 ⭐ 新增功能
@@ -398,15 +401,46 @@ func (s *Service) SendDirect(peerID, content string) error {
 	if err != nil {
 		return err
 	}
+	now := time.Now()
 	wire := encWire{
 		CID:    cid,
 		Sender: from,
-		TS:     time.Now().Unix(),
+		TS:     now.Unix(),
 		Nonce:  nonceB64,
 		Cipher: cipherB64,
 	}
 	data, _ := json.Marshal(wire)
 	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
+
+	// 自动保存自己发送的消息到本地存储
+	if s.storage != nil {
+		storedMsg := &storage.StoredMessage{
+			ID:             generateMessageID(),
+			ConversationID: cid,
+			SenderID:       from,
+			SenderNickname: s.user.Nickname,
+			Content:        content,
+			Timestamp:      now,
+			IsRead:         true, // 自己发送的消息默认已读
+			IsGroup:        false,
+		}
+		_ = s.storage.SaveMessage(storedMsg)
+
+		// 更新会话最后消息时间
+		conv, _ := s.storage.GetConversation(cid)
+		if conv == nil {
+			conv = &storage.StoredConversation{
+				ID:            cid,
+				Type:          "dm",
+				LastMessageAt: now,
+				CreatedAt:     now,
+			}
+		} else {
+			conv.LastMessageAt = now
+		}
+		_ = s.storage.SaveConversation(conv)
+	}
+
 	return s.nats.Publish(subj, data)
 }
 
@@ -430,15 +464,46 @@ func (s *Service) SendGroup(gid, content string) error {
 	if err != nil {
 		return err
 	}
+	now := time.Now()
 	wire := encWire{
 		CID:    gid,
 		Sender: from,
-		TS:     time.Now().Unix(),
+		TS:     now.Unix(),
 		Nonce:  nonceB64,
 		Cipher: cipherB64,
 	}
 	data, _ := json.Marshal(wire)
 	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
+
+	// 自动保存自己发送的群聊消息到本地存储
+	if s.storage != nil {
+		storedMsg := &storage.StoredMessage{
+			ID:             generateMessageID(),
+			ConversationID: gid,
+			SenderID:       from,
+			SenderNickname: s.user.Nickname,
+			Content:        content,
+			Timestamp:      now,
+			IsRead:         true, // 自己发送的消息默认已读
+			IsGroup:        true,
+		}
+		_ = s.storage.SaveMessage(storedMsg)
+
+		// 更新群聊会话最后消息时间
+		conv, _ := s.storage.GetConversation(gid)
+		if conv == nil {
+			conv = &storage.StoredConversation{
+				ID:            gid,
+				Type:          "group",
+				LastMessageAt: now,
+				CreatedAt:     now,
+			}
+		} else {
+			conv.LastMessageAt = now
+		}
+		_ = s.storage.SaveConversation(conv)
+	}
+
 	return s.nats.Publish(subj, data)
 }
 
@@ -507,7 +572,41 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 		Subject: subject,
 	}
 
-	// 7) 分发
+	// 7) 自动保存到本地存储（如果storage已初始化）
+	if s.storage != nil {
+		storedMsg := &storage.StoredMessage{
+			ID:             generateMessageID(),
+			ConversationID: w.CID,
+			SenderID:       w.Sender,
+			SenderNickname: w.Sender, // TODO: 后续可以扩展好友昵称映射
+			Content:        string(pt),
+			Timestamp:      time.Unix(w.TS, 0),
+			IsRead:         false,
+			IsGroup:        isGroup,
+		}
+		// 最佳努力保存，失败不影响消息分发
+		_ = s.storage.SaveMessage(storedMsg)
+
+		// 更新会话最后消息时间
+		convType := "dm"
+		if isGroup {
+			convType = "group"
+		}
+		conv, _ := s.storage.GetConversation(w.CID)
+		if conv == nil {
+			conv = &storage.StoredConversation{
+				ID:            w.CID,
+				Type:          convType,
+				LastMessageAt: time.Unix(w.TS, 0),
+				CreatedAt:     time.Now(),
+			}
+		} else {
+			conv.LastMessageAt = time.Unix(w.TS, 0)
+		}
+		_ = s.storage.SaveConversation(conv)
+	}
+
+	// 8) 分发
 	s.dispatchDecrypted(msg)
 }
 
@@ -544,10 +643,58 @@ func (s *Service) Close() error {
 	return nil
 }
 
+// --- 存储相关API ---
+
+// GetMessages 获取会话历史消息
+func (s *Service) GetMessages(conversationID string, limit int, before *time.Time) ([]*storage.StoredMessage, error) {
+	if s.storage == nil {
+		return nil, errors.New("storage not initialized")
+	}
+	return s.storage.GetMessages(conversationID, limit, before)
+}
+
+// MarkAsRead 标记会话消息已读
+func (s *Service) MarkAsRead(conversationID string, before time.Time) error {
+	if s.storage == nil {
+		return errors.New("storage not initialized")
+	}
+	return s.storage.MarkAsRead(conversationID, before)
+}
+
+// GetConversation 获取会话信息
+func (s *Service) GetConversation(conversationID string) (*storage.StoredConversation, error) {
+	if s.storage == nil {
+		return nil, errors.New("storage not initialized")
+	}
+	return s.storage.GetConversation(conversationID)
+}
+
+// SearchMessages 搜索消息
+func (s *Service) SearchMessages(query string, limit int) ([]*storage.StoredMessage, error) {
+	if s.storage == nil {
+		return nil, errors.New("storage not initialized")
+	}
+	return s.storage.SearchMessages(query, limit)
+}
+
+// SaveMessage 手动保存消息（可选）
+func (s *Service) SaveMessage(msg *storage.StoredMessage) error {
+	if s.storage == nil {
+		return errors.New("storage not initialized")
+	}
+	return s.storage.SaveMessage(msg)
+}
+
 // --- helpers ---
 func generateUserID() string {
 	return "user_" + randomID()
 }
+
+// generateMessageID 生成消息唯一ID
+func generateMessageID() string {
+	return "msg_" + randomID()
+}
+
 func randomID() string {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
