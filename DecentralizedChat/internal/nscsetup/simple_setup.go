@@ -60,7 +60,7 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 		return fmt.Errorf("generate JWTs: %w", err)
 	}
 
-	// 3. 生成resolver配置
+	// 3. 生成resolver配置（用于Hub节点，LeafNode不需要）
 	resolverPath := filepath.Join(confDir, "simple_resolver.conf")
 	if err := setup.GenerateResolverConfig(resolverPath); err != nil {
 		return fmt.Errorf("generate resolver config: %w", err)
@@ -81,6 +81,7 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 
 	// 6. 更新配置
 	userPub, _ := setup.UserKey.PublicKey()
+	accountPub, _ := setup.AccountKey.PublicKey()
 
 	// 设置默认值（如果配置为空）
 	if cfg.Keys.Operator == "" {
@@ -94,6 +95,8 @@ func EnsureSimpleSetup(cfg *config.Config) error {
 	}
 
 	cfg.Keys.KeysDir = confDir
+	cfg.Keys.OperatorJWT = setup.OperatorJWT // 保存Operator JWT到配置
+	cfg.Keys.AccountPubKey = accountPub      // 保存账户公钥
 	cfg.Keys.UserCredsPath = credsPath
 	cfg.Keys.UserSeedPath = userSeedPath
 	cfg.Keys.UserPubKey = userPub

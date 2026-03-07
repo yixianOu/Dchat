@@ -31,6 +31,7 @@ type LeafNodeConfig struct {
 	LocalPort      int           `json:"local_port"`
 	HubURLs        []string      `json:"hub_urls"`
 	CredsFile      string        `json:"creds_file"`
+	OperatorJWT    string        `json:"operator_jwt"`    // Operator JWT，用于本地JWT认证
 	EnableTLS      bool          `json:"enable_tls"`
 	ConnectTimeout time.Duration `json:"connect_timeout"`
 }
@@ -43,6 +44,8 @@ type UIConfig struct {
 // KeysConfig 简化的密钥配置
 type KeysConfig struct {
 	Operator      string `json:"operator"`        // 操作者名称 (e.g. dchat)
+	OperatorJWT   string `json:"operator_jwt"`    // 操作者JWT，用于验证本地连接
+	AccountPubKey string `json:"account_pub_key"` // 账户公钥 (A...)
 	KeysDir       string `json:"keys_dir"`        // 密钥存储目录
 	UserCredsPath string `json:"user_creds_path"` // 用户凭据文件路径 (.creds)
 	UserSeedPath  string `json:"user_seed_path"`  // 用户私钥种子文件路径
@@ -222,8 +225,11 @@ func (c *Config) ValidateAndSetDefaults() error {
 		c.LeafNode.LocalHost = "127.0.0.1"
 	}
 
-	// 设置默认端口
+	// 设置默认端口（如果是0表示随机端口，不需要设置默认值）
 	if c.LeafNode.LocalPort == 0 {
+		// 0表示让系统自动分配随机端口，保持不变
+	} else if c.LeafNode.LocalPort < 1 || c.LeafNode.LocalPort > 65535 {
+		// 无效端口号，设置为默认值
 		c.LeafNode.LocalPort = 4222
 	}
 
@@ -240,6 +246,16 @@ func (c *Config) ValidateAndSetDefaults() error {
 	// 确保keys.user与user.nickname保持一致（如果keys.user为空）
 	if c.Keys.User == "" {
 		c.Keys.User = c.User.Nickname
+	}
+
+	// 同步CredsFile到LeafNode配置
+	if c.LeafNode.CredsFile == "" && c.Keys.UserCredsPath != "" {
+		c.LeafNode.CredsFile = c.Keys.UserCredsPath
+	}
+
+	// 同步OperatorJWT到LeafNode配置
+	if c.LeafNode.OperatorJWT == "" && c.Keys.OperatorJWT != "" {
+		c.LeafNode.OperatorJWT = c.Keys.OperatorJWT
 	}
 
 	if c.UI.Theme == "" {
