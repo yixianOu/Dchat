@@ -8,6 +8,7 @@ import (
 	"DecentralizedChat/internal/config"
 	"DecentralizedChat/internal/leafnode"
 	internal_nats "DecentralizedChat/internal/nats"
+	"DecentralizedChat/internal/nscsetup"
 
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
@@ -26,10 +27,14 @@ func TestLeafNode_P2P_Through_Public_Hub_E2E(t *testing.T) {
 
 	// ========== Step 1: 启动第一个 LeafNode 节点 A ==========
 	t.Log("Step 1: 启动 LeafNode 节点 A...")
+  // 先初始化NSC配置得到creds路径
+  cfg, _ := config.LoadConfig()
+  _ = nscsetup.EnsureSimpleSetup(cfg)
 	cfgA := &config.LeafNodeConfig{
 		LocalHost:      testHost,
 		LocalPort:      42222, // 固定端口避免冲突
 		HubURLs:        []string{publicHubLeafURL},
+		CredsFile:  cfg.Keys.UserCredsPath,
 		ConnectTimeout: 15 * time.Second, // 公网环境增加超时时间
 	}
 
@@ -51,6 +56,7 @@ func TestLeafNode_P2P_Through_Public_Hub_E2E(t *testing.T) {
 		LocalHost:      testHost,
 		LocalPort:      42223, // 固定端口避免冲突
 		HubURLs:        []string{publicHubLeafURL},
+		CredsFile:  cfg.Keys.UserCredsPath,
 		ConnectTimeout: 15 * time.Second,
 	}
 
