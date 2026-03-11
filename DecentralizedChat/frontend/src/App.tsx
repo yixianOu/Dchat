@@ -30,6 +30,10 @@ const App: React.FC = () => {
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [nickname, setNickname] = useState('');
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null); // ✅ 新增网络状态
+  // 可复制信息弹窗状态
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyModalTitle, setCopyModalTitle] = useState('');
+  const [copyModalItems, setCopyModalItems] = useState<Array<{label: string, value: string}>>([]);
 
   // 初始化用户信息和事件监听
   useEffect(() => {
@@ -175,8 +179,13 @@ const App: React.FC = () => {
       setSessions(prev => [...prev, newSession]);
       setCurrentSession(newSession);
 
-      // 展示群ID和密钥给用户
-      alert(`群创建成功！\n群ID: ${gid}\n群密钥: ${groupKey}\n请将这些信息分享给要加入的好友。`);
+      // 展示群ID和密钥给用户，支持复制
+      setCopyModalTitle('群创建成功');
+      setCopyModalItems([
+        { label: '群ID', value: gid },
+        { label: '群密钥', value: groupKey },
+      ]);
+      setShowCopyModal(true);
     } catch (error) {
       console.error('创建群失败:', error);
       alert('创建群失败');
@@ -318,8 +327,33 @@ const App: React.FC = () => {
           <div className="modal-content">
             <h3>用户设置</h3>
             <div className="form-group">
+              <label>你的用户ID (可复制):</label>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <input
+                  value={user.id}
+                  readOnly
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '12px' }}
+                />
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(user.id);
+                    const btn = event?.target as HTMLButtonElement;
+                    const originalText = btn.textContent;
+                    btn.textContent = '已复制!';
+                    setTimeout(() => {
+                      btn.textContent = originalText;
+                    }, 2000);
+                  }}
+                  className="copy-btn"
+                  style={{ padding: '4px 8px' }}
+                >
+                  复制
+                </button>
+              </div>
+            </div>
+            <div className="form-group">
               <label>昵称:</label>
-              <input 
+              <input
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="输入昵称"
@@ -336,6 +370,54 @@ const App: React.FC = () => {
       {/* 密钥管理弹窗 */}
       {showKeyManager && (
         <KeyManager onClose={() => setShowKeyManager(false)} />
+      )}
+
+      {/* 可复制信息弹窗 */}
+      {showCopyModal && (
+        <div className="key-manager-modal">
+          <div className="modal-content">
+            <h3>{copyModalTitle}</h3>
+            <div className="key-display">
+              {copyModalItems.map((item, index) => (
+                <div key={index} className="key-item">
+                  <label>{item.label}:</label>
+                  <textarea
+                    value={item.value}
+                    rows={2}
+                    readOnly
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: '12px' }}
+                  />
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(item.value);
+                      const btn = event?.target as HTMLButtonElement;
+                      const originalText = btn.textContent;
+                      btn.textContent = '已复制!';
+                      setTimeout(() => {
+                        btn.textContent = originalText;
+                      }, 2000);
+                    }}
+                    className="copy-btn"
+                    style={{ marginTop: '4px' }}
+                  >
+                    复制
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: '12px', color: '#666', margin: '10px 0' }}>
+              请妥善保管以上信息，分享给需要加入的用户。
+            </p>
+            <div className="modal-actions">
+              <button
+                onClick={() => setShowCopyModal(false)}
+                className="btn-primary"
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

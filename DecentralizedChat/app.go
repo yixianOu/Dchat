@@ -147,6 +147,19 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 	}
 
+	// 初始化离线消息同步（所有依赖都准备就绪：LeafNode已连接、NATS客户端已连接、密钥已加载）
+	if a.chatSvc != nil && a.config.LeafNode.EnableJetStream {
+		go func() {
+			// 等待3秒确保LeafNode和Hub的连接完全稳定
+			time.Sleep(3 * time.Second)
+			if err := a.chatSvc.InitOfflineSync(); err != nil {
+				log.Printf("初始化离线同步失败: %v", err)
+			} else {
+				log.Println("✅ 离线消息同步初始化成功")
+			}
+		}()
+	}
+
 	if err := config.SaveConfig(a.config); err != nil {
 		log.Printf("save config warn: %v", err)
 	}
@@ -155,7 +168,9 @@ func (a *App) OnStartup(ctx context.Context) {
 
 // OnShutdown is called when the app stops
 func (a *App) OnShutdown(ctx context.Context) {
+	// 先停止离线消息同步
 	if a.natsSvc != nil {
+		a.natsSvc.StopSync()
 		a.natsSvc.Close()
 	}
 	if a.leafnodeMgr != nil {
