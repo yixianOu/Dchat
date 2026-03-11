@@ -230,6 +230,129 @@ func (s *Service) GetUser() User {
 	return *s.user
 }
 
+// InitOfflineSync 初始化离线消息同步，用户登录成功后调用
+func (s *Service) InitOfflineSync() error {
+	userID := s.user.ID
+
+	// 配置同步回调
+	cfg := &natsservice.OfflineSyncConfig{
+		UserID: userID,
+		MessageHandler: func(data []byte) error {
+			return s.processOfflineMessage(data)
+		},
+		ErrorHandler: func(err error) {
+			s.dispatchError(err)
+		},
+	}
+
+	// 初始化镜像
+	if err := s.nats.InitOfflineMirror(cfg); err != nil {
+		return err
+	}
+
+	// 启动同步
+	return s.nats.StartSync()
+}
+
+// processOfflineMessage 处理同步下来的离线消息
+func (s *Service) processOfflineMessage(data []byte) error {
+	// 1. 解密：复用现有消息解密逻辑，和实时消息处理完全一致
+	var w encWire
+	if err := json.Unmarshal(data, &w); err != nil {
+		return fmt.Errorf("unmarshal offline message: %w", err)
+	}
+
+	// 忽略自己发送的离线消息（避免重复存储）
+	s.mu.RLock()
+	selfID := s.user.ID
+	priv := s.userPrivB64
+	s.mu.RUnlock()
+	if w.Sender == selfID {
+		return nil
+	}
+
+	var (
+		pt      []byte
+		err     error
+		isGroup bool
+	)
+
+	// 先尝试作为群聊解密
+	sym, groupKeyErr := s.getGroupKey(w.CID)
+	if groupKeyErr == nil {
+		pt, err = decryptGroup(sym, w.Nonce, w.Cipher)
+		isGroup = true
+	} else {
+		// 尝试作为私聊解密
+		if priv == "" {
+			return errors.New("local private key missing")
+		}
+		peerPub, friendKeyErr := s.getFriendKey(w.Sender)
+		if friendKeyErr != nil {
+			// 没有对应密钥的消息直接丢弃
+			return nil
+		}
+		pt, err = decryptDirect(priv, peerPub, w.Nonce, w.Cipher)
+		isGroup = false
+	}
+
+	if err != nil {
+		return fmt.Errorf("decrypt offline message: %w", err)
+	}
+
+	// 构造统一的解密消息结构
+	decrypted := &DecryptedMessage{
+		CID:     w.CID,
+		Sender:  w.Sender,
+		TS:      time.Unix(w.TS, 0),
+		Plain:   string(pt),
+		IsGroup: isGroup,
+		RawWire: w,
+		Subject: "",
+	}
+
+	// 2. 存储：复用现有SQLite存储逻辑
+	if s.storage != nil {
+		storedMsg := &storage.StoredMessage{
+			ID:             generateMessageID(),
+			ConversationID: w.CID,
+			SenderID:       w.Sender,
+			SenderNickname: w.Sender,
+			Content:        string(pt),
+			Timestamp:      time.Unix(w.TS, 0),
+			IsRead:         false, // 离线消息默认未读
+			IsGroup:        isGroup,
+		}
+		if err := s.storage.SaveMessage(storedMsg); err != nil {
+			return fmt.Errorf("save offline message: %w", err)
+		}
+
+		// 更新会话列表
+		convType := "dm"
+		if isGroup {
+			convType = "group"
+		}
+		conv, _ := s.storage.GetConversation(w.CID)
+		now := time.Now()
+		if conv == nil {
+			conv = &storage.StoredConversation{
+				ID:            w.CID,
+				Type:          convType,
+				LastMessageAt: time.Unix(w.TS, 0),
+				CreatedAt:     now,
+			}
+		} else {
+			conv.LastMessageAt = time.Unix(w.TS, 0)
+		}
+		_ = s.storage.SaveConversation(conv)
+	}
+
+	// 3. 分发：复用现有消息分发逻辑，通知UI更新
+	s.dispatchDecrypted(decrypted)
+
+	return nil
+}
+
 // SetKeyPair 设置本地密钥对
 func (s *Service) SetKeyPair(privB64, pubB64 string) {
 	s.mu.Lock()

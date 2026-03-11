@@ -22,7 +22,7 @@ import (
 
 // CreateGroupResult 创建群聊返回结果
 type CreateGroupResult struct {
-	Gid      string `json:"gid"`
+	GID      string `json:"gid"`
 	GroupKey string `json:"groupKey"`
 }
 
@@ -65,12 +65,15 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// 2. 初始化并启动 LeafNode Manager
 	leafnodeCfg := &config.LeafNodeConfig{
-		LocalHost:      cfg.LeafNode.LocalHost,
-		LocalPort:      cfg.LeafNode.LocalPort,
-		HubURLs:        cfg.LeafNode.HubURLs,
-		CredsFile:      cfg.Keys.UserCredsPath,
-		EnableTLS:      cfg.LeafNode.EnableTLS,
-		ConnectTimeout: cfg.LeafNode.ConnectTimeout,
+		LocalHost:               cfg.LeafNode.LocalHost,
+		LocalPort:               cfg.LeafNode.LocalPort,
+		HubURLs:                 cfg.LeafNode.HubURLs,
+		CredsFile:               cfg.Keys.UserCredsPath,
+		EnableTLS:               cfg.LeafNode.EnableTLS,
+		ConnectTimeout:          cfg.LeafNode.ConnectTimeout,
+		EnableJetStream:         cfg.LeafNode.EnableJetStream,
+		JetStreamStoreDir:       cfg.LeafNode.JetStreamStoreDir,
+		JetStreamAllowUpstreamAPI: cfg.LeafNode.JetStreamAllowUpstreamAPI,
 	}
 	if leafnodeCfg.ConnectTimeout == 0 {
 		leafnodeCfg.ConnectTimeout = 10 * time.Second
@@ -310,7 +313,7 @@ func (a *App) CreateGroup() (*CreateGroupResult, error) {
 		return nil, err
 	}
 	return &CreateGroupResult{
-		Gid:      gid,
+		GID:      gid,
 		GroupKey: groupKey,
 	}, nil
 }

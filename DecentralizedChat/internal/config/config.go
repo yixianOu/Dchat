@@ -71,6 +71,8 @@ var defaultConfig = Config{
 		CredsFile:      "",
 		EnableTLS:      false,
 		ConnectTimeout: 10 * time.Second,
+		EnableJetStream: true,
+		JetStreamAllowUpstreamAPI: true,
 	},
 	SQLitePath: "", // 默认 ~/.dchat/chat.db
 	UI: UIConfig{
@@ -97,6 +99,8 @@ func DefaultLeafNodeConfig() *LeafNodeConfig {
 		CredsFile:      "",
 		EnableTLS:      false,
 		ConnectTimeout: 10 * time.Second,
+		EnableJetStream: true,
+		JetStreamAllowUpstreamAPI: true,
 	}
 }
 

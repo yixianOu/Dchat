@@ -2,8 +2,10 @@
 package nats
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -11,6 +13,18 @@ import (
 
 type Service struct {
 	conn *nats.Conn
+	mu   sync.RWMutex
+
+	// ========== 离线消息同步相关字段 ==========
+	js              nats.JetStreamContext // JetStream上下文
+	syncCfg         *OfflineSyncConfig    // 同步配置
+	syncSubGroup    *nats.Subscription    // 群聊同步订阅
+	syncSubDirect   *nats.Subscription    // 私聊同步订阅
+	syncCtx         context.Context       // 同步协程上下文
+	syncCancel      context.CancelFunc    // 同步取消函数
+	syncRunning     bool                  // 同步状态
+	streamNameGroup string                // 本地群聊镜像流名称
+	streamNameDirect string               // 本地私聊镜像流名称
 }
 
 type ClientConfig struct {
@@ -80,7 +94,14 @@ func NewService(cfg ClientConfig) (*Service, error) {
 		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
 	}
 
-	return &Service{conn: nc}, nil
+	// 初始化同步上下文
+	syncCtx, syncCancel := context.WithCancel(context.Background())
+
+	return &Service{
+		conn: nc,
+		syncCtx: syncCtx,
+		syncCancel: syncCancel,
+	}, nil
 }
 
 func (s *Service) Subscribe(subject string, handler func(msg *nats.Msg)) error {
