@@ -1,5 +1,5 @@
 // E2E 集成测试：Hub JetStream 离线消息
-package e2e_test
+package jetstream_test
 
 import (
 	"fmt"

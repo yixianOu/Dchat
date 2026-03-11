@@ -37,6 +37,7 @@ type LeafNodeConfig struct {
 	ConnectTimeout time.Duration `json:"connect_timeout"`
 	EnableJetStream bool         `json:"enable_jetstream"` // 是否开启本地JetStream
 	JetStreamStoreDir string     `json:"jetstream_store_dir"` // JetStream存储目录，空则使用临时目录
+	JetStreamAllowUpstreamAPI bool `json:"jetstream_allow_upstream_api"` // 是否允许转发JetStream API请求到上游Hub
 }
 
 type UIConfig struct {

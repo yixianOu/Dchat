@@ -147,9 +147,9 @@ func (m *Manager) buildServerOptions(remotes []*server.RemoteLeafOpts) *server.O
 		Host: m.config.LocalHost,
 		Port: m.config.LocalPort,
 		LeafNode: server.LeafNodeOpts{
-			Host:    m.config.LocalHost,
-			Port:    -1, // 不接受 incoming LeafNode 连接
-			Remotes: remotes,
+			Host:                  m.config.LocalHost,
+			Port:                  -1, // 不接受 incoming LeafNode 连接
+			Remotes:               remotes,
 		},
 		NoLog:  true,
 		NoSigs: true,
