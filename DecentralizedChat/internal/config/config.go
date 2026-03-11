@@ -35,6 +35,8 @@ type LeafNodeConfig struct {
 	OperatorJWT    string        `json:"operator_jwt"`    // Operator JWT，用于本地JWT认证
 	EnableTLS      bool          `json:"enable_tls"`
 	ConnectTimeout time.Duration `json:"connect_timeout"`
+	EnableJetStream bool         `json:"enable_jetstream"` // 是否开启本地JetStream
+	JetStreamStoreDir string     `json:"jetstream_store_dir"` // JetStream存储目录，空则使用临时目录
 }
 
 type UIConfig struct {
@@ -64,7 +66,7 @@ var defaultConfig = Config{
 	LeafNode: LeafNodeConfig{
 		LocalHost:      "127.0.0.1",
 		LocalPort:      4222,
-		HubURLs:        []string{"nats://hub1.dchat.example.com:7422"},
+		HubURLs:        []string{"nats://121.199.173.116:7422"},
 		CredsFile:      "",
 		EnableTLS:      false,
 		ConnectTimeout: 10 * time.Second,
@@ -90,7 +92,7 @@ func DefaultLeafNodeConfig() *LeafNodeConfig {
 	return &LeafNodeConfig{
 		LocalHost:      "127.0.0.1",
 		LocalPort:      4222,
-		HubURLs:        []string{"nats://hub1.dchat.example.com:7422", "nats://hub2.dchat.example.com:7422"},
+		HubURLs:        []string{"nats://121.199.173.116:7422"},
 		CredsFile:      "",
 		EnableTLS:      false,
 		ConnectTimeout: 10 * time.Second,
@@ -236,7 +238,7 @@ func (c *Config) ValidateAndSetDefaults() error {
 
 	// 设置默认 Hub URLs
 	if len(c.LeafNode.HubURLs) == 0 {
-		c.LeafNode.HubURLs = []string{"nats://hub1.dchat.example.com:7422"}
+		c.LeafNode.HubURLs = []string{"nats://121.199.173.116:7422"}
 	}
 
 	// 设置默认昵称

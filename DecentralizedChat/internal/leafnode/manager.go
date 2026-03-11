@@ -155,6 +155,15 @@ func (m *Manager) buildServerOptions(remotes []*server.RemoteLeafOpts) *server.O
 		NoSigs: true,
 	}
 
-	// LeafNode 不需要本地 JetStream（用 SQLite 代替）
+	// 如果配置了开启JetStream
+	if m.config.EnableJetStream {
+		opts.JetStream = true
+		opts.JetStreamMaxMemory = 256 * 1024 * 1024 // 256MB内存存储限制
+		opts.JetStreamMaxStore = 1 * 1024 * 1024 * 1024 // 1GB磁盘存储限制
+		if m.config.JetStreamStoreDir != "" {
+			opts.StoreDir = m.config.JetStreamStoreDir
+		}
+	}
+
 	return opts
 }
