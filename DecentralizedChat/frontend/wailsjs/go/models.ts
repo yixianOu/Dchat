@@ -83,6 +83,7 @@ export namespace storage {
 	    timestamp: time.Time;
 	    is_read: boolean;
 	    is_group: boolean;
+	    nats_seq: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new StoredMessage(source);
@@ -98,6 +99,7 @@ export namespace storage {
 	        this.timestamp = this.convertValues(source["timestamp"], time.Time);
 	        this.is_read = source["is_read"];
 	        this.is_group = source["is_group"];
+	        this.nats_seq = source["nats_seq"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

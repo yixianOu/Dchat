@@ -61,6 +61,7 @@ func TestStorage_E2E(t *testing.T) {
 			Timestamp:      now.Add(-10 * time.Minute),
 			IsRead:         false,
 			IsGroup:        false,
+			NatsSeq:        1,
 		},
 		{
 			ID:             "msg_002",
@@ -71,6 +72,7 @@ func TestStorage_E2E(t *testing.T) {
 			Timestamp:      now.Add(-5 * time.Minute),
 			IsRead:         false,
 			IsGroup:        false,
+			NatsSeq:        2,
 		},
 		{
 			ID:             "msg_003",
@@ -81,6 +83,7 @@ func TestStorage_E2E(t *testing.T) {
 			Timestamp:      now,
 			IsRead:         false,
 			IsGroup:        false,
+			NatsSeq:        3,
 		},
 	}
 
@@ -236,6 +239,7 @@ func TestSQLiteStorage_MultipleConversations_E2E(t *testing.T) {
 		Timestamp:      time.Now(),
 		IsRead:         false,
 		IsGroup:        false,
+		NatsSeq:        1,
 	}
 	msg2 := &storage.StoredMessage{
 		ID:             "msg_c2_1",
@@ -246,6 +250,7 @@ func TestSQLiteStorage_MultipleConversations_E2E(t *testing.T) {
 		Timestamp:      time.Now(),
 		IsRead:         false,
 		IsGroup:        true,
+		NatsSeq:        1,
 	}
 
 	if err := s.SaveMessage(msg1); err != nil {
@@ -358,6 +363,7 @@ func TestSQLiteStorage_FilePersistence_E2E(t *testing.T) {
 		Timestamp:      time.Now(),
 		IsRead:         false,
 		IsGroup:        false,
+		NatsSeq:        1,
 	}
 	if err := s1.SaveMessage(msg); err != nil {
 		t.Fatalf("保存消息失败: %v", err)

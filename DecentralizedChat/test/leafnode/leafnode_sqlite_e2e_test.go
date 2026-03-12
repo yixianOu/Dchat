@@ -106,6 +106,7 @@ func TestLeafNode_SQLite_FullArchitecture_E2E(t *testing.T) {
 		Timestamp:      time.Now().Add(-10 * time.Second),
 		IsRead:         false,
 		IsGroup:        false,
+		NatsSeq:        1,
 	}
 	msg2 := &storage.StoredMessage{
 		ID:             "msg_e2e_002",
@@ -116,6 +117,7 @@ func TestLeafNode_SQLite_FullArchitecture_E2E(t *testing.T) {
 		Timestamp:      time.Now(),
 		IsRead:         false,
 		IsGroup:        false,
+		NatsSeq:        2,
 	}
 
 	if err := s.SaveMessage(msg1); err != nil {
@@ -264,6 +266,7 @@ func TestLeafNode_MultipleSQLiteConversations_E2E(t *testing.T) {
 		Timestamp:      time.Now(),
 		IsRead:         false,
 		IsGroup:        false,
+		NatsSeq:        1,
 	}
 	msg2 := &storage.StoredMessage{
 		ID:             "msg_e2e_c2_1",
@@ -274,6 +277,7 @@ func TestLeafNode_MultipleSQLiteConversations_E2E(t *testing.T) {
 		Timestamp:      time.Now(),
 		IsRead:         false,
 		IsGroup:        true,
+		NatsSeq:        1,
 	}
 
 	if err := s.SaveMessage(msg1); err != nil {
