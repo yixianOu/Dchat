@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -81,11 +82,11 @@ func NewService(cfg ClientConfig) (*Service, error) {
 	opts = append(opts,
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			if err != nil {
-				fmt.Printf("NATS disconnected: %v\n", err)
+				slog.Error("NATS disconnected", "error", err)
 			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			fmt.Printf("NATS reconnected to: %s\n", nc.ConnectedUrl())
+			slog.Info("NATS reconnected", "url", nc.ConnectedUrl())
 		}),
 	)
 
@@ -144,7 +145,7 @@ func (s *Service) RequestJSON(subject string, data interface{}, timeout time.Dur
 func (s *Service) SubscribeJSON(subject string, handler func(data []byte) error) error {
 	_, err := s.conn.Subscribe(subject, func(msg *nats.Msg) {
 		if err := handler(msg.Data); err != nil {
-			fmt.Printf("failed to process JSON message: %v\n", err)
+			slog.Error("failed to process JSON message", "error", err, "subject", subject)
 		}
 	})
 	if err != nil {

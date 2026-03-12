@@ -12,20 +12,20 @@ import (
 	"golang.org/x/crypto/nacl/box"
 )
 
-// b64 encodes bytes to standard base64
-func b64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
+// B64 encodes bytes to standard base64
+func B64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
 
-// b64dec decodes standard base64
-func b64dec(s string) ([]byte, error) { return base64.StdEncoding.DecodeString(s) }
+// B64Dec decodes standard base64
+func B64Dec(s string) ([]byte, error) { return base64.StdEncoding.DecodeString(s) }
 
 // encryptDirect performs public-key encryption using NaCl box (X25519 + XSalsa20-Poly1305)
 // Keys are expected raw 32 bytes each, base64 encoded.
-func encryptDirect(senderPrivB64, recipientPubB64 string, plaintext []byte) (nonceB64, cipherB64 string, err error) {
-	privRaw, err := b64dec(senderPrivB64)
+func EncryptDirect(senderPrivB64, recipientPubB64 string, plaintext []byte) (nonceB64, cipherB64 string, err error) {
+	privRaw, err := B64Dec(senderPrivB64)
 	if err != nil {
 		return "", "", fmt.Errorf("decode sender priv: %w", err)
 	}
-	peerPubRaw, err := b64dec(recipientPubB64)
+	peerPubRaw, err := B64Dec(recipientPubB64)
 	if err != nil {
 		return "", "", fmt.Errorf("decode recipient pub: %w", err)
 	}
@@ -41,24 +41,24 @@ func encryptDirect(senderPrivB64, recipientPubB64 string, plaintext []byte) (non
 		return "", "", err
 	}
 	sealed := box.Seal(nil, plaintext, &nonce, &peerPub, &priv)
-	return b64(nonce[:]), b64(sealed), nil
+	return B64(nonce[:]), B64(sealed), nil
 }
 
 // decryptDirect decrypts a message encrypted with encryptDirect
-func decryptDirect(recipientPrivB64, senderPubB64, nonceB64, cipherB64 string) ([]byte, error) {
-	privRaw, err := b64dec(recipientPrivB64)
+func DecryptDirect(recipientPrivB64, senderPubB64, nonceB64, cipherB64 string) ([]byte, error) {
+	privRaw, err := B64Dec(recipientPrivB64)
 	if err != nil {
 		return nil, fmt.Errorf("decode priv: %w", err)
 	}
-	pubRaw, err := b64dec(senderPubB64)
+	pubRaw, err := B64Dec(senderPubB64)
 	if err != nil {
 		return nil, fmt.Errorf("decode pub: %w", err)
 	}
-	nonceRaw, err := b64dec(nonceB64)
+	nonceRaw, err := B64Dec(nonceB64)
 	if err != nil {
 		return nil, fmt.Errorf("decode nonce: %w", err)
 	}
-	cipherRaw, err := b64dec(cipherB64)
+	cipherRaw, err := B64Dec(cipherB64)
 	if err != nil {
 		return nil, fmt.Errorf("decode cipher: %w", err)
 	}
@@ -79,8 +79,8 @@ func decryptDirect(recipientPrivB64, senderPubB64, nonceB64, cipherB64 string) (
 }
 
 // encryptGroup uses AES-256-GCM with a base64 encoded 32-byte key
-func encryptGroup(symKeyB64 string, plaintext []byte) (nonceB64, cipherB64 string, err error) {
-	key, err := b64dec(symKeyB64)
+func EncryptGroup(symKeyB64 string, plaintext []byte) (nonceB64, cipherB64 string, err error) {
+	key, err := B64Dec(symKeyB64)
 	if err != nil {
 		return "", "", fmt.Errorf("decode group key: %w", err)
 	}
@@ -100,12 +100,12 @@ func encryptGroup(symKeyB64 string, plaintext []byte) (nonceB64, cipherB64 strin
 		return "", "", err
 	}
 	sealed := gcm.Seal(nil, nonce, plaintext, nil)
-	return b64(nonce), b64(sealed), nil
+	return B64(nonce), B64(sealed), nil
 }
 
 // decryptGroup decrypts AES-256-GCM ciphertext
-func decryptGroup(symKeyB64, nonceB64, cipherB64 string) ([]byte, error) {
-	key, err := b64dec(symKeyB64)
+func DecryptGroup(symKeyB64, nonceB64, cipherB64 string) ([]byte, error) {
+	key, err := B64Dec(symKeyB64)
 	if err != nil {
 		return nil, err
 	}
@@ -120,11 +120,11 @@ func decryptGroup(symKeyB64, nonceB64, cipherB64 string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	nonce, err := b64dec(nonceB64)
+	nonce, err := B64Dec(nonceB64)
 	if err != nil {
 		return nil, err
 	}
-	cipherRaw, err := b64dec(cipherB64)
+	cipherRaw, err := B64Dec(cipherB64)
 	if err != nil {
 		return nil, err
 	}

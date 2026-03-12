@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type Config struct {
 	SQLitePath string         `json:"sqlite_path"`
 	UI         UIConfig       `json:"ui"`
 	Keys       KeysConfig     `json:"keys"`
+	LogLevel   string         `json:"log_level"` // 日志级别: debug, info, warn, error
 }
 
 type UserConfig struct {
@@ -88,6 +90,7 @@ var defaultConfig = Config{
 		Account:       "",
 		User:          "Anonymous", // 默认与user.nickname保持一致
 	},
+	LogLevel: "info", // 默认日志级别
 }
 
 // DefaultLeafNodeConfig 返回默认的 LeafNode 配置
@@ -271,6 +274,16 @@ func (c *Config) ValidateAndSetDefaults() error {
 	}
 	if c.UI.Language == "" {
 		c.UI.Language = "zh-CN"
+	}
+
+	// 设置默认日志级别
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+	// 验证日志级别是否有效
+	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
+	if !validLevels[strings.ToLower(c.LogLevel)] {
+		c.LogLevel = "info"
 	}
 
 	return nil

@@ -25,8 +25,8 @@ type User struct {
 	Nickname string `json:"nickname"`
 }
 
-// encWire 最小载荷（见 README）：{cid,sender,ts,nonce,cipher}
-type encWire struct {
+// EncWire 最小载荷（见 README）：{cid,sender,ts,nonce,cipher}
+type EncWire struct {
 	CID    string `json:"cid"`
 	Sender string `json:"sender"`
 	TS     int64  `json:"ts"`
@@ -41,7 +41,7 @@ type DecryptedMessage struct {
 	TS      time.Time // 原始发送秒级时间戳转时间
 	Plain   string    // 解密后明文
 	IsGroup bool      // 是否群聊
-	RawWire encWire   // 原始载荷
+	RawWire EncWire   // 原始载荷
 	Subject string    // 原始 NATS subject
 }
 
@@ -257,7 +257,7 @@ func (s *Service) InitOfflineSync() error {
 // processOfflineMessage 处理同步下来的离线消息
 func (s *Service) processOfflineMessage(data []byte) error {
 	// 1. 解密：复用现有消息解密逻辑，和实时消息处理完全一致
-	var w encWire
+	var w EncWire
 	if err := json.Unmarshal(data, &w); err != nil {
 		return fmt.Errorf("unmarshal offline message: %w", err)
 	}
@@ -280,7 +280,7 @@ func (s *Service) processOfflineMessage(data []byte) error {
 	// 先尝试作为群聊解密
 	sym, groupKeyErr := s.getGroupKey(w.CID)
 	if groupKeyErr == nil {
-		pt, err = decryptGroup(sym, w.Nonce, w.Cipher)
+		pt, err = DecryptGroup(sym, w.Nonce, w.Cipher)
 		isGroup = true
 	} else {
 		// 尝试作为私聊解密
@@ -292,7 +292,7 @@ func (s *Service) processOfflineMessage(data []byte) error {
 			// 没有对应密钥的消息直接丢弃
 			return nil
 		}
-		pt, err = decryptDirect(priv, peerPub, w.Nonce, w.Cipher)
+		pt, err = DecryptDirect(priv, peerPub, w.Nonce, w.Cipher)
 		isGroup = false
 	}
 
@@ -555,12 +555,12 @@ func (s *Service) SendDirect(peerID, content string) error {
 	}
 
 	cid := deriveCID(from, peerID)
-	nonceB64, cipherB64, err := encryptDirect(priv, peerPub, []byte(content))
+	nonceB64, cipherB64, err := EncryptDirect(priv, peerPub, []byte(content))
 	if err != nil {
 		return err
 	}
 	now := time.Now()
-	wire := encWire{
+	wire := EncWire{
 		CID:    cid,
 		Sender: from,
 		TS:     now.Unix(),
@@ -618,12 +618,12 @@ func (s *Service) SendGroup(gid, content string) error {
 		return fmt.Errorf("group key not available: %w", err)
 	}
 
-	nonceB64, cipherB64, err := encryptGroup(sym, []byte(content))
+	nonceB64, cipherB64, err := EncryptGroup(sym, []byte(content))
 	if err != nil {
 		return err
 	}
 	now := time.Now()
-	wire := encWire{
+	wire := EncWire{
 		CID:    gid,
 		Sender: from,
 		TS:     now.Unix(),
@@ -668,7 +668,7 @@ func (s *Service) SendGroup(gid, content string) error {
 // handleEncrypted 解密并派发
 func (s *Service) handleEncrypted(subject string, data []byte) {
 	// 1) 反序列化
-	var w encWire
+	var w EncWire
 	if err := json.Unmarshal(data, &w); err != nil {
 		s.dispatchError(fmt.Errorf("unmarshal: %w", err))
 		return
@@ -700,7 +700,7 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 			s.dispatchError(fmt.Errorf("group key not available for %s: %w", w.CID, keyErr))
 			return
 		}
-		pt, err = decryptGroup(sym, w.Nonce, w.Cipher)
+		pt, err = DecryptGroup(sym, w.Nonce, w.Cipher)
 	} else {
 		if priv == "" {
 			s.dispatchError(errors.New("local priv key missing"))
@@ -712,7 +712,7 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 			s.dispatchError(fmt.Errorf("friend pub key not available for %s: %w", w.Sender, keyErr))
 			return
 		}
-		pt, err = decryptDirect(priv, peerPub, w.Nonce, w.Cipher)
+		pt, err = DecryptDirect(priv, peerPub, w.Nonce, w.Cipher)
 	}
 	if err != nil {
 		s.dispatchError(fmt.Errorf("decrypt: %w", err))

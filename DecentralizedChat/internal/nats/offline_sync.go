@@ -2,7 +2,7 @@ package nats
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -51,7 +51,7 @@ func (s *Service) InitOfflineMirror(cfg *OfflineSyncConfig) error {
 	if err != nil {
 		return fmt.Errorf("create group mirror stream failed: %w", err)
 	}
-	log.Printf("✅ 群聊镜像流创建成功: %s", s.streamNameGroup)
+	slog.Info("✅ 群聊镜像流创建成功", "stream", s.streamNameGroup)
 
 	// ========== 创建私聊消息镜像流 ==========
 	s.streamNameDirect = fmt.Sprintf("USER_OFFLINE_DM_%s", cfg.UserID)
@@ -74,7 +74,7 @@ func (s *Service) InitOfflineMirror(cfg *OfflineSyncConfig) error {
 	if err != nil {
 		return fmt.Errorf("create direct mirror stream failed: %w", err)
 	}
-	log.Printf("✅ 私聊镜像流创建成功: %s", s.streamNameDirect)
+	slog.Info("✅ 私聊镜像流创建成功", "stream", s.streamNameDirect)
 
 	return nil
 }
@@ -122,7 +122,7 @@ func (s *Service) StartSync() error {
 	go s.syncLoop("group", s.syncSubGroup)
 	go s.syncLoop("direct", s.syncSubDirect)
 
-	log.Println("✅ 离线消息同步已启动（群聊+私聊）")
+	slog.Info("✅ 离线消息同步已启动（群聊+私聊）")
 	return nil
 }
 
@@ -143,12 +143,12 @@ func (s *Service) StopSync() {
 		s.syncCancel()
 	}
 	s.syncRunning = false
-	log.Println("🛑 离线消息同步已停止")
+	slog.Info("🛑 离线消息同步已停止")
 }
 
 // syncLoop 同步主循环，支持群聊和私聊两个流
 func (s *Service) syncLoop(streamType string, sub *nats.Subscription) {
-	defer log.Printf("🛑 %s 同步协程已退出", streamType)
+	defer slog.Info("🛑 同步协程已退出", "type", streamType)
 
 	for {
 		select {

@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +36,8 @@ type App struct {
 	storage     *storage.Storage
 	config      *config.Config
 	mu          sync.RWMutex
+	startupErrs []error // 启动阶段错误集合
+	initialized bool    // 是否已完成启动
 }
 
 // NewApp creates a new App application struct
@@ -42,15 +45,65 @@ func NewApp() *App {
 	return &App{}
 }
 
+// 初始化日志输出到文件和控制台，支持级别区分
+func initLog(level string) error {
+	logFile, err := os.OpenFile("log.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+
+	// 解析日志级别
+	var logLevel slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelInfo
+	}
+
+	// 同时输出到控制台和文件
+	mw := io.MultiWriter(os.Stdout, logFile)
+
+	// 创建日志handler，带级别和源文件信息
+	handler := slog.NewTextHandler(mw, &slog.HandlerOptions{
+		Level:     logLevel,
+		AddSource: true,
+	})
+
+	// 设置全局默认logger
+	slog.SetDefault(slog.New(handler))
+	return nil
+}
+
+// addStartupError 添加启动错误并记录日志
+func (a *App) addStartupError(err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.startupErrs = append(a.startupErrs, err)
+	slog.Error("startup error", "error", err)
+}
+
 // OnStartup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) OnStartup(ctx context.Context) {
 	a.ctx = ctx
-	// 1. 加载配置
+
+	// 1. 先加载配置，获取日志级别
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Printf("load config failed: %v", err)
+		fmt.Printf("load config failed: %v, using default config\n", err)
 		cfg = &config.Config{}
+	}
+
+	// 2. 初始化日志，使用配置的日志级别
+	if err := initLog(cfg.LogLevel); err != nil {
+		fmt.Printf("init log failed: %v\n", err)
 	}
 	if cfg.LeafNode.LocalHost == "" {
 		cfg.LeafNode.LocalHost = "127.0.0.1"
@@ -58,7 +111,7 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// 简化版NATS初始化：无需NSC CLI，直接使用Go库
 	if err := nscsetup.EnsureSimpleSetup(cfg); err != nil {
-		log.Printf("初始化简化NATS设置失败: %v", err)
+		a.addStartupError(fmt.Errorf("初始化简化NATS设置失败: %w", err))
 		return
 	}
 	a.config = cfg
@@ -80,12 +133,12 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 	a.leafnodeMgr = leafnode.NewManager(leafnodeCfg)
 
-	log.Println("Starting LeafNode...")
+	slog.Info("Starting LeafNode...")
 	if err := a.leafnodeMgr.Start(); err != nil {
-		log.Printf("start leafnode failed: %v", err)
+		a.addStartupError(fmt.Errorf("start leafnode failed: %w", err))
 		return
 	}
-	log.Println("✅ LeafNode started successfully")
+	slog.Info("✅ LeafNode started successfully")
 
 	// 3. 初始化 SQLite 本地存储
 	sqlitePath := cfg.SQLitePath
@@ -100,10 +153,12 @@ func (a *App) OnStartup(ctx context.Context) {
 		if err := os.MkdirAll(filepath.Dir(sqlitePath), 0755); err == nil {
 			a.storage, err = storage.NewSQLiteStorage(sqlitePath)
 			if err != nil {
-				log.Printf("init storage failed: %v", err)
+				a.addStartupError(fmt.Errorf("init storage failed: %w", err))
 			} else {
-				log.Println("✅ SQLite storage initialized")
+				slog.Info("✅ SQLite storage initialized")
 			}
+		} else {
+			a.addStartupError(fmt.Errorf("create sqlite directory failed: %w", err))
 		}
 	}
 
@@ -114,7 +169,7 @@ func (a *App) OnStartup(ctx context.Context) {
 		CredsFile: a.config.Keys.UserCredsPath,
 	})
 	if err != nil {
-		log.Printf("start nats client failed: %v", err)
+		a.addStartupError(fmt.Errorf("start nats client failed: %w", err))
 		return
 	}
 	// 把storage实例传给chat服务
@@ -137,12 +192,12 @@ func (a *App) OnStartup(ctx context.Context) {
 	if a.config.Keys.UserSeedPath != "" {
 		seed, err := a.getNSCUserSeed()
 		if err != nil {
-			log.Printf("failed to load NSC seed: %v", err)
+			a.addStartupError(fmt.Errorf("failed to load NSC seed: %w", err))
 		} else {
 			if err := a.chatSvc.LoadNSCKeys(seed); err != nil {
-				log.Printf("failed to load NSC chat keys: %v", err)
+				a.addStartupError(fmt.Errorf("failed to load NSC chat keys: %w", err))
 			} else {
-				log.Println("NSC chat keys loaded successfully")
+				slog.Info("NSC chat keys loaded successfully")
 			}
 		}
 	}
@@ -153,17 +208,41 @@ func (a *App) OnStartup(ctx context.Context) {
 			// 等待3秒确保LeafNode和Hub的连接完全稳定
 			time.Sleep(3 * time.Second)
 			if err := a.chatSvc.InitOfflineSync(); err != nil {
-				log.Printf("初始化离线同步失败: %v", err)
+				slog.Error("初始化离线同步失败", "error", err)
+				// 异步初始化的错误推送到前端
+				runtime.EventsEmit(a.ctx, "message:error", map[string]any{
+					"error":     fmt.Sprintf("离线同步初始化失败: %v", err),
+					"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
+				})
 			} else {
-				log.Println("✅ 离线消息同步初始化成功")
+				slog.Info("✅ 离线消息同步初始化成功")
 			}
 		}()
 	}
 
 	if err := config.SaveConfig(a.config); err != nil {
-		log.Printf("save config warn: %v", err)
+		slog.Warn("save config warn", "error", err)
 	}
-	log.Println("DChat application started (LeafNode mode)")
+
+	// 标记启动完成，推送启动错误到前端
+	a.mu.Lock()
+	a.initialized = true
+	startupErrs := a.startupErrs
+	a.mu.Unlock()
+
+	if len(startupErrs) > 0 {
+		// 把所有启动错误合并成一条消息推送给前端
+		errMsg := "启动过程中出现以下错误:\n"
+		for _, err := range startupErrs {
+			errMsg += fmt.Sprintf("- %v\n", err)
+		}
+		runtime.EventsEmit(a.ctx, "message:error", map[string]any{
+			"error":     errMsg,
+			"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
+		})
+	}
+
+	slog.Info("DChat application started (LeafNode mode)")
 }
 
 // OnShutdown is called when the app stops
@@ -350,6 +429,22 @@ func (a *App) SearchMessages(query string, limit int) ([]*storage.StoredMessage,
 		return nil, fmt.Errorf("chat service not initialized")
 	}
 	return a.chatSvc.SearchMessages(query, limit)
+}
+
+// GetStartupStatus 获取启动状态和错误信息
+func (a *App) GetStartupStatus() (map[string]any, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	errStrs := make([]string, len(a.startupErrs))
+	for i, err := range a.startupErrs {
+		errStrs[i] = err.Error()
+	}
+
+	return map[string]any{
+		"initialized": a.initialized,
+		"errors":      errStrs,
+	}, nil
 }
 
 // getNSCUserSeed 获取当前用户的NSC seed (从配置中读取)
