@@ -139,6 +139,22 @@ func (s *Service) RequestJSON(subject string, data interface{}, timeout time.Dur
 	return msg, nil
 }
 
+// PublishJetStream 发布JetStream消息，返回序列ID
+func (s *Service) PublishJetStream(subject string, data []byte) (uint64, error) {
+	if s.js == nil {
+		var err error
+		s.js, err = s.conn.JetStream(nats.Domain("hub"))
+		if err != nil {
+			return 0, err
+		}
+	}
+	ack, err := s.js.Publish(subject, data)
+	if err != nil {
+		return 0, err
+	}
+	return ack.Sequence, nil
+}
+
 // SubscribeJSON subscribes and forwards raw JSON payload to handler
 func (s *Service) SubscribeJSON(subject string, handler func(data []byte) error) error {
 	_, err := s.conn.Subscribe(subject, func(msg *nats.Msg) {

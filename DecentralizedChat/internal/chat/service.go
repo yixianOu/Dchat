@@ -297,7 +297,7 @@ func (s *Service) processOfflineMessage(msg *nats.Msg) error {
 		}
 		peerPub, friendKeyErr := s.getFriendKey(w.Sender)
 		if friendKeyErr != nil {
-			slog.Error("好友密钥不存在，丢弃消息", "friend_id", w.Sender, "error", friendKeyErr)
+			slog.Debug("好友密钥不存在，丢弃消息", "friend_id", w.Sender, "error", friendKeyErr)
 			// 没有对应密钥的消息直接丢弃
 			return nil
 		}
@@ -307,7 +307,7 @@ func (s *Service) processOfflineMessage(msg *nats.Msg) error {
 	}
 
 	if err != nil {
-		slog.Error("解密离线消息失败", "error", err, "is_group", isGroup)
+		slog.Debug("解密离线消息失败", "error", err, "is_group", isGroup)
 		return fmt.Errorf("decrypt offline message: %w", err)
 	}
 	slog.Debug("离线消息解密成功", "content", string(pt))
@@ -508,7 +508,7 @@ func (s *Service) JoinDirect(peerID string) error {
 		subj,
 		func(m *nats.Msg) {
 			// inline handler kept small; delegates to unified decrypt/dispatch
-			s.handleEncrypted(subj, m.Data)
+			s.handleEncrypted(subj, m)
 		},
 	); err != nil {
 		return err
@@ -543,7 +543,7 @@ func (s *Service) JoinGroup(gid string) error {
 		subj,
 		func(m *nats.Msg) {
 			// group message handler -> decrypt path
-			s.handleEncrypted(subj, m.Data)
+			s.handleEncrypted(subj, m)
 		},
 	); err != nil {
 		return err
@@ -591,6 +591,12 @@ func (s *Service) SendDirect(peerID, content string) error {
 	data, _ := json.Marshal(wire)
 	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
 
+	// 先使用JetStream发布，确保消息持久化并获取序列ID
+	seq, err := s.nats.PublishJetStream(subj, data)
+	if err != nil {
+		return err
+	}
+
 	// 自动保存自己发送的消息到本地存储
 	if s.storage != nil {
 		storedMsg := &storage.StoredMessage{
@@ -602,6 +608,7 @@ func (s *Service) SendDirect(peerID, content string) error {
 			Timestamp:      now,
 			IsRead:         true, // 自己发送的消息默认已读
 			IsGroup:        false,
+			NatsSeq:        seq,
 		}
 		_ = s.storage.SaveMessage(storedMsg)
 
@@ -620,7 +627,7 @@ func (s *Service) SendDirect(peerID, content string) error {
 		_ = s.storage.SaveConversation(conv)
 	}
 
-	return s.nats.Publish(subj, data)
+	return nil
 }
 
 // SendGroup 发送群聊
@@ -653,10 +660,10 @@ func (s *Service) SendGroup(gid, content string) error {
 	}
 	data, _ := json.Marshal(wire)
 	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
-
+  var storedMsg *storage.StoredMessage
 	// 自动保存自己发送的群聊消息到本地存储
 	if s.storage != nil {
-		storedMsg := &storage.StoredMessage{
+		storedMsg = &storage.StoredMessage{
 			ID:             generateMessageID(),
 			ConversationID: gid,
 			SenderID:       from,
@@ -683,14 +690,26 @@ func (s *Service) SendGroup(gid, content string) error {
 		_ = s.storage.SaveConversation(conv)
 	}
 
-	return s.nats.Publish(subj, data)
+	// 使用JetStream发布，确保消息持久化并获取序列ID
+	seq, err := s.nats.PublishJetStream(subj, data)
+	if err != nil {
+		return err
+	}
+
+	// 保存自己发的消息时带上NATS序列ID
+	storedMsg.NatsSeq = seq
+	if err := s.storage.SaveMessage(storedMsg); err != nil {
+		slog.Error("保存自己发送的消息失败", "error", err)
+	}
+
+	return nil
 }
 
 // handleEncrypted 解密并派发
-func (s *Service) handleEncrypted(subject string, data []byte) {
+func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 	// 1) 反序列化
 	var w EncWire
-	if err := json.Unmarshal(data, &w); err != nil {
+	if err := json.Unmarshal(natsMsg.Data, &w); err != nil {
 		s.dispatchError(fmt.Errorf("unmarshal: %w", err))
 		return
 	}
@@ -753,6 +772,12 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 
 	// 7) 自动保存到本地存储（如果storage已初始化）
 	if s.storage != nil {
+		// 获取NATS序列ID用于去重
+		var natsSeq uint64
+		if meta, err := natsMsg.Metadata(); err == nil {
+			natsSeq = meta.Sequence.Stream
+		}
+
 		storedMsg := &storage.StoredMessage{
 			ID:             generateMessageID(),
 			ConversationID: w.CID,
@@ -762,6 +787,7 @@ func (s *Service) handleEncrypted(subject string, data []byte) {
 			Timestamp:      time.Unix(w.TS, 0),
 			IsRead:         false,
 			IsGroup:        isGroup,
+			NatsSeq:        natsSeq,
 		}
 		// 最佳努力保存，失败不影响消息分发
 		_ = s.storage.SaveMessage(storedMsg)
