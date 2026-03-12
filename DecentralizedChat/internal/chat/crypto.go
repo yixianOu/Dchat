@@ -78,7 +78,7 @@ func DecryptDirect(recipientPrivB64, senderPubB64, nonceB64, cipherB64 string) (
 	return out, nil
 }
 
-// encryptGroup uses AES-256-GCM with a base64 encoded 32-byte key
+// EncryptGroup uses AES-256-GCM with a base64 encoded 32-byte key
 func EncryptGroup(symKeyB64 string, plaintext []byte) (nonceB64, cipherB64 string, err error) {
 	key, err := B64Dec(symKeyB64)
 	if err != nil {
@@ -103,7 +103,7 @@ func EncryptGroup(symKeyB64 string, plaintext []byte) (nonceB64, cipherB64 strin
 	return B64(nonce), B64(sealed), nil
 }
 
-// decryptGroup decrypts AES-256-GCM ciphertext
+// DecryptGroup decrypts AES-256-GCM ciphertext
 func DecryptGroup(symKeyB64, nonceB64, cipherB64 string) ([]byte, error) {
 	key, err := B64Dec(symKeyB64)
 	if err != nil {

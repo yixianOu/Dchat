@@ -310,12 +310,7 @@ func (s *Service) processOfflineMessage(data []byte) error {
 		slog.Error("解密离线消息失败", "error", err, "is_group", isGroup)
 		return fmt.Errorf("decrypt offline message: %w", err)
 	}
-
 	slog.Debug("离线消息解密成功", "content", string(pt))
-
-	if err != nil {
-		return fmt.Errorf("decrypt offline message: %w", err)
-	}
 
 	// 构造统一的解密消息结构
 	decrypted := &DecryptedMessage{
