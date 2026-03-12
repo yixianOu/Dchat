@@ -98,7 +98,10 @@ const App: React.FC = () => {
 
         // ⭐ 基于事件的消息监听（只做通知，不直接添加消息到列表）
         const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {
-          // 更新会话列表
+          // 1. 添加消息到全局消息列表
+          setMessages(prev => [...prev, msg]);
+
+          // 2. 更新会话列表
           const sessionId = msg.IsGroup ? msg.CID : msg.CID;
           setSessions(prev => {
             const existing = prev.find(s => s.id === sessionId);
