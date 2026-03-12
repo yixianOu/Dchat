@@ -269,6 +269,24 @@ func (c *Config) ValidateAndSetDefaults() error {
 		c.LeafNode.OperatorJWT = c.Keys.OperatorJWT
 	}
 
+	// 强制开启JetStream支持，确保离线消息同步功能正常
+	if !c.LeafNode.EnableJetStream {
+		c.LeafNode.EnableJetStream = true
+	}
+	if !c.LeafNode.JetStreamAllowUpstreamAPI {
+		c.LeafNode.JetStreamAllowUpstreamAPI = true
+	}
+
+	// 设置默认JetStream存储目录
+	if c.LeafNode.JetStreamStoreDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			c.LeafNode.JetStreamStoreDir = filepath.Join(homeDir, ".dchat", "jetstream")
+			// 确保目录存在
+			os.MkdirAll(c.LeafNode.JetStreamStoreDir, 0755)
+		}
+	}
+
 	if c.UI.Theme == "" {
 		c.UI.Theme = "dark"
 	}

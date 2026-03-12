@@ -46,6 +46,10 @@ export function GetUser() {
   return window['go']['main']['App']['GetUser']();
 }
 
+export function GetUserNSCPublicKey() {
+  return window['go']['main']['App']['GetUserNSCPublicKey']();
+}
+
 export function JoinDirect(arg1) {
   return window['go']['main']['App']['JoinDirect'](arg1);
 }

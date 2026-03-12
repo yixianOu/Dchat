@@ -28,6 +28,8 @@ export function GetStartupStatus():Promise<Record<string, any>>;
 
 export function GetUser():Promise<chat.User>;
 
+export function GetUserNSCPublicKey():Promise<string>;
+
 export function JoinDirect(arg1:string):Promise<void>;
 
 export function JoinGroup(arg1:string,arg2:string):Promise<void>;

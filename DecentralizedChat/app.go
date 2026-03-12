@@ -495,6 +495,17 @@ func (a *App) GetAllConversations() ([]*storage.StoredConversation, error) {
 	return a.storage.GetAllConversations()
 }
 
+// GetUserNSCPublicKey 获取当前用户的NSC公钥（U开头）
+func (a *App) GetUserNSCPublicKey() (string, error) {
+	if a.config == nil {
+		return "", fmt.Errorf("config not loaded")
+	}
+	if a.config.Keys.UserPubKey == "" {
+		return "", fmt.Errorf("NSC public key not available")
+	}
+	return a.config.Keys.UserPubKey, nil
+}
+
 // getNSCUserSeed 获取当前用户的NSC seed (从配置中读取)
 func (a *App) getNSCUserSeed() (string, error) {
 	if a.config == nil {

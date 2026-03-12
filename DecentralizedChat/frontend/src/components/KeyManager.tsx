@@ -1,119 +1,109 @@
-import React, { useState } from 'react';
-import { loadNSCKeys } from '../services/dchatAPI';
+import React, { useState, useEffect } from 'react';
+import { loadNSCKeys, getUserNSCPublicKey } from '../services/dchatAPI';
 
 interface KeyManagerProps {
   onClose: () => void;
 }
 
 const KeyManager: React.FC<KeyManagerProps> = ({ onClose }) => {
-  const [privateKey, setPrivateKey] = useState('');
-  const [publicKey, setPublicKey] = useState('');
-  const [showKeys, setShowKeys] = useState(false);
+  const [seed, setSeed] = useState('');
+  const [userPubKey, setUserPubKey] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const generateKeyPair = () => {
-    // TODO: 需要集成真正的加密库（如 libsodium.js 或 tweetnacl-js）
-    // 当前使用模拟实现，生产环境中应该使用真正的 X25519 密钥对
-    console.warn('警告：当前使用模拟密钥生成，生产环境请使用真正的加密库');
-    
-    // 生成32字节的模拟密钥（实际应该使用 X25519）
-    const generateRandomBytes = (length: number) => {
-      const array = new Uint8Array(length);
-      crypto.getRandomValues(array);
-      return btoa(String.fromCharCode(...array));
+  // 组件加载时获取当前用户公钥
+  useEffect(() => {
+    const loadPubKey = async () => {
+      try {
+        const pubKey = await getUserNSCPublicKey();
+        setUserPubKey(pubKey);
+      } catch (err) {
+        console.warn('当前未配置NSC密钥:', err);
+      }
     };
-    
-    const privKey = generateRandomBytes(32);
-    const pubKey = generateRandomBytes(32);
-    
-    setPrivateKey(privKey);
-    setPublicKey(pubKey);
-    setShowKeys(true);
-  };
+    loadPubKey();
+  }, []);
 
-  const saveKeyPair = async () => {
-    if (!privateKey || !publicKey) {
-      alert('请先生成密钥对');
+  const importNSCSeed = async () => {
+    if (!seed.trim()) {
+      alert('请输入NSC Seed');
       return;
     }
-    
-    try {
-      // 使用NSC seed加载密钥（这里应该传入实际的NSC seed）
-      await loadNSCKeys(privateKey);  // 假设privateKey是NSC seed
-      alert('NSC密钥加载成功');
-      onClose();
-    } catch (error) {
-      console.error('加载NSC密钥失败:', error);
-      alert('加载NSC密钥失败');
-    }
-  };
 
-  const importKeyPair = () => {
-    const privKey = prompt('输入私钥 (Base64):');
-    const pubKey = prompt('输入公钥 (Base64):');
-    
-    if (privKey && pubKey) {
-      setPrivateKey(privKey);
-      setPublicKey(pubKey);
-      setShowKeys(true);
+    // 简单格式校验
+    if (!seed.trim().startsWith('SU')) {
+      alert('NSC Seed格式错误，必须以"SU"开头');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await loadNSCKeys(seed.trim());
+      // 导入成功后重新获取公钥
+      const pubKey = await getUserNSCPublicKey();
+      setUserPubKey(pubKey);
+      alert('NSC密钥导入成功！');
+      setSeed('');
+    } catch (error) {
+      console.error('导入NSC密钥失败:', error);
+      alert('导入失败，请检查Seed格式是否正确');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="key-manager-modal">
       <div className="modal-content">
-        <h3>密钥管理</h3>
-        
-        <div className="key-actions">
-          <button onClick={generateKeyPair} className="btn-primary">
-            生成新密钥对
-          </button>
-          <button onClick={importKeyPair} className="btn-secondary">
-            导入密钥对
+        <h3>NSC 密钥管理</h3>
+
+        {/* 显示当前用户公钥 */}
+        <div className="key-item">
+          <label>我的NSC公钥 (可分享给好友添加):</label>
+          <textarea
+            value={userPubKey || '未配置NSC密钥'}
+            rows={2}
+            readOnly
+            style={{ fontFamily: 'monospace', fontSize: '12px' }}
+          />
+          {userPubKey && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(userPubKey);
+                alert('公钥已复制到剪贴板');
+              }}
+              className="copy-btn"
+              style={{ marginTop: '4px' }}
+            >
+              复制公钥
+            </button>
+          )}
+        </div>
+
+        <div style={{ margin: '20px 0', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+          <h4>导入NSC Seed</h4>
+          <div className="form-group">
+            <label>NSC Seed (SU开头的私钥):</label>
+            <textarea
+              value={seed}
+              onChange={(e) => setSeed(e.target.value)}
+              rows={3}
+              placeholder="请输入以SU开头的NSC Seed"
+              style={{ width: '100%', fontFamily: 'monospace', fontSize: '12px' }}
+            />
+          </div>
+          <button
+            onClick={importNSCSeed}
+            className="btn-primary"
+            disabled={isLoading}
+            style={{ marginTop: '10px' }}
+          >
+            {isLoading ? '导入中...' : '导入NSC Seed'}
           </button>
         </div>
 
-        {showKeys && (
-          <div className="key-display">
-            <div className="key-item">
-              <label>公钥 (可分享):</label>
-              <textarea 
-                value={publicKey}
-                onChange={(e) => setPublicKey(e.target.value)}
-                rows={3}
-                readOnly
-              />
-              <button 
-                onClick={() => navigator.clipboard.writeText(publicKey)}
-                className="copy-btn"
-              >
-                复制
-              </button>
-            </div>
-            
-            <div className="key-item">
-              <label>私钥 (请妥善保管):</label>
-              <textarea 
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-                rows={3}
-                className="private-key"
-              />
-              <button 
-                onClick={() => navigator.clipboard.writeText(privateKey)}
-                className="copy-btn"
-              >
-                复制
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="modal-actions">
-          <button onClick={saveKeyPair} className="btn-primary">
-            保存密钥对
-          </button>
           <button onClick={onClose} className="btn-secondary">
-            取消
+            关闭
           </button>
         </div>
       </div>

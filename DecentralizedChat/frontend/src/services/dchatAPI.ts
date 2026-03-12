@@ -17,7 +17,8 @@ import {
   GetMessages,
   MarkAsRead,
   SearchMessages,
-  GetAllConversations // ✅ 新增：获取所有会话列表
+  GetAllConversations, // ✅ 新增：获取所有会话列表
+  GetUserNSCPublicKey // ✅ 新增：获取当前用户NSC公钥
 } from '../../wailsjs/go/main/App';
 
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -49,6 +50,7 @@ export const getMessages = GetMessages; // ✅ 新增：获取消息历史
 export const markAsRead = MarkAsRead; // ✅ 新增：标记已读
 export const searchMessages = SearchMessages; // ✅ 新增：搜索消息
 export const getAllConversations = GetAllConversations; // ✅ 新增：获取所有会话列表
+export const getUserNSCPublicKey = GetUserNSCPublicKey; // ✅ 新增：获取当前用户NSC公钥
 
 // ⭐ 基于事件的监听器，替代回调方式
 export const onDecrypted = (callback: (msg: DecryptedMessage) => void): (() => void) => {
