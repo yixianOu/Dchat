@@ -58,7 +58,7 @@ const KeyManager: React.FC<KeyManagerProps> = ({ onClose }) => {
 
         {/* 显示当前用户公钥 */}
         <div className="key-item">
-          <label>我的NSC公钥 (可分享给好友添加):</label>
+          <label>我的NSC公钥 (直接分享给好友添加，无需额外UserID):</label>
           <textarea
             value={userPubKey || '未配置NSC密钥'}
             rows={2}

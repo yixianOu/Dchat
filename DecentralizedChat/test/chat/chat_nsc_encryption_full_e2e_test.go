@@ -108,14 +108,16 @@ func TestChat_Full_NSC_Encryption_E2E(t *testing.T) {
 	// =================== Step 3: 添加好友（仅使用NSC公钥，不需要交换聊天公钥） ===================
 	t.Log("\nStep 3: 双方仅通过NSC公钥添加好友...")
 	// Alice添加Bob为好友：只需要知道Bob的NSC公钥，不需要Bob在线，不需要交换任何消息
-	err = chatAlice.AddFriendNSCKey(bobUID, bobNscPub)
+	derivedBobUID, err := chatAlice.AddFriendNSCKey(bobNscPub)
 	require.NoError(t, err)
-	t.Log("✅ Alice添加Bob为好友成功（仅用Bob的NSC公钥）")
+	require.Equal(t, bobUID, derivedBobUID) // 验证派生的ID和预期一致
+	t.Log("✅ Alice添加Bob为好友成功（仅用Bob的NSC公钥，自动派生用户ID匹配）")
 
 	// Bob添加Alice为好友：同样只需要知道Alice的NSC公钥
-	err = chatBob.AddFriendNSCKey(aliceUID, aliceNscPub)
+	derivedAliceUID, err := chatBob.AddFriendNSCKey(aliceNscPub)
 	require.NoError(t, err)
-	t.Log("✅ Bob添加Alice为好友成功（仅用Alice的NSC公钥）")
+	require.Equal(t, aliceUID, derivedAliceUID) // 验证派生的ID和预期一致
+	t.Log("✅ Bob添加Alice为好友成功（仅用Alice的NSC公钥，自动派生用户ID匹配）")
 
 	// =================== Step 4: Bob订阅会话，等待消息 ===================
 	t.Log("\nStep 4: Bob订阅与Alice的私聊会话...")

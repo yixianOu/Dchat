@@ -406,11 +406,12 @@ func (a *App) LoadNSCKeys(nscSeed string) error {
 }
 
 // AddFriendNSCKey 通过NSC公钥添加好友
-func (a *App) AddFriendNSCKey(uid, nscPubKey string) error {
+// AddFriendNSCKey 通过NSC公钥添加好友，返回自动派生的好友ID
+func (a *App) AddFriendNSCKey(nscPubKey string) (string, error) {
 	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
+		return "", fmt.Errorf("chat service not initialized")
 	}
-	return a.chatSvc.AddFriendNSCKey(uid, nscPubKey)
+	return a.chatSvc.AddFriendNSCKey(nscPubKey)
 }
 
 // GetMessages 获取会话历史消息

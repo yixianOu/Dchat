@@ -20,6 +20,26 @@ import {
 import { User, DecryptedMessage, ChatSession, Friend, Group, NetworkStatus } from './types';
 import './App.css';
 
+// 统一转换存储消息格式，修复时间戳解析问题
+const convertStorageMessages = (historyMessages: any[]): DecryptedMessage[] => {
+  return historyMessages.map((msg: any) => {
+    // 解析Go格式时间戳，兼容带m=后缀的格式
+    let timestamp = msg.timestamp;
+    if (typeof timestamp === 'string' && timestamp.includes(' m=')) {
+      timestamp = timestamp.split(' m=')[0];
+    }
+    const date = new Date(timestamp);
+    return {
+      CID: msg.conversation_id,
+      Sender: msg.sender_nickname || msg.sender_id,
+      Ts: isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString(),
+      Plain: msg.content,
+      IsGroup: msg.is_group,
+      Subject: ''
+    };
+  });
+};
+
 const App: React.FC = () => {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -48,12 +68,26 @@ const App: React.FC = () => {
         // ✅ 加载所有历史会话
         try {
           const convs = await getAllConversations();
-          const loadedSessions = convs.map(conv => ({
-            id: conv.id,
-            name: conv.type === 'group' ? `群聊 ${conv.id.slice(0, 8)}` : `私聊 ${conv.id.slice(0, 8)}`,
-            isGroup: conv.type === 'group',
-            lastTime: new Date(conv.last_message_at as unknown as string).getTime()
-          }));
+          const loadedSessions = convs.map(conv => {
+            // 解析时间戳，兼容异常格式
+            let lastTime = Date.now();
+            if (conv.last_message_at) {
+              let ts = String(conv.last_message_at);
+              if (ts.includes(' m=')) {
+                ts = ts.split(' m=')[0];
+              }
+              const date = new Date(ts);
+              if (!isNaN(date.getTime())) {
+                lastTime = date.getTime();
+              }
+            }
+            return {
+              id: conv.id,
+              name: conv.type === 'group' ? `群聊 ${conv.id.slice(0, 8)}` : `私聊 ${conv.id.slice(0, 8)}`,
+              isGroup: conv.type === 'group',
+              lastTime: lastTime
+            };
+          });
           // 按最后消息时间倒序排列
           loadedSessions.sort((a, b) => b.lastTime - a.lastTime);
           setSessions(loadedSessions);
@@ -62,18 +96,16 @@ const App: React.FC = () => {
           console.warn('加载历史会话失败:', err);
         }
 
-        // ⭐ 基于事件的消息监听
+        // ⭐ 基于事件的消息监听（只做通知，不直接添加消息到列表）
         const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {
-          setMessages(prev => [...prev, msg]);
-          
           // 更新会话列表
           const sessionId = msg.IsGroup ? msg.CID : msg.CID;
           setSessions(prev => {
             const existing = prev.find(s => s.id === sessionId);
             if (existing) {
-              return prev.map(s => 
-                s.id === sessionId 
-                  ? { ...s, lastMessage: msg.Plain, lastTime: new Date(msg.Ts).getTime() }
+              return prev.map(s =>
+                s.id === sessionId
+                  ? { ...s, lastMessage: msg.Plain, lastTime: new Date().getTime() }
                   : s
               );
             } else {
@@ -82,10 +114,18 @@ const App: React.FC = () => {
                 name: msg.IsGroup ? `群聊 ${sessionId.slice(0, 8)}` : `私聊 ${msg.Sender}`,
                 isGroup: msg.IsGroup,
                 lastMessage: msg.Plain,
-                lastTime: new Date(msg.Ts).getTime()
+                lastTime: new Date().getTime()
               }];
             }
           });
+
+          // 如果当前正在查看该会话，自动刷新最新消息（从数据库读取）
+          if (currentSession?.id === sessionId) {
+            getMessages(sessionId, 50, null as any).then(historyMessages => {
+              const converted = convertStorageMessages(historyMessages);
+              setMessages(converted);
+            }).catch(err => console.error('刷新消息失败:', err));
+          }
         });
 
         // ⭐ 基于事件的错误监听
@@ -139,14 +179,7 @@ const App: React.FC = () => {
 
       try {
         const historyMessages = await getMessages(currentSession.id, 50, null as any);
-        const converted = historyMessages.map((msg: any) => ({
-          CID: msg.conversation_id,
-          Sender: msg.sender_nickname || msg.sender_id,
-          Ts: String(msg.timestamp),
-          Plain: msg.content,
-          IsGroup: msg.is_group,
-          Subject: ''
-        }));
+        const converted = convertStorageMessages(historyMessages);
         setMessages(converted);
       } catch (error) {
         console.error('加载历史消息失败:', error);
@@ -169,24 +202,21 @@ const App: React.FC = () => {
   };
 
   const handleAddFriend = async () => {
-    const userID = prompt('输入好友UserID:');
-    if (!userID) return;
-
     const nscPubKey = prompt('输入好友的NSC公钥 (U开头的公开身份ID):');
     if (!nscPubKey) return;
 
-    const remark = prompt('输入好友备注名(可选):', userID);
+    const remark = prompt('输入好友备注名(可选):', '');
 
     try {
-      // 1. 添加好友NSC公钥，自动派生聊天公钥
-      await addFriendNSCKey(userID, nscPubKey);
-      setFriends(prev => [...prev, { id: userID, nickname: remark || userID, publicKey: nscPubKey }]);
+      // 1. 添加好友NSC公钥，自动派生聊天公钥和好友ID
+      const friendID = await addFriendNSCKey(nscPubKey);
+      setFriends(prev => [...prev, { id: friendID, nickname: remark || friendID, publicKey: nscPubKey }]);
 
       // 2. 自动加入私聊会话，不需要用户手动点击"开始私聊"
-      const conversationID = await getConversationID(userID);
+      const conversationID = await getConversationID(friendID);
       const newSession: ChatSession = {
         id: conversationID,
-        name: `私聊 ${remark || userID}`,
+        name: `私聊 ${remark || friendID}`,
         isGroup: false
       };
 
@@ -202,7 +232,7 @@ const App: React.FC = () => {
       alert('好友添加成功！已自动打开聊天会话');
     } catch (error) {
       console.error('添加好友失败:', error);
-      alert('添加好友失败，请检查UserID和NSC公钥格式是否正确');
+      alert('添加好友失败，请检查NSC公钥格式是否正确');
     }
   };
 

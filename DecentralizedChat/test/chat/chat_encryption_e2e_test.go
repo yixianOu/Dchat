@@ -358,12 +358,12 @@ func TestChat_NSCKey_Derivation_E2E(t *testing.T) {
 	}
 
 	// 测试添加好友NSC公钥
-	err = chatSvc.AddFriendNSCKey("test_friend", testNSCPub)
+	uid, err := chatSvc.AddFriendNSCKey(testNSCPub)
 	if err != nil {
 		// 如果测试公钥无效，说明验证逻辑正常工作
 		t.Logf("ℹ️  添加好友NSC公钥失败(预期): %v", err)
 	} else {
-		t.Log("✅ 添加好友NSC公钥成功")
+		t.Logf("✅ 添加好友NSC公钥成功,返回用户ID: %s", uid)
 	}
 
 	t.Log("\n=== NSC密钥功能测试通过 ✅ ===")

@@ -8,7 +8,7 @@ import {context} from '../models';
 
 export function AddFriendKey(arg1:string,arg2:string):Promise<void>;
 
-export function AddFriendNSCKey(arg1:string,arg2:string):Promise<void>;
+export function AddFriendNSCKey(arg1:string):Promise<string>;
 
 export function AddGroupKey(arg1:string,arg2:string):Promise<void>;
 

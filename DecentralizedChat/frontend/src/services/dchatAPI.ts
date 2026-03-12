@@ -35,7 +35,7 @@ export interface CreateGroupResult {
 export const setUserInfo = SetUserInfo;
 export const getUser = GetUser;
 export const addFriendKey = AddFriendKey;
-export const addFriendNSCKey = AddFriendNSCKey; // ✅ 新增：通过NSC公钥添加好友
+export const addFriendNSCKey = AddFriendNSCKey as (nscPubKey: string) => Promise<string>; // ✅ 新增：通过NSC公钥添加好友，返回自动派生的好友ID
 export const addGroupKey = AddGroupKey;
 export const joinDirect = JoinDirect;
 export const joinGroup = JoinGroup as (gid: string, groupKey: string) => Promise<void>; // ✅ 新的带密钥的JoinGroup

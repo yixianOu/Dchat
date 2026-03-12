@@ -6,8 +6,8 @@ export function AddFriendKey(arg1, arg2) {
   return window['go']['main']['App']['AddFriendKey'](arg1, arg2);
 }
 
-export function AddFriendNSCKey(arg1, arg2) {
-  return window['go']['main']['App']['AddFriendNSCKey'](arg1, arg2);
+export function AddFriendNSCKey(arg1) {
+  return window['go']['main']['App']['AddFriendNSCKey'](arg1);
 }
 
 export function AddGroupKey(arg1, arg2) {

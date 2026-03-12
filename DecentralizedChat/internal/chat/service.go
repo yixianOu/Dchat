@@ -18,6 +18,8 @@ import (
 	"DecentralizedChat/internal/storage"
 
 	"github.com/nats-io/nats.go"
+
+	_ "golang.org/x/crypto/nacl/box"
 )
 
 // User 基础身份
@@ -124,26 +126,32 @@ func (s *Service) LoadNSCKeys(nscSeed string) error {
 	s.nscKeyManager = keyManager
 	s.userPrivB64 = privB64
 	s.userPubB64 = pubB64
+	// 从公钥派生固定用户ID，永久绑定身份
+	s.user.ID = deriveUserIDFromPubKey(pubB64)
 	s.mu.Unlock()
 
 	return nil
 }
 
 // AddFriendNSCKey 通过NSC公钥添加好友聊天公钥 ⭐ 新增功能
-func (s *Service) AddFriendNSCKey(uid, nscPubKey string) error {
-	if uid == "" || nscPubKey == "" {
-		return errors.New("uid or NSC public key is empty")
+// 返回自动派生的好友ID，无需手动指定
+func (s *Service) AddFriendNSCKey(nscPubKey string) (string, error) {
+	if nscPubKey == "" {
+		return "", errors.New("NSC public key is empty")
 	}
 
 	// 从NSC公钥派生聊天公钥
 	chatPubKey, err := GetChatPubKeyFromNSCPub(nscPubKey)
 	if err != nil {
-		return fmt.Errorf("derive chat public key: %w", err)
+		return "", fmt.Errorf("derive chat public key: %w", err)
 	}
+
+	// 从聊天公钥派生好友ID，确保ID和对方的用户ID完全一致
+	uid := deriveUserIDFromPubKey(chatPubKey)
 
 	// 添加到好友列表
 	s.AddFriendKey(uid, chatPubKey)
-	return nil
+	return uid, nil
 }
 
 // getFriendKey 获取好友公钥，优先从内存缓存，如果没有则从本地SQLite查询
@@ -379,6 +387,8 @@ func (s *Service) SetKeyPair(privB64, pubB64 string) {
 	s.mu.Lock()
 	s.userPrivB64 = privB64
 	s.userPubB64 = pubB64
+	// 从公钥派生固定用户ID，永久绑定身份
+	s.user.ID = deriveUserIDFromPubKey(pubB64)
 	s.mu.Unlock()
 }
 
@@ -555,8 +565,8 @@ func (s *Service) JoinGroup(gid string) error {
 }
 
 // SendDirect 发送私聊
-func (s *Service) SendDirect(peerID, content string) error {
-	if peerID == "" || content == "" {
+func (s *Service) SendDirect(peerIDOrCID, content string) error {
+	if peerIDOrCID == "" || content == "" {
 		return errors.New("peerID/content empty")
 	}
 
@@ -566,18 +576,47 @@ func (s *Service) SendDirect(peerID, content string) error {
 	s.mu.RUnlock()
 
 	if priv == "" {
+		slog.Error("发送私聊失败：本地私钥为空")
 		return errors.New("local priv key empty")
 	}
 
-	// 按需获取好友公钥
-	peerPub, err := s.getFriendKey(peerID)
-	if err != nil {
-		return fmt.Errorf("friend pub key not available: %w", err)
+	// 支持两种参数：用户ID 或 会话ID
+	var peerID string
+	peerPub, err := s.getFriendKey(peerIDOrCID)
+	if err == nil {
+		// 直接是用户ID
+		peerID = peerIDOrCID
+	} else {
+		// 尝试解析会话ID，提取对端用户ID
+		// 会话ID是两个用户ID的组合，尝试两种可能：from + peer 或 peer + from
+		allFriends, err := s.storage.GetAllFriends()
+		if err != nil {
+			slog.Error("发送私聊失败：获取好友列表失败", "error", err)
+			return fmt.Errorf("get friends failed: %w", err)
+		}
+		found := false
+		for _, fid := range allFriends {
+			if deriveCID(from, fid) == peerIDOrCID || deriveCID(fid, from) == peerIDOrCID {
+				peerID = fid
+				peerPub, err = s.getFriendKey(fid)
+				if err != nil {
+					slog.Error("发送私聊失败：好友公钥不存在", "friend_id", fid, "error", err)
+					return fmt.Errorf("friend pub key not available: %w", err)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			slog.Error("发送私聊失败：无效的会话ID或好友ID", "input", peerIDOrCID)
+			return fmt.Errorf("invalid peer or conversation ID: %s", peerIDOrCID)
+		}
 	}
 
 	cid := deriveCID(from, peerID)
 	nonceB64, cipherB64, err := EncryptDirect(priv, peerPub, []byte(content))
 	if err != nil {
+		slog.Error("发送私聊失败：消息加密失败", "error", err)
 		return err
 	}
 	now := time.Now()
@@ -594,6 +633,7 @@ func (s *Service) SendDirect(peerID, content string) error {
 	// 先使用JetStream发布，确保消息持久化并获取序列ID
 	seq, err := s.nats.PublishJetStream(subj, data)
 	if err != nil {
+		slog.Error("发送私聊失败：NATS发布消息失败", "subject", subj, "error", err)
 		return err
 	}
 
@@ -633,6 +673,7 @@ func (s *Service) SendDirect(peerID, content string) error {
 // SendGroup 发送群聊
 func (s *Service) SendGroup(gid, content string) error {
 	if gid == "" || content == "" {
+		slog.Error("发送群聊失败：参数为空")
 		return errors.New("gid/content empty")
 	}
 
@@ -643,11 +684,13 @@ func (s *Service) SendGroup(gid, content string) error {
 	// 按需获取群组密钥
 	sym, err := s.getGroupKey(gid)
 	if err != nil {
+		slog.Error("发送群聊失败：群组密钥不存在", "gid", gid, "error", err)
 		return fmt.Errorf("group key not available: %w", err)
 	}
 
 	nonceB64, cipherB64, err := EncryptGroup(sym, []byte(content))
 	if err != nil {
+		slog.Error("发送群聊失败：消息加密失败", "error", err)
 		return err
 	}
 	now := time.Now()
@@ -693,6 +736,7 @@ func (s *Service) SendGroup(gid, content string) error {
 	// 使用JetStream发布，确保消息持久化并获取序列ID
 	seq, err := s.nats.PublishJetStream(subj, data)
 	if err != nil {
+		slog.Error("发送群聊失败：NATS发布消息失败", "subject", subj, "error", err)
 		return err
 	}
 
@@ -737,6 +781,7 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 		// 按需获取群组密钥
 		sym, keyErr := s.getGroupKey(w.CID)
 		if keyErr != nil {
+			slog.Debug("群聊消息处理失败：群组密钥不存在", "gid", w.CID, "error", keyErr)
 			s.dispatchError(fmt.Errorf("group key not available for %s: %w", w.CID, keyErr))
 			return
 		}
@@ -749,12 +794,14 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 		// 按需获取好友公钥
 		peerPub, keyErr := s.getFriendKey(w.Sender)
 		if keyErr != nil {
+			slog.Debug("私聊消息处理失败：好友公钥不存在", "sender", w.Sender, "error", keyErr)
 			s.dispatchError(fmt.Errorf("friend pub key not available for %s: %w", w.Sender, keyErr))
 			return
 		}
 		pt, err = DecryptDirect(priv, peerPub, w.Nonce, w.Cipher)
 	}
 	if err != nil {
+		slog.Debug("消息解密失败", "error", err, "is_group", isGroup)
 		s.dispatchError(fmt.Errorf("decrypt: %w", err))
 		return
 	}
@@ -890,8 +937,17 @@ func (s *Service) SaveMessage(msg *storage.StoredMessage) error {
 	return s.storage.SaveMessage(msg)
 }
 
+// deriveUserIDFromPubKey 从公钥派生固定用户ID，永久绑定身份
+func deriveUserIDFromPubKey(pubKeyB64 string) string {
+	// 对公钥做SHA256哈希，取前16个字节转十六进制，前缀保持user_
+	hash := sha256.Sum256([]byte(pubKeyB64))
+	return "user_" + hex.EncodeToString(hash[:8]) // 8字节 = 16个十六进制字符，和之前长度一致
+}
+
 // --- helpers ---
+// generateUserID 已废弃，使用deriveUserIDFromPubKey代替
 func generateUserID() string {
+	// 保留兼容，如果没有加载密钥时临时生成随机ID
 	return "user_" + randomID()
 }
 
