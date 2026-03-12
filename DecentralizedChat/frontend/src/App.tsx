@@ -139,7 +139,7 @@ const App: React.FC = () => {
 
       try {
         const historyMessages = await getMessages(currentSession.id, 50, null as any);
-        const converted = historyMessages.reverse().map((msg: any) => ({
+        const converted = historyMessages.map((msg: any) => ({
           CID: msg.conversation_id,
           Sender: msg.sender_nickname || msg.sender_id,
           Ts: String(msg.timestamp),
