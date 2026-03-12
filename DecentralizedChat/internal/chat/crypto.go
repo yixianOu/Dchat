@@ -44,7 +44,7 @@ func EncryptDirect(senderPrivB64, recipientPubB64 string, plaintext []byte) (non
 	return B64(nonce[:]), B64(sealed), nil
 }
 
-// decryptDirect decrypts a message encrypted with encryptDirect
+// DecryptDirect decrypts a message encrypted with encryptDirect
 func DecryptDirect(recipientPrivB64, senderPubB64, nonceB64, cipherB64 string) ([]byte, error) {
 	privRaw, err := B64Dec(recipientPrivB64)
 	if err != nil {
