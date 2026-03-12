@@ -45,27 +45,48 @@ func (s *Storage) SaveMessage(msg *StoredMessage) error {
 	return err
 }
 
-// GetMessages 获取会话历史消息
+// GetMessages 获取会话历史消息，cid为空时返回所有消息
 func (s *Storage) GetMessages(cid string, limit int, before *time.Time) ([]*StoredMessage, error) {
 	var rows *sql.Rows
 	var err error
 
-	if before != nil {
-		rows, err = s.db.Query(`
-			SELECT id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group
-			FROM messages
-			WHERE cid = ? AND timestamp < ?
-			ORDER BY timestamp DESC
-			LIMIT ?
-		`, cid, *before, limit)
+	if cid == "" {
+		// 空cid返回所有消息
+		if before != nil {
+			rows, err = s.db.Query(`
+				SELECT id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group
+				FROM messages
+				WHERE timestamp < ?
+				ORDER BY timestamp DESC
+				LIMIT ?
+			`, *before, limit)
+		} else {
+			rows, err = s.db.Query(`
+				SELECT id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group
+				FROM messages
+				ORDER BY timestamp DESC
+				LIMIT ?
+			`, limit)
+		}
 	} else {
-		rows, err = s.db.Query(`
-			SELECT id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group
-			FROM messages
-			WHERE cid = ?
-			ORDER BY timestamp DESC
-			LIMIT ?
-		`, cid, limit)
+		// 返回指定会话的消息
+		if before != nil {
+			rows, err = s.db.Query(`
+				SELECT id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group
+				FROM messages
+				WHERE cid = ? AND timestamp < ?
+				ORDER BY timestamp DESC
+				LIMIT ?
+			`, cid, *before, limit)
+		} else {
+			rows, err = s.db.Query(`
+				SELECT id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group
+				FROM messages
+				WHERE cid = ?
+				ORDER BY timestamp DESC
+				LIMIT ?
+			`, cid, limit)
+		}
 	}
 
 	if err != nil {
@@ -238,4 +259,27 @@ func (s *Storage) GetAllGroups() ([]string, error) {
 		groups = append(groups, groupID)
 	}
 	return groups, rows.Err()
+}
+
+// GetAllConversations 获取所有会话列表，按最后消息时间倒序排列
+func (s *Storage) GetAllConversations() ([]*StoredConversation, error) {
+	rows, err := s.db.Query(`
+		SELECT id, type, last_message_at, created_at
+		FROM conversations
+		ORDER BY last_message_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var convs []*StoredConversation
+	for rows.Next() {
+		conv := &StoredConversation{}
+		if err := rows.Scan(&conv.ID, &conv.Type, &conv.LastMessageAt, &conv.CreatedAt); err != nil {
+			return nil, err
+		}
+		convs = append(convs, conv)
+	}
+	return convs, rows.Err()
 }

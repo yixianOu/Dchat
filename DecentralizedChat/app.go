@@ -487,6 +487,14 @@ func (a *App) GetStartupStatus() (map[string]any, error) {
 	}, nil
 }
 
+// GetAllConversations 获取所有会话列表，按最后消息时间倒序排列
+func (a *App) GetAllConversations() ([]*storage.StoredConversation, error) {
+	if a.storage == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	return a.storage.GetAllConversations()
+}
+
 // getNSCUserSeed 获取当前用户的NSC seed (从配置中读取)
 func (a *App) getNSCUserSeed() (string, error) {
 	if a.config == nil {

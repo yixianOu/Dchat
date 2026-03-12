@@ -260,8 +260,11 @@ func (s *Service) processOfflineMessage(data []byte) error {
 	// 1. 解密：复用现有消息解密逻辑，和实时消息处理完全一致
 	var w EncWire
 	if err := json.Unmarshal(data, &w); err != nil {
+		slog.Error("反序列化离线消息失败", "error", err)
 		return fmt.Errorf("unmarshal offline message: %w", err)
 	}
+
+	slog.Debug("收到离线消息", "sender", w.Sender, "cid", w.CID, "nonce", w.Nonce)
 
 	// 忽略自己发送的离线消息（避免重复存储）
 	s.mu.RLock()
@@ -269,6 +272,7 @@ func (s *Service) processOfflineMessage(data []byte) error {
 	priv := s.userPrivB64
 	s.mu.RUnlock()
 	if w.Sender == selfID {
+		slog.Debug("忽略自己发送的离线消息")
 		return nil
 	}
 
@@ -281,21 +285,33 @@ func (s *Service) processOfflineMessage(data []byte) error {
 	// 先尝试作为群聊解密
 	sym, groupKeyErr := s.getGroupKey(w.CID)
 	if groupKeyErr == nil {
+		slog.Debug("尝试群聊解密", "gid", w.CID)
 		pt, err = DecryptGroup(sym, w.Nonce, w.Cipher)
 		isGroup = true
 	} else {
+		slog.Debug("群聊密钥不存在，尝试私聊解密", "friend_id", w.Sender, "group_err", groupKeyErr)
 		// 尝试作为私聊解密
 		if priv == "" {
+			slog.Error("本地私钥缺失")
 			return errors.New("local private key missing")
 		}
 		peerPub, friendKeyErr := s.getFriendKey(w.Sender)
 		if friendKeyErr != nil {
+			slog.Error("好友密钥不存在，丢弃消息", "friend_id", w.Sender, "error", friendKeyErr)
 			// 没有对应密钥的消息直接丢弃
 			return nil
 		}
+		slog.Debug("使用好友公钥解密", "friend_pub", peerPub[:10] + "...")
 		pt, err = DecryptDirect(priv, peerPub, w.Nonce, w.Cipher)
 		isGroup = false
 	}
+
+	if err != nil {
+		slog.Error("解密离线消息失败", "error", err, "is_group", isGroup)
+		return fmt.Errorf("decrypt offline message: %w", err)
+	}
+
+	slog.Debug("离线消息解密成功", "content", string(pt))
 
 	if err != nil {
 		return fmt.Errorf("decrypt offline message: %w", err)
