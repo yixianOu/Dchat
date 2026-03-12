@@ -16,66 +16,21 @@ type OfflineSyncConfig struct {
 	ErrorHandler   func(error)      // 错误处理回调
 }
 
-// InitOfflineMirror 初始化镜像流
+// InitOfflineMirror 初始化离线同步（直接跨domain消费Hub上的流，无需本地镜像）
 func (s *Service) InitOfflineMirror(cfg *OfflineSyncConfig) error {
 	if s.conn == nil || !s.conn.IsConnected() {
 		return fmt.Errorf("nats not connected")
 	}
 
-	// 初始化JetStream上下文
-	js, err := s.conn.JetStream()
+	// 初始化JetStream上下文，指定Hub的domain前缀
+	js, err := s.conn.JetStream(nats.Domain("hub"))
 	if err != nil {
 		return fmt.Errorf("jetstream init failed: %w", err)
 	}
 	s.js = js
 	s.syncCfg = cfg
 
-	// ========== 创建群聊消息镜像流 ==========
-	s.streamNameGroup = fmt.Sprintf("USER_OFFLINE_GRP_%s", cfg.UserID)
-	// 清理旧流
-	_ = js.DeleteStream(s.streamNameGroup)
-	// 创建镜像流，同步Hub上的DChatGroups流
-	_, err = js.AddStream(&nats.StreamConfig{
-		Name: s.streamNameGroup,
-		Mirror: &nats.StreamSource{
-			Name:          "DChatGroups", // Hub上的群聊流名称
-			FilterSubject: "dchat.grp.*.msg", // 同步所有群聊消息
-			External: &nats.ExternalStream{
-				APIPrefix:     "$JS.hub.API", // Hub端JetStream domain
-				DeliverPrefix: fmt.Sprintf("sync.grp.%s", cfg.UserID),
-			},
-		},
-		MaxAge:  30 * 24 * time.Hour, // 和Hub保持一致
-		Storage: nats.FileStorage,
-	})
-	if err != nil {
-		return fmt.Errorf("create group mirror stream failed: %w", err)
-	}
-	slog.Info("✅ 群聊镜像流创建成功", "stream", s.streamNameGroup)
-
-	// ========== 创建私聊消息镜像流 ==========
-	s.streamNameDirect = fmt.Sprintf("USER_OFFLINE_DM_%s", cfg.UserID)
-	// 清理旧流
-	_ = js.DeleteStream(s.streamNameDirect)
-	// 创建镜像流，同步Hub上的DChatDirect流
-	_, err = js.AddStream(&nats.StreamConfig{
-		Name: s.streamNameDirect,
-		Mirror: &nats.StreamSource{
-			Name:          "DChatDirect", // Hub上的私聊流名称
-			FilterSubject: "dchat.dm.*.msg", // 同步所有私聊消息
-			External: &nats.ExternalStream{
-				APIPrefix:     "$JS.hub.API", // Hub端JetStream domain
-				DeliverPrefix: fmt.Sprintf("sync.dm.%s", cfg.UserID),
-			},
-		},
-		MaxAge:  30 * 24 * time.Hour, // 和Hub保持一致
-		Storage: nats.FileStorage,
-	})
-	if err != nil {
-		return fmt.Errorf("create direct mirror stream failed: %w", err)
-	}
-	slog.Info("✅ 私聊镜像流创建成功", "stream", s.streamNameDirect)
-
+	slog.Info("✅ 离线同步初始化成功，直接消费Hub domain流")
 	return nil
 }
 
@@ -92,24 +47,24 @@ func (s *Service) StartSync() error {
 		return nil
 	}
 
-	// ========== 订阅群聊镜像流 ==========
+	// ========== 订阅Hub上的群聊流 ==========
 	subGroup, err := s.js.PullSubscribe("dchat.grp.*.msg",
 		fmt.Sprintf("sync_consumer_grp_%s", s.syncCfg.UserID),
 		nats.DeliverAll(),
 		nats.AckExplicit(),
-		nats.BindStream(s.streamNameGroup),
+		nats.BindStream("DChatGroups"),
 	)
 	if err != nil {
 		return fmt.Errorf("create group subscription failed: %w", err)
 	}
 	s.syncSubGroup = subGroup
 
-	// ========== 订阅私聊镜像流 ==========
+	// ========== 订阅Hub上的私聊流 ==========
 	subDirect, err := s.js.PullSubscribe("dchat.dm.*.msg",
 		fmt.Sprintf("sync_consumer_dm_%s", s.syncCfg.UserID),
 		nats.DeliverAll(),
 		nats.AckExplicit(),
-		nats.BindStream(s.streamNameDirect),
+		nats.BindStream("DChatDirect"),
 	)
 	if err != nil {
 		return fmt.Errorf("create direct subscription failed: %w", err)
@@ -161,6 +116,7 @@ func (s *Service) syncLoop(streamType string, sub *nats.Subscription) {
 				if err == nats.ErrTimeout || strings.Contains(err.Error(), "context canceled") {
 					continue
 				}
+				slog.Error("拉取消息失败", "type", streamType, "error", err)
 				if s.syncCfg.ErrorHandler != nil {
 					s.syncCfg.ErrorHandler(fmt.Errorf("%s fetch failed: %w", streamType, err))
 				}
@@ -168,10 +124,17 @@ func (s *Service) syncLoop(streamType string, sub *nats.Subscription) {
 				continue
 			}
 
+			if len(msgs) > 0 {
+				slog.Info("拉取到消息", "type", streamType, "count", len(msgs))
+			}
+
 			for _, msg := range msgs {
 				// 调用回调处理
 				if s.syncCfg.MessageHandler != nil {
-					_ = s.syncCfg.MessageHandler(msg.Data)
+					err := s.syncCfg.MessageHandler(msg.Data)
+					if err != nil {
+						slog.Error("处理离线消息失败", "error", err, "subject", msg.Subject)
+					}
 				}
 				// 无论处理结果都ACK，避免重复消费
 				_ = msg.Ack()

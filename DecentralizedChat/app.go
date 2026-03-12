@@ -242,6 +242,46 @@ func (a *App) OnStartup(ctx context.Context) {
 		})
 	}
 
+	// 自动恢复所有会话（异步执行，不阻塞启动）
+	if a.storage != nil && a.chatSvc != nil {
+		go func() {
+			// 等待1秒确保服务完全稳定
+			time.Sleep(1 * time.Second)
+
+			// 恢复好友会话
+			friends, err := a.storage.GetAllFriends()
+			if err != nil {
+				slog.Warn("failed to get friends list", "error", err)
+			} else {
+				successCount := 0
+				for _, peerID := range friends {
+					if err := a.chatSvc.JoinDirect(peerID); err != nil {
+						slog.Warn("failed to rejoin direct chat", "peer", peerID, "error", err)
+					} else {
+						successCount++
+					}
+				}
+				slog.Info("direct chats restored", "total", len(friends), "success", successCount)
+			}
+
+			// 恢复群聊会话
+			groups, err := a.storage.GetAllGroups()
+			if err != nil {
+				slog.Warn("failed to get groups list", "error", err)
+			} else {
+				successCount := 0
+				for _, gid := range groups {
+					if err := a.chatSvc.JoinGroup(gid); err != nil {
+						slog.Warn("failed to rejoin group chat", "gid", gid, "error", err)
+					} else {
+						successCount++
+					}
+				}
+				slog.Info("group chats restored", "total", len(groups), "success", successCount)
+			}
+		}()
+	}
+
 	slog.Info("DChat application started (LeafNode mode)")
 }
 

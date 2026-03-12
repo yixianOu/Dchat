@@ -86,7 +86,7 @@ func (s *Storage) GetMessages(cid string, limit int, before *time.Time) ([]*Stor
 		messages = append(messages, msg)
 	}
 
-	// 反转顺序（从旧到新）
+	// 反转顺序，得到 旧→新 的排序，这样渲染时最旧的消息在最上面，最新的在最下面
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
@@ -200,4 +200,42 @@ func (s *Storage) GetGroupSymKey(groupID string) (string, error) {
 		return "", fmt.Errorf("group sym key not found: %s", groupID)
 	}
 	return symKey, err
+}
+
+// GetAllFriends 获取所有好友ID列表
+func (s *Storage) GetAllFriends() ([]string, error) {
+	rows, err := s.db.Query(`SELECT user_id FROM friend_pub_keys`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var friends []string
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		friends = append(friends, userID)
+	}
+	return friends, rows.Err()
+}
+
+// GetAllGroups 获取所有群聊ID列表
+func (s *Storage) GetAllGroups() ([]string, error) {
+	rows, err := s.db.Query(`SELECT group_id FROM group_sym_keys`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []string
+	for rows.Next() {
+		var groupID string
+		if err := rows.Scan(&groupID); err != nil {
+			return nil, err
+		}
+		groups = append(groups, groupID)
+	}
+	return groups, rows.Err()
 }

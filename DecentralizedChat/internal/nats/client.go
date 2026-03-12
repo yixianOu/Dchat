@@ -24,8 +24,6 @@ type Service struct {
 	syncCtx         context.Context       // 同步协程上下文
 	syncCancel      context.CancelFunc    // 同步取消函数
 	syncRunning     bool                  // 同步状态
-	streamNameGroup string                // 本地群聊镜像流名称
-	streamNameDirect string               // 本地私聊镜像流名称
 }
 
 type ClientConfig struct {
@@ -180,5 +178,10 @@ func (s *Service) GetStats() map[string]interface{} {
 		"messages_in":  stats.InMsgs,
 		"messages_out": stats.OutMsgs,
 	}
+}
+
+// Conn 返回内部NATS连接（用于测试/调试）
+func (s *Service) Conn() *nats.Conn {
+	return s.conn
 }
 

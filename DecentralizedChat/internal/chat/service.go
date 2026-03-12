@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -324,9 +325,10 @@ func (s *Service) processOfflineMessage(data []byte) error {
 			IsGroup:        isGroup,
 		}
 		if err := s.storage.SaveMessage(storedMsg); err != nil {
+			slog.Error("保存离线消息失败", "error", err)
 			return fmt.Errorf("save offline message: %w", err)
 		}
-
+		slog.Info("离线消息保存成功", "cid", w.CID, "sender", w.Sender, "content", string(pt))
 		// 更新会话列表
 		convType := "dm"
 		if isGroup {
