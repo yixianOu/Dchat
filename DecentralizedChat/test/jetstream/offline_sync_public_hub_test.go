@@ -201,11 +201,12 @@ func TestOfflineSync_PublicHub_E2E(t *testing.T) {
 	dmFound := false
 	grpFound := false
 	for _, msg := range messages {
-		if msg.ConversationID == testDM_CID {
+		switch msg.ConversationID {
+case testDM_CID:
 			require.Equal(t, testFriendID, msg.SenderID, "私聊消息发送者应该是好友")
 			require.Equal(t, "Hello from friend!", msg.Content, "私聊消息内容不匹配")
 			dmFound = true
-		} else if msg.ConversationID == testGroupID {
+		case testGroupID:
 			require.Equal(t, testFriendID, msg.SenderID, "群聊消息发送者应该是好友")
 			require.Equal(t, "Hello from group!", msg.Content, "群聊消息内容不匹配")
 			grpFound = true

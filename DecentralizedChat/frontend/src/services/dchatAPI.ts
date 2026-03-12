@@ -16,7 +16,8 @@ import {
   GetConversation,
   GetMessages,
   MarkAsRead,
-  SearchMessages
+  SearchMessages,
+  GetAllConversations // ✅ 新增：获取所有会话列表
 } from '../../wailsjs/go/main/App';
 
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -47,6 +48,7 @@ export const getConversation = GetConversation; // ✅ 新增：获取会话信�
 export const getMessages = GetMessages; // ✅ 新增：获取消息历史
 export const markAsRead = MarkAsRead; // ✅ 新增：标记已读
 export const searchMessages = SearchMessages; // ✅ 新增：搜索消息
+export const getAllConversations = GetAllConversations; // ✅ 新增：获取所有会话列表
 
 // ⭐ 基于事件的监听器，替代回调方式
 export const onDecrypted = (callback: (msg: DecryptedMessage) => void): (() => void) => {

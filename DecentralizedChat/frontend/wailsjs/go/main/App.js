@@ -18,6 +18,10 @@ export function CreateGroup() {
   return window['go']['main']['App']['CreateGroup']();
 }
 
+export function GetAllConversations() {
+  return window['go']['main']['App']['GetAllConversations']();
+}
+
 export function GetConversation(arg1) {
   return window['go']['main']['App']['GetConversation'](arg1);
 }
@@ -32,6 +36,10 @@ export function GetMessages(arg1, arg2, arg3) {
 
 export function GetNetworkStatus() {
   return window['go']['main']['App']['GetNetworkStatus']();
+}
+
+export function GetStartupStatus() {
+  return window['go']['main']['App']['GetStartupStatus']();
 }
 
 export function GetUser() {

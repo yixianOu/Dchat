@@ -14,7 +14,8 @@ import {
   onError,
   getConversationID,  // ✅ 新增功能
   getNetworkStatus,    // ✅ 新增功能
-  getMessages         // ✅ 新增：获取历史消息
+  getMessages,         // ✅ 新增：获取历史消息
+  getAllConversations // ✅ 新增：获取所有会话列表
 } from './services/dchatAPI';
 import { User, DecryptedMessage, ChatSession, Friend, Group, NetworkStatus } from './types';
 import './App.css';
@@ -43,6 +44,23 @@ const App: React.FC = () => {
         const currentUser = await getUser();
         setUser(currentUser);
         setNickname(currentUser.nickname);
+
+        // ✅ 加载所有历史会话
+        try {
+          const convs = await getAllConversations();
+          const loadedSessions = convs.map(conv => ({
+            id: conv.id,
+            name: conv.type === 'group' ? `群聊 ${conv.id.slice(0, 8)}` : `私聊 ${conv.id.slice(0, 8)}`,
+            isGroup: conv.type === 'group',
+            lastTime: new Date(conv.last_message_at as unknown as string).getTime()
+          }));
+          // 按最后消息时间倒序排列
+          loadedSessions.sort((a, b) => b.lastTime - a.lastTime);
+          setSessions(loadedSessions);
+          console.log(`加载了 ${loadedSessions.length} 个历史会话`);
+        } catch (err) {
+          console.warn('加载历史会话失败:', err);
+        }
 
         // ⭐ 基于事件的消息监听
         const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {

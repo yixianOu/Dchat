@@ -18,7 +18,7 @@ func B64(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
 // B64Dec decodes standard base64
 func B64Dec(s string) ([]byte, error) { return base64.StdEncoding.DecodeString(s) }
 
-// encryptDirect performs public-key encryption using NaCl box (X25519 + XSalsa20-Poly1305)
+// EncryptDirect performs public-key encryption using NaCl box (X25519 + XSalsa20-Poly1305)
 // Keys are expected raw 32 bytes each, base64 encoded.
 func EncryptDirect(senderPrivB64, recipientPubB64 string, plaintext []byte) (nonceB64, cipherB64 string, err error) {
 	privRaw, err := B64Dec(senderPrivB64)
