@@ -11,9 +11,9 @@ import (
 
 // OfflineSyncConfig 同步配置
 type OfflineSyncConfig struct {
-	UserID         string          // 当前用户ID
-	MessageHandler func([]byte) error // 消息处理回调
-	ErrorHandler   func(error)      // 错误处理回调
+	UserID         string                // 当前用户ID
+	MessageHandler func(*nats.Msg) error // 消息处理回调，支持获取NATS元数据
+	ErrorHandler   func(error)           // 错误处理回调
 }
 
 // InitOfflineMirror 初始化离线同步（直接跨domain消费Hub上的流，无需本地镜像）
@@ -131,7 +131,7 @@ func (s *Service) syncLoop(streamType string, sub *nats.Subscription) {
 			for _, msg := range msgs {
 				// 调用回调处理
 				if s.syncCfg.MessageHandler != nil {
-					err := s.syncCfg.MessageHandler(msg.Data)
+					err := s.syncCfg.MessageHandler(msg)
 					if err != nil {
 						slog.Error("处理离线消息失败", "error", err, "subject", msg.Subject)
 					}

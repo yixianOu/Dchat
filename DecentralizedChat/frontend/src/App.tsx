@@ -169,18 +169,40 @@ const App: React.FC = () => {
   };
 
   const handleAddFriend = async () => {
-    const uid = prompt('输入好友备注名:');
+    const userID = prompt('输入好友UserID:');
+    if (!userID) return;
+
     const nscPubKey = prompt('输入好友的NSC公钥 (U开头的公开身份ID):');
-    if (uid && nscPubKey) {
-      try {
-        // 新的方法：仅用NSC公钥添加好友，自动派生聊天公钥
-        await addFriendNSCKey(uid, nscPubKey);
-        setFriends(prev => [...prev, { id: uid, nickname: uid, publicKey: nscPubKey }]);
-        alert('好友添加成功！无需交换密钥，可直接发送加密消息');
-      } catch (error) {
-        console.error('添加好友失败:', error);
-        alert('添加好友失败，请检查NSC公钥格式是否正确');
-      }
+    if (!nscPubKey) return;
+
+    const remark = prompt('输入好友备注名(可选):', userID);
+
+    try {
+      // 1. 添加好友NSC公钥，自动派生聊天公钥
+      await addFriendNSCKey(userID, nscPubKey);
+      setFriends(prev => [...prev, { id: userID, nickname: remark || userID, publicKey: nscPubKey }]);
+
+      // 2. 自动加入私聊会话，不需要用户手动点击"开始私聊"
+      const conversationID = await getConversationID(userID);
+      const newSession: ChatSession = {
+        id: conversationID,
+        name: `私聊 ${remark || userID}`,
+        isGroup: false
+      };
+
+      // 3. 添加到会话列表并自动切换到该会话
+      setSessions(prev => {
+        if (!prev.find(s => s.id === conversationID)) {
+          return [...prev, newSession];
+        }
+        return prev;
+      });
+      setCurrentSession(newSession);
+
+      alert('好友添加成功！已自动打开聊天会话');
+    } catch (error) {
+      console.error('添加好友失败:', error);
+      alert('添加好友失败，请检查UserID和NSC公钥格式是否正确');
     }
   };
 
@@ -235,32 +257,47 @@ const App: React.FC = () => {
   };
 
   const handleStartDirectChat = async () => {
-    const peerID = prompt('输入对方 ID:');
-    if (peerID) {
-      const friend = friends.find(f => f.id === peerID);
-      if (!friend) {
-        alert('请先添加该用户为好友');
-        return;
-      }
-      
-      try {
-        await joinDirect(peerID);
-        
-        // ✅ 使用新功能：获取真实的会话ID
-        const conversationID = await getConversationID(peerID);
-        
-        const newSession: ChatSession = {
-          id: conversationID, // 使用后端计算的真实CID
-          name: `私聊 ${friend.nickname}`,
-          isGroup: false
-        };
-        setSessions(prev => [...prev, newSession]);
-        setCurrentSession(newSession);
-        alert('开始私聊成功');
-      } catch (error) {
-        console.error('开始私聊失败:', error);
-        alert('开始私聊失败');
-      }
+    // 如果已经有好友列表，让用户选择，否则手动输入
+    if (friends.length === 0) {
+      alert('您还没有添加任何好友，请先添加好友');
+      return;
+    }
+
+    // 显示好友列表让用户选择
+    const friendOptions = friends.map((f, i) => `${i+1}. ${f.nickname} (${f.id})`).join('\n');
+    const selection = prompt(`选择要聊天的好友:\n${friendOptions}\n输入序号:`);
+    if (!selection) return;
+
+    const index = parseInt(selection) - 1;
+    if (index < 0 || index >= friends.length) {
+      alert('无效的序号');
+      return;
+    }
+
+    const friend = friends[index];
+    try {
+      await joinDirect(friend.id);
+
+      // 使用后端计算的真实会话ID
+      const conversationID = await getConversationID(friend.id);
+
+      const newSession: ChatSession = {
+        id: conversationID,
+        name: `私聊 ${friend.nickname}`,
+        isGroup: false
+      };
+
+      // 避免重复添加会话
+      setSessions(prev => {
+        if (!prev.find(s => s.id === conversationID)) {
+          return [...prev, newSession];
+        }
+        return prev;
+      });
+      setCurrentSession(newSession);
+    } catch (error) {
+      console.error('开始私聊失败:', error);
+      alert('开始私聊失败');
     }
   };
 

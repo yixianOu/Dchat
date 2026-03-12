@@ -1,5 +1,5 @@
 // E2E 集成测试：SQLite 本地存储
-package e2e_test
+package storage_test
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 	"DecentralizedChat/internal/storage"
 )
 
-func TestSQLiteStorage_E2E(t *testing.T) {
+func TestStorage_E2E(t *testing.T) {
 	t.Log("=== E2E 测试: SQLite 本地存储 ===")
 	t.Log("")
 

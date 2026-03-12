@@ -12,6 +12,7 @@ type StoredMessage struct {
 	Timestamp      time.Time `json:"timestamp"`
 	IsRead         bool      `json:"is_read"`
 	IsGroup        bool      `json:"is_group"`
+	NatsSeq        uint64    `json:"nats_seq"` // NATS消息序列ID，用于去重
 }
 
 // StoredConversation 存储的会话

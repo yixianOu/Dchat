@@ -34,14 +34,14 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
-// SaveMessage 保存消息
+// SaveMessage 保存消息，自动去重（基于NATS序列ID）
 func (s *Storage) SaveMessage(msg *StoredMessage) error {
 	_, err := s.db.Exec(`
-		INSERT OR REPLACE INTO messages
-		(id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT OR IGNORE INTO messages
+		(id, cid, sender_id, sender_nickname, content, timestamp, is_read, is_group, nats_seq)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, msg.ID, msg.ConversationID, msg.SenderID, msg.SenderNickname,
-		msg.Content, msg.Timestamp, msg.IsRead, msg.IsGroup)
+		msg.Content, msg.Timestamp, msg.IsRead, msg.IsGroup, msg.NatsSeq)
 	return err
 }
 

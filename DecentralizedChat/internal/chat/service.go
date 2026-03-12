@@ -238,8 +238,8 @@ func (s *Service) InitOfflineSync() error {
 	// 配置同步回调
 	cfg := &natsservice.OfflineSyncConfig{
 		UserID: userID,
-		MessageHandler: func(data []byte) error {
-			return s.processOfflineMessage(data)
+		MessageHandler: func(msg *nats.Msg) error {
+			return s.processOfflineMessage(msg)
 		},
 		ErrorHandler: func(err error) {
 			s.dispatchError(err)
@@ -256,10 +256,10 @@ func (s *Service) InitOfflineSync() error {
 }
 
 // processOfflineMessage 处理同步下来的离线消息
-func (s *Service) processOfflineMessage(data []byte) error {
+func (s *Service) processOfflineMessage(msg *nats.Msg) error {
 	// 1. 解密：复用现有消息解密逻辑，和实时消息处理完全一致
 	var w EncWire
-	if err := json.Unmarshal(data, &w); err != nil {
+	if err := json.Unmarshal(msg.Data, &w); err != nil {
 		slog.Error("反序列化离线消息失败", "error", err)
 		return fmt.Errorf("unmarshal offline message: %w", err)
 	}
@@ -312,6 +312,13 @@ func (s *Service) processOfflineMessage(data []byte) error {
 	}
 	slog.Debug("离线消息解密成功", "content", string(pt))
 
+	// 获取NATS消息序列ID用于去重
+	natsSeq := uint64(0)
+	if meta, err := msg.Metadata(); err == nil {
+		natsSeq = meta.Sequence.Stream
+		slog.Debug("获取NATS消息序列ID", "seq", natsSeq)
+	}
+
 	// 构造统一的解密消息结构
 	decrypted := &DecryptedMessage{
 		CID:     w.CID,
@@ -320,7 +327,7 @@ func (s *Service) processOfflineMessage(data []byte) error {
 		Plain:   string(pt),
 		IsGroup: isGroup,
 		RawWire: w,
-		Subject: "",
+		Subject: msg.Subject,
 	}
 
 	// 2. 存储：复用现有SQLite存储逻辑
@@ -334,6 +341,7 @@ func (s *Service) processOfflineMessage(data []byte) error {
 			Timestamp:      time.Unix(w.TS, 0),
 			IsRead:         false, // 离线消息默认未读
 			IsGroup:        isGroup,
+			NatsSeq:        natsSeq,
 		}
 		if err := s.storage.SaveMessage(storedMsg); err != nil {
 			slog.Error("保存离线消息失败", "error", err)
