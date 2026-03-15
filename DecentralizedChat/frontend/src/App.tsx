@@ -95,62 +95,90 @@ const App: React.FC = () => {
         } catch (err) {
           console.warn('加载历史会话失败:', err);
         }
-
-        // ⭐ 基于事件的消息监听（只做通知，不直接添加消息到列表）
-        const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {
-          // 1. 更新会话列表
-          const sessionId = msg.IsGroup ? msg.CID : msg.CID;
-          setSessions(prev => {
-            const existing = prev.find(s => s.id === sessionId);
-            if (existing) {
-              return prev.map(s =>
-                s.id === sessionId
-                  ? { ...s, lastMessage: msg.Plain, lastTime: new Date().getTime() }
-                  : s
-              );
-            } else {
-              return [...prev, {
-                id: sessionId,
-                name: msg.IsGroup ? `群聊 ${sessionId.slice(0, 8)}` : `私聊 ${msg.Sender}`,
-                isGroup: msg.IsGroup,
-                lastMessage: msg.Plain,
-                lastTime: new Date().getTime()
-              }];
-            }
-          });
-
-          // 如果当前正在查看该会话，自动刷新最新消息（从数据库读取，保证唯一）
-          if (currentSession?.id === sessionId) {
-            getMessages(sessionId, 50, null as any).then(historyMessages => {
-              const converted = convertStorageMessages(historyMessages);
-              setMessages(converted);
-            }).catch(err => console.error('刷新消息失败:', err));
-          }
-        });
-
-        // ⭐ 基于事件的错误监听
-        const unsubscribeErrors = onError((errorData: { error: string; timestamp: string }) => {
-          console.error('Chat error:', errorData.error);
-          // 可以添加更好的错误处理，如错误状态管理
-          alert(`聊天错误: ${errorData.error}`);
-        });
-
-        // 清理函数
-        return () => {
-          unsubscribeMessages();
-          unsubscribeErrors();
-        };
-
       } catch (error) {
         console.error('初始化应用失败:', error);
       }
     };
 
-    const cleanup = initApp();
-    return () => {
-      cleanup?.then(fn => fn?.());
-    };
+    initApp();
   }, []);
+
+  // 消息监听单独处理，依赖currentSession确保能拿到最新值
+  useEffect(() => {
+    console.log('🔄 重新注册消息回调，当前会话:', currentSession?.id);
+
+    // ⭐ 基于事件的消息监听：直接去重添加，保证实时性
+    const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {
+      console.log('📩 收到新消息:', msg);
+      console.log('📍 当前会话ID:', currentSession?.id, '消息会话ID:', msg.CID);
+
+      // 1. 先修复时间格式
+      const processedMsg = {...msg};
+      // 解析时间戳，兼容各种格式
+      try {
+        let ts = msg.Ts;
+        if (typeof ts === 'string' && ts.includes(' m=')) {
+          ts = ts.split(' m=')[0];
+        }
+        const date = new Date(ts);
+        if (isNaN(date.getTime())) {
+          // 时间无效则用当前时间
+          processedMsg.Ts = new Date().toISOString();
+        }
+      } catch (e) {
+        processedMsg.Ts = new Date().toISOString();
+      }
+
+      // 2. 严格去重：会话ID+发送者+内容完全一致就认为是重复
+      setMessages(prev => {
+        const isDuplicate = prev.some(m =>
+          m.CID === processedMsg.CID &&
+          m.Sender === processedMsg.Sender &&
+          m.Plain === processedMsg.Plain
+        );
+
+        if (isDuplicate) {
+          console.log('ℹ️ 检测到重复消息，忽略');
+          return prev;
+        }
+        return [...prev, processedMsg];
+      });
+
+      // 2. 更新会话列表
+      const sessionId = msg.IsGroup ? msg.CID : msg.CID;
+      setSessions(prev => {
+        const existing = prev.find(s => s.id === sessionId);
+        if (existing) {
+          return prev.map(s =>
+            s.id === sessionId
+              ? { ...s, lastMessage: msg.Plain, lastTime: new Date().getTime() }
+              : s
+          );
+        } else {
+          return [...prev, {
+            id: sessionId,
+            name: msg.IsGroup ? `群聊 ${sessionId.slice(0, 8)}` : `私聊 ${msg.Sender}`,
+            isGroup: msg.IsGroup,
+            lastMessage: msg.Plain,
+            lastTime: new Date().getTime()
+          }];
+        }
+      });
+    });
+
+    // ⭐ 基于事件的错误监听
+    const unsubscribeErrors = onError((errorData: { error: string; timestamp: string }) => {
+      console.error('Chat error:', errorData.error);
+      // 可以添加更好的错误处理，如错误状态管理
+      alert(`聊天错误: ${errorData.error}`);
+    });
+
+    // 清理函数
+    return () => {
+      unsubscribeMessages();
+      unsubscribeErrors();
+    };
+  }, [currentSession]); // 加入currentSession依赖，确保能拿到最新的会话值
 
   // ✅ 新增：定期检查网络状态
   useEffect(() => {
