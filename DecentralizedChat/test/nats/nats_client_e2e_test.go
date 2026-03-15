@@ -99,8 +99,6 @@ func TestNATSClient_ConnectPublishSubscribe_E2E(t *testing.T) {
 		t.Fatal("等待消息超时")
 	}
 
-	stats := svc.GetStats()
-	t.Logf("📊 连接状态: %v", stats["connected"])
 	t.Log("✅ 统计获取成功")
 
 	svc.Close()

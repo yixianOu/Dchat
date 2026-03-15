@@ -378,40 +378,6 @@ func (a *App) GetConversationID(peerID string) (string, error) {
 	return a.chatSvc.GetConversationID(peerID), nil
 }
 
-// GetNetworkStatus returns current network and cluster status
-func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
-	if a.natsSvc == nil || a.leafnodeMgr == nil {
-		return nil, fmt.Errorf("services not initialized")
-	}
-
-	result := make(map[string]interface{})
-
-	// NATS客户端状态
-	result["nats"] = a.natsSvc.GetStats()
-
-	// LeafNode 状态
-	result["leafnode"] = map[string]interface{}{
-		"connected":     a.leafnodeMgr.IsRunning(),
-		"hub_urls":      a.config.LeafNode.HubURLs,
-		"local_url":     a.leafnodeMgr.GetLocalNATSURL(),
-		"sqlite_path":   a.config.SQLitePath,
-		"storage_ready": a.storage != nil,
-	}
-
-	// 配置信息
-	if a.config != nil {
-		result["config"] = map[string]interface{}{
-			"local_host": a.config.LeafNode.LocalHost,
-			"local_port": a.config.LeafNode.LocalPort,
-			"hub_urls":   a.config.LeafNode.HubURLs,
-		}
-	}
-
-	return result, nil
-}
-
-
-// AddFriendNSCKey 通过NSC公钥添加好友
 // AddFriendNSCKey 通过NSC公钥添加好友，返回自动派生的好友ID
 func (a *App) AddFriendNSCKey(nscPubKey string) (string, error) {
 	if a.chatSvc == nil {

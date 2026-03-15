@@ -790,7 +790,6 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
     }
 
     result := make(map[string]interface{})
-    result["nats"] = a.natsSvc.GetStats()
     result["leafnode"] = map[string]interface{}{
         "connected":         a.leafnodeMgr.IsRunning(),
         "hub_urls":          a.config.LeafNode.HubURLs,

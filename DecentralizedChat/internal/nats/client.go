@@ -179,23 +179,6 @@ func (s *Service) IsConnected() bool {
 	return s.conn != nil && s.conn.IsConnected()
 }
 
-func (s *Service) GetStats() map[string]interface{} {
-	if s.conn == nil {
-		return map[string]interface{}{
-			"connected": false,
-		}
-	}
-	stats := s.conn.Stats()
-	return map[string]interface{}{
-		"connected":    s.conn.IsConnected(),
-		"reconnects":   stats.Reconnects,
-		"bytes_in":     stats.InBytes,
-		"bytes_out":    stats.OutBytes,
-		"messages_in":  stats.InMsgs,
-		"messages_out": stats.OutMsgs,
-	}
-}
-
 // Conn 返回内部NATS连接（用于测试/调试）
 func (s *Service) Conn() *nats.Conn {
 	return s.conn
