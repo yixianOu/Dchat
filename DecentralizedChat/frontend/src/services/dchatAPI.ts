@@ -11,7 +11,6 @@ import {
   SendDirect,
   SendGroup,
   GetConversationID,  // ✅ 新增功能，已生成
-  GetNetworkStatus,   // ✅ 新增功能，已生成
   GetConversation,
   GetMessages,
   MarkAsRead,
@@ -42,7 +41,6 @@ export const createGroup = CreateGroup as unknown as () => Promise<CreateGroupRe
 export const sendDirect = SendDirect;
 export const sendGroup = SendGroup;
 export const getConversationID = GetConversationID;
-export const getNetworkStatus = GetNetworkStatus;
 export const getConversation = GetConversation; // ✅ 新增：获取会话信息
 export const getMessages = GetMessages; // ✅ 新增：获取消息历史
 export const markAsRead = MarkAsRead; // ✅ 新增：标记已读

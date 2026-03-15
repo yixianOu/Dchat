@@ -13,7 +13,6 @@ import {
   onDecrypted,
   onError,
   getConversationID,  // ✅ 新增功能
-  getNetworkStatus,    // ✅ 新增功能
   getMessages,         // ✅ 新增：获取历史消息
   getAllConversations // ✅ 新增：获取所有会话列表
 } from './services/dchatAPI';

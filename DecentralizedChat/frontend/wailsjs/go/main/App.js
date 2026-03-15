@@ -34,10 +34,6 @@ export function GetMessages(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetMessages'](arg1, arg2, arg3);
 }
 
-export function GetNetworkStatus() {
-  return window['go']['main']['App']['GetNetworkStatus']();
-}
-
 export function GetStartupStatus() {
   return window['go']['main']['App']['GetStartupStatus']();
 }

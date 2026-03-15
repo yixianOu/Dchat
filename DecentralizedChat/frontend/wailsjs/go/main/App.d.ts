@@ -22,8 +22,6 @@ export function GetConversationID(arg1:string):Promise<string>;
 
 export function GetMessages(arg1:string,arg2:number,arg3:time.Time):Promise<Array<storage.StoredMessage>>;
 
-export function GetNetworkStatus():Promise<Record<string, any>>;
-
 export function GetStartupStatus():Promise<Record<string, any>>;
 
 export function GetUser():Promise<chat.User>;
