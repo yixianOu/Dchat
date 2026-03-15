@@ -28,13 +28,14 @@ type User struct {
 	Nickname string `json:"nickname"`
 }
 
-// EncWire 最小载荷（见 README）：{cid,sender,ts,nonce,cipher}
+// EncWire 最小载荷（见 README）：{cid,sender,ts,nonce,cipher,nickname}
 type EncWire struct {
-	CID    string `json:"cid"`
-	Sender string `json:"sender"`
-	TS     int64  `json:"ts"`
-	Nonce  string `json:"nonce"`
-	Cipher string `json:"cipher"`
+	CID      string `json:"cid"`
+	Sender   string `json:"sender"`
+	TS       int64  `json:"ts"`
+	Nonce    string `json:"nonce"`
+	Cipher   string `json:"cipher"`
+	Nickname string `json:"nickname,omitempty"` // 发送者昵称，可选
 }
 
 // DecryptedMessage 统一回调结构
@@ -344,12 +345,16 @@ func (s *Service) processOfflineMessage(msg *nats.Msg) error {
 			ID:             generateMessageID(),
 			ConversationID: w.CID,
 			SenderID:       w.Sender,
-			SenderNickname: w.Sender,
+			SenderNickname: w.Nickname, // 优先使用消息里的昵称
 			Content:        string(pt),
 			Timestamp:      time.Unix(w.TS, 0),
 			IsRead:         false, // 离线消息默认未读
 			IsGroup:        isGroup,
 			NatsSeq:        natsSeq,
+		}
+		// 昵称空的话fallback到用户ID
+		if storedMsg.SenderNickname == "" {
+			storedMsg.SenderNickname = w.Sender
 		}
 		if err := s.storage.SaveMessage(storedMsg); err != nil {
 			slog.Error("保存离线消息失败", "error", err)
@@ -621,11 +626,12 @@ func (s *Service) SendDirect(peerIDOrCID, content string) error {
 	}
 	now := time.Now()
 	wire := EncWire{
-		CID:    cid,
-		Sender: from,
-		TS:     now.Unix(),
-		Nonce:  nonceB64,
-		Cipher: cipherB64,
+		CID:      cid,
+		Sender:   from,
+		TS:       now.Unix(),
+		Nonce:    nonceB64,
+		Cipher:   cipherB64,
+		Nickname: s.user.Nickname, // 带上发送者昵称
 	}
 	data, _ := json.Marshal(wire)
 	subj := fmt.Sprintf("dchat.dm.%s.msg", cid)
@@ -695,11 +701,12 @@ func (s *Service) SendGroup(gid, content string) error {
 	}
 	now := time.Now()
 	wire := EncWire{
-		CID:    gid,
-		Sender: from,
-		TS:     now.Unix(),
-		Nonce:  nonceB64,
-		Cipher: cipherB64,
+		CID:      gid,
+		Sender:   from,
+		TS:       now.Unix(),
+		Nonce:    nonceB64,
+		Cipher:   cipherB64,
+		Nickname: s.user.Nickname, // 带上发送者昵称
 	}
 	data, _ := json.Marshal(wire)
 	subj := fmt.Sprintf("dchat.grp.%s.msg", gid)
@@ -829,12 +836,16 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 			ID:             generateMessageID(),
 			ConversationID: w.CID,
 			SenderID:       w.Sender,
-			SenderNickname: w.Sender, // TODO: 后续可以扩展好友昵称映射
+			SenderNickname: w.Nickname, // 优先使用消息里的昵称
 			Content:        string(pt),
 			Timestamp:      time.Unix(w.TS, 0),
 			IsRead:         false,
 			IsGroup:        isGroup,
 			NatsSeq:        natsSeq,
+		}
+		// 昵称空的话fallback到用户ID
+		if storedMsg.SenderNickname == "" {
+			storedMsg.SenderNickname = w.Sender
 		}
 		// 最佳努力保存，失败不影响消息分发
 		_ = s.storage.SaveMessage(storedMsg)

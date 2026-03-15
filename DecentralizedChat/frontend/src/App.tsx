@@ -47,8 +47,6 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [showKeyManager, setShowKeyManager] = useState(false);
-  const [nickname, setNickname] = useState('');
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null); // ✅ 新增网络状态
   // 可复制信息弹窗状态
   const [showCopyModal, setShowCopyModal] = useState(false);
@@ -62,7 +60,6 @@ const App: React.FC = () => {
         // 获取当前用户信息
         const currentUser = await getUser();
         setUser(currentUser);
-        setNickname(currentUser.nickname);
 
         // ✅ 加载所有历史会话
         try {
@@ -217,17 +214,6 @@ const App: React.FC = () => {
     loadSessionHistory();
   }, [currentSession?.id]);
 
-  const handleSetNickname = async () => {
-    try {
-      await setUserInfo(nickname);
-      const updatedUser = await getUser();
-      setUser(updatedUser);
-      setShowSettings(false);
-    } catch (error) {
-      console.error('设置昵称失败:', error);
-      alert('设置昵称失败');
-    }
-  };
 
   const handleAddFriend = async () => {
     const nscPubKey = prompt('输入好友的NSC公钥 (U开头的公开身份ID):');
@@ -325,7 +311,6 @@ const App: React.FC = () => {
           <h2>DChat</h2>
           <div className="user-info">
             <span>{user.nickname || '未设置昵称'}</span>
-            <button onClick={() => setShowSettings(true)}>设置</button>
           </div>
           
           {/* ✅ 新增：网络状态显示 */}
@@ -347,7 +332,7 @@ const App: React.FC = () => {
           <button onClick={handleAddFriend}>添加好友</button>
           <button onClick={handleCreateGroup}>创建群聊</button>
           <button onClick={handleJoinGroup}>加入群组</button>
-          <button onClick={() => setShowKeyManager(true)}>密钥管理</button>
+          <button onClick={() => setShowSettings(true)}>设置</button>
         </div>
         
         <div className="sessions-list">
@@ -386,55 +371,9 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* 设置弹窗 */}
+      {/* 设置弹窗（原密钥管理，已整合用户ID、昵称、公钥管理） */}
       {showSettings && (
-        <div className="settings-modal">
-          <div className="modal-content">
-            <h3>用户设置</h3>
-            <div className="form-group">
-              <label>你的用户ID (可复制):</label>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <input
-                  value={user.id}
-                  readOnly
-                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '12px' }}
-                />
-                <button
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(user.id);
-                    const btn = event?.target as HTMLButtonElement;
-                    const originalText = btn.textContent;
-                    btn.textContent = '已复制!';
-                    setTimeout(() => {
-                      btn.textContent = originalText;
-                    }, 2000);
-                  }}
-                  className="copy-btn"
-                  style={{ padding: '4px 8px' }}
-                >
-                  复制
-                </button>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>昵称:</label>
-              <input
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="输入昵称"
-              />
-            </div>
-            <div className="modal-actions">
-              <button onClick={handleSetNickname}>保存</button>
-              <button onClick={() => setShowSettings(false)}>取消</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 密钥管理弹窗 */}
-      {showKeyManager && (
-        <KeyManager onClose={() => setShowKeyManager(false)} />
+        <KeyManager onClose={() => setShowSettings(false)} />
       )}
 
       {/* 可复制信息弹窗 */}

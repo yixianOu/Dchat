@@ -175,6 +175,11 @@ func (a *App) OnStartup(ctx context.Context) {
 	// 把storage实例传给chat服务
 	a.chatSvc = chat.NewService(a.natsSvc, a.storage)
 
+	// 从配置加载用户昵称
+	if a.config.User.Nickname != "" {
+		a.chatSvc.SetUser(a.config.User.Nickname)
+	}
+
 	// 设置默认的消息处理器，将解密后的消息推送给前端
 	a.chatSvc.OnDecrypted(func(msg *chat.DecryptedMessage) {
 		runtime.EventsEmit(a.ctx, "message:decrypted", msg)
@@ -306,7 +311,15 @@ func (a *App) SetUserInfo(nickname string) error {
 		return fmt.Errorf("chat service not initialized")
 	}
 
+	// 更新chat service的用户昵称
 	a.chatSvc.SetUser(nickname)
+
+	// 保存到配置文件持久化
+	a.config.User.Nickname = nickname
+	if err := config.SaveConfig(a.config); err != nil {
+		slog.Warn("保存用户昵称到配置文件失败", "error", err)
+	}
+
 	return nil
 }
 

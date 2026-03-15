@@ -1,0 +1,34 @@
+time=2026-03-15T22:16:03.564+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:136 msg="Starting LeafNode..."
+time=2026-03-15T22:16:03.592+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:141 msg="✅ LeafNode started successfully"
+time=2026-03-15T22:16:03.595+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:158 msg="✅ SQLite storage initialized"
+time=2026-03-15T22:16:03.597+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:200 msg="NSC chat keys loaded successfully"
+time=2026-03-15T22:16:03.597+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:285 msg="DChat application started (LeafNode mode)"
+time=2026-03-15T22:16:04.599+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:264 msg="direct chats restored" total=2 success=2
+time=2026-03-15T22:16:04.600+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:280 msg="group chats restored" total=1 success=1
+time=2026-03-15T22:16:06.597+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:33 msg="✅ 离线同步初始化成功，直接消费Hub domain流"
+time=2026-03-15T22:16:06.625+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:80 msg="✅ 离线消息同步已启动（群聊+私聊）"
+time=2026-03-15T22:16:06.625+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:218 msg="✅ 离线消息同步初始化成功"
+time=2026-03-15T22:16:06.640+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:128 msg=拉取到消息 type=direct count=1
+time=2026-03-15T22:16:06.649+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/chat/service.go:358 msg=离线消息保存成功 cid=bbd3cfd370769884 sender=user_470f574ab6555e8e content=hello
+time=2026-03-15T22:16:23.961+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:128 msg=拉取到消息 type=direct count=1
+time=2026-03-15T22:20:24.836+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:128 msg=拉取到消息 type=direct count=1
+time=2026-03-15T22:22:48.241+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:136 msg="Starting LeafNode..."
+time=2026-03-15T22:22:48.269+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:141 msg="✅ LeafNode started successfully"
+time=2026-03-15T22:22:48.271+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:158 msg="✅ SQLite storage initialized"
+time=2026-03-15T22:22:48.273+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:200 msg="NSC chat keys loaded successfully"
+time=2026-03-15T22:22:48.273+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:285 msg="DChat application started (LeafNode mode)"
+time=2026-03-15T22:22:49.274+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:264 msg="direct chats restored" total=2 success=2
+time=2026-03-15T22:22:49.275+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:280 msg="group chats restored" total=1 success=1
+time=2026-03-15T22:22:51.274+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:33 msg="✅ 离线同步初始化成功，直接消费Hub domain流"
+time=2026-03-15T22:22:51.288+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:80 msg="✅ 离线消息同步已启动（群聊+私聊）"
+time=2026-03-15T22:22:51.288+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:218 msg="✅ 离线消息同步初始化成功"
+time=2026-03-15T22:23:00.601+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:136 msg="Starting LeafNode..."
+time=2026-03-15T22:23:00.628+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:141 msg="✅ LeafNode started successfully"
+time=2026-03-15T22:23:00.630+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:158 msg="✅ SQLite storage initialized"
+time=2026-03-15T22:23:00.632+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:200 msg="NSC chat keys loaded successfully"
+time=2026-03-15T22:23:00.632+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:285 msg="DChat application started (LeafNode mode)"
+time=2026-03-15T22:23:01.633+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:264 msg="direct chats restored" total=2 success=2
+time=2026-03-15T22:23:01.634+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:280 msg="group chats restored" total=1 success=1
+time=2026-03-15T22:23:03.633+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:33 msg="✅ 离线同步初始化成功，直接消费Hub domain流"
+time=2026-03-15T22:23:03.651+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/internal/nats/offline_sync.go:80 msg="✅ 离线消息同步已启动（群聊+私聊）"
+time=2026-03-15T22:23:03.651+08:00 level=INFO source=/home/orician/workspace/learn/nats/Dchat/DecentralizedChat/app.go:218 msg="✅ 离线消息同步初始化成功"
