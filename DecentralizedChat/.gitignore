@@ -5,3 +5,4 @@ frontend/dist
 nats-test-minimal
 jetstream_store
 test/dist
+test/cli/data
