@@ -119,27 +119,30 @@ func (m *Manager) GetConfig() config.LeafNodeConfig {
 // 内部方法
 
 func (m *Manager) parseHubURLs() ([]*server.RemoteLeafOpts, error) {
-	var remotes []*server.RemoteLeafOpts
+	var urls []*url.URL
 
 	for _, hubURL := range m.config.HubURLs {
 		u, err := url.Parse(hubURL)
 		if err != nil {
 			continue // 跳过无效 URL
 		}
-
-		remoteOpts := &server.RemoteLeafOpts{
-			URLs: []*url.URL{u},
-		}
-
-		// 如果配置了 CredsFile，添加到远程连接配置
-		if m.config.CredsFile != "" {
-			remoteOpts.Credentials = m.config.CredsFile
-		}
-
-		remotes = append(remotes, remoteOpts)
+		urls = append(urls, u)
 	}
 
-	return remotes, nil
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("no valid hub URLs configured")
+	}
+
+	remoteOpts := &server.RemoteLeafOpts{
+		URLs: urls, // 所有Hub地址放到同一个remote，LeafNode自动选择可用节点和故障转移
+	}
+
+	// 如果配置了 CredsFile，添加到远程连接配置
+	if m.config.CredsFile != "" {
+		remoteOpts.Credentials = m.config.CredsFile
+	}
+
+	return []*server.RemoteLeafOpts{remoteOpts}, nil
 }
 
 func (m *Manager) buildServerOptions(remotes []*server.RemoteLeafOpts) *server.Options {
