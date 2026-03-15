@@ -218,7 +218,8 @@ nats stream ls --server localhost:4222
     --retention limits \
     --max-msgs-per-subject 1000 \
     --max-age 30d \
-    --replicas 1
+    --replicas 1 \
+    --discard old
 ```
 
 ## 授权配置（可选，启用JWT认证）
