@@ -218,5 +218,65 @@ nats stream ls --server localhost:4222
     --retention limits \
     --max-msgs-per-subject 1000 \
     --max-age 30d \
-    --replicas 1    
-```    
+    --replicas 1
+```
+
+## 授权配置（可选，启用JWT认证）
+
+如果需要部署需要授权的Hub，只有持有有效凭证的LeafNode才能连接，请按照以下步骤配置：
+
+### 前置准备
+1. 本地已经完成Dchat的初始化运行，生成了NSC配置文件
+2. 从本地`~/.dchat/`目录复制以下文件到服务器：
+   | 本地路径 | 说明 | 敏感级别 |
+   |---------|------|----------|
+   | `~/.dchat/simple_resolver.conf` | Resolver配置文件，包含Operator JWT（公钥信息）和认证规则 | 公开 |
+   | `~/.dchat/accounts/` 目录 | 所有账户的JWT文件 | 公开 |
+
+⚠️ **绝对不要复制以下敏感文件到服务器**：
+- `~/.dchat/operator.nk`：Operator私钥，是最高权限密钥，必须本地离线保存
+- `~/.dchat/account.nk`：账户私钥，本地保存即可
+- `~/.dchat/user.nk` / `user.seed` / `user.creds`：用户个人凭证，属于用户隐私
+
+### 服务器配置
+1. 上传文件到服务器的 `/etc/nats/` 目录：
+   ```bash
+   # 服务器上创建目录
+   mkdir -p /etc/nats/accounts
+   ```
+   上传后目录结构：
+   ```
+   /etc/nats/
+   ├── simple_resolver.conf
+   ├── accounts/
+   │   └── ACxxxxxxxxxxxxxxxxxxxxxxxxxxxx.jwt  # 你的账户JWT文件
+   ```
+
+2. 修正resolver配置路径：
+   修改`simple_resolver.conf`中的`dir`路径为服务器上accounts目录的实际路径：
+   ```yaml
+   resolver {
+     type: full
+     dir: "/etc/nats/accounts"  # 改为服务器上accounts目录的绝对路径
+   }
+   ```
+
+3. 更新Hub配置文件，添加认证配置：
+   在`hub.conf`中添加以下内容：
+   ```yaml
+   # 加载认证配置
+   include simple_resolver.conf
+
+   # LeafNode连接配置（可选：限制仅指定账户可以连接）
+   leafnodes: {
+     # allowed_accounts: ["ACxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]
+   }
+   ```
+
+### 账户更新
+将本地`~/.dchat/accounts/`下新生成的JWT文件上传到服务器的`/etc/nats/accounts/`目录即可，无需重启Hub，会自动加载。
+
+### 安全建议
+1. Operator私钥(`operator.nk`)必须离线安全保存，不要泄露，一旦泄露整个Hub的认证体系将失效
+2. 定期备份服务器上的`accounts/`目录，避免账户数据丢失
+3. 生产环境建议开启TLS加密LeafNode连接，参考NATS官方TLS配置文档    

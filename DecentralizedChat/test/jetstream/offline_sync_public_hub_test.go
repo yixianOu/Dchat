@@ -179,14 +179,20 @@ func TestOfflineSync_PublicHub_E2E(t *testing.T) {
 	require.NoError(t, err, "初始化离线同步失败")
 	t.Log("✅ 离线同步启动成功，等待同步完成...")
 
-	// 等待同步完成，公网环境等待30秒
-	time.Sleep(30 * time.Second)
+	// 轮询等待同步完成，最多等待20秒
+	t.Log("⏳ 等待同步完成，最多等待20秒...")
+	var messages []*storage.StoredMessage
+	for i := 0; i < 20; i++ {
+		messages, err = store.GetMessages("", 100, nil)
+		require.NoError(t, err, "查询消息失败")
+		if len(messages) >= 2 {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 
 	// ========== Step 5: 验证结果 ==========
 	t.Log("\nStep 5: 验证同步结果...")
-	// 查询所有消息
-	messages, err := store.GetMessages("", 100, nil)
-	require.NoError(t, err, "查询消息失败")
 
 	// 打印同步结果
 	t.Logf("📊 同步到消息数量: %d", len(messages))
