@@ -397,13 +397,6 @@ func (a *App) GetNetworkStatus() (map[string]interface{}, error) {
 	return result, nil
 }
 
-// LoadNSCKeys 从NSC seed加载聊天密钥对
-func (a *App) LoadNSCKeys(nscSeed string) error {
-	if a.chatSvc == nil {
-		return fmt.Errorf("chat service not initialized")
-	}
-	return a.chatSvc.LoadNSCKeys(nscSeed)
-}
 
 // AddFriendNSCKey 通过NSC公钥添加好友
 // AddFriendNSCKey 通过NSC公钥添加好友，返回自动派生的好友ID

@@ -58,10 +58,6 @@ export function JoinGroup(arg1, arg2) {
   return window['go']['main']['App']['JoinGroup'](arg1, arg2);
 }
 
-export function LoadNSCKeys(arg1) {
-  return window['go']['main']['App']['LoadNSCKeys'](arg1);
-}
-
 export function MarkAsRead(arg1, arg2) {
   return window['go']['main']['App']['MarkAsRead'](arg1, arg2);
 }

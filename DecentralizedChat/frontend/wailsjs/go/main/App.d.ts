@@ -34,8 +34,6 @@ export function JoinDirect(arg1:string):Promise<void>;
 
 export function JoinGroup(arg1:string,arg2:string):Promise<void>;
 
-export function LoadNSCKeys(arg1:string):Promise<void>;
-
 export function MarkAsRead(arg1:string,arg2:time.Time):Promise<void>;
 
 export function OnShutdown(arg1:context.Context):Promise<void>;

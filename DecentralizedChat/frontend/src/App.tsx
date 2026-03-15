@@ -17,7 +17,7 @@ import {
   getMessages,         // ✅ 新增：获取历史消息
   getAllConversations // ✅ 新增：获取所有会话列表
 } from './services/dchatAPI';
-import { User, DecryptedMessage, ChatSession, Friend, Group, NetworkStatus } from './types';
+import { User, DecryptedMessage, ChatSession, Group, NetworkStatus } from './types';
 import './App.css';
 
 // 统一转换存储消息格式，修复时间戳解析问题
@@ -45,7 +45,6 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [user, setUser] = useState<User>({ id: '', nickname: '' });
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
-  const [friends, setFriends] = useState<Friend[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showKeyManager, setShowKeyManager] = useState(false);
@@ -81,6 +80,7 @@ const App: React.FC = () => {
                 lastTime = date.getTime();
               }
             }
+
             return {
               id: conv.id,
               name: conv.type === 'group' ? `群聊 ${conv.id.slice(0, 8)}` : `私聊 ${conv.id.slice(0, 8)}`,
@@ -157,9 +157,9 @@ const App: React.FC = () => {
         } else {
           return [...prev, {
             id: sessionId,
-            name: msg.IsGroup ? `群聊 ${sessionId.slice(0, 8)}` : `私聊 ${msg.Sender}`,
+            name: msg.IsGroup ? `群聊 ${sessionId.slice(0, 8)}` : `私聊 ${sessionId.slice(0, 8)}`,
             isGroup: msg.IsGroup,
-            lastMessage: msg.Plain,
+            lastMessage: processedMsg.Plain,
             lastTime: new Date().getTime()
           }];
         }
@@ -233,18 +233,15 @@ const App: React.FC = () => {
     const nscPubKey = prompt('输入好友的NSC公钥 (U开头的公开身份ID):');
     if (!nscPubKey) return;
 
-    const remark = prompt('输入好友备注名(可选):', '');
-
     try {
       // 1. 添加好友NSC公钥，自动派生聊天公钥和好友ID
       const friendID = await addFriendNSCKey(nscPubKey);
-      setFriends(prev => [...prev, { id: friendID, nickname: remark || friendID, publicKey: nscPubKey }]);
 
       // 2. 自动加入私聊会话，不需要用户手动点击"开始私聊"
       const conversationID = await getConversationID(friendID);
       const newSession: ChatSession = {
         id: conversationID,
-        name: `私聊 ${remark || friendID}`,
+        name: `私聊 ${friendID.slice(0, 8)}`,
         isGroup: false
       };
 
@@ -314,50 +311,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartDirectChat = async () => {
-    // 如果已经有好友列表，让用户选择，否则手动输入
-    if (friends.length === 0) {
-      alert('您还没有添加任何好友，请先添加好友');
-      return;
-    }
-
-    // 显示好友列表让用户选择
-    const friendOptions = friends.map((f, i) => `${i+1}. ${f.nickname} (${f.id})`).join('\n');
-    const selection = prompt(`选择要聊天的好友:\n${friendOptions}\n输入序号:`);
-    if (!selection) return;
-
-    const index = parseInt(selection) - 1;
-    if (index < 0 || index >= friends.length) {
-      alert('无效的序号');
-      return;
-    }
-
-    const friend = friends[index];
-    try {
-      await joinDirect(friend.id);
-
-      // 使用后端计算的真实会话ID
-      const conversationID = await getConversationID(friend.id);
-
-      const newSession: ChatSession = {
-        id: conversationID,
-        name: `私聊 ${friend.nickname}`,
-        isGroup: false
-      };
-
-      // 避免重复添加会话
-      setSessions(prev => {
-        if (!prev.find(s => s.id === conversationID)) {
-          return [...prev, newSession];
-        }
-        return prev;
-      });
-      setCurrentSession(newSession);
-    } catch (error) {
-      console.error('开始私聊失败:', error);
-      alert('开始私聊失败');
-    }
-  };
 
   const getSessionMessages = (sessionId: string): DecryptedMessage[] => {
     // ✅ 简化：现在直接匹配CID，因为我们使用真实的会话ID
@@ -394,7 +347,6 @@ const App: React.FC = () => {
           <button onClick={handleAddFriend}>添加好友</button>
           <button onClick={handleCreateGroup}>创建群聊</button>
           <button onClick={handleJoinGroup}>加入群组</button>
-          <button onClick={handleStartDirectChat}>开始私聊</button>
           <button onClick={() => setShowKeyManager(true)}>密钥管理</button>
         </div>
         

@@ -5,7 +5,6 @@ import {
   AddFriendKey,
   AddFriendNSCKey,
   AddGroupKey,
-  LoadNSCKeys,
   JoinDirect,
   JoinGroup,
   CreateGroup,
@@ -44,7 +43,6 @@ export const sendDirect = SendDirect;
 export const sendGroup = SendGroup;
 export const getConversationID = GetConversationID;
 export const getNetworkStatus = GetNetworkStatus;
-export const loadNSCKeys = LoadNSCKeys;
 export const getConversation = GetConversation; // ✅ 新增：获取会话信息
 export const getMessages = GetMessages; // ✅ 新增：获取消息历史
 export const markAsRead = MarkAsRead; // ✅ 新增：标记已读
