@@ -98,10 +98,7 @@ const App: React.FC = () => {
 
         // ⭐ 基于事件的消息监听（只做通知，不直接添加消息到列表）
         const unsubscribeMessages = onDecrypted((msg: DecryptedMessage) => {
-          // 1. 添加消息到全局消息列表
-          setMessages(prev => [...prev, msg]);
-
-          // 2. 更新会话列表
+          // 1. 更新会话列表
           const sessionId = msg.IsGroup ? msg.CID : msg.CID;
           setSessions(prev => {
             const existing = prev.find(s => s.id === sessionId);
@@ -122,7 +119,7 @@ const App: React.FC = () => {
             }
           });
 
-          // 如果当前正在查看该会话，自动刷新最新消息（从数据库读取）
+          // 如果当前正在查看该会话，自动刷新最新消息（从数据库读取，保证唯一）
           if (currentSession?.id === sessionId) {
             getMessages(sessionId, 50, null as any).then(historyMessages => {
               const converted = convertStorageMessages(historyMessages);

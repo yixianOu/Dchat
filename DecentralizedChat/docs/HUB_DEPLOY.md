@@ -207,7 +207,7 @@ nats stream ls --server localhost:4222
     --retention limits \
     --max-msgs-per-subject 1000 \
     --max-age 30d \
-    --replicas 1 \
+    --replicas 3 \
     --discard old
 
   #需要持久化私聊消息，创建另一个Stream：
@@ -218,7 +218,7 @@ nats stream ls --server localhost:4222
     --retention limits \
     --max-msgs-per-subject 1000 \
     --max-age 30d \
-    --replicas 1 \
+    --replicas 3 \
     --discard old
 ```
 
