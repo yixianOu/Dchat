@@ -109,10 +109,9 @@ const App: React.FC = () => {
       console.log('📍 当前会话ID:', currentSession?.id, '消息会话ID:', msg.CID);
 
       // 1. 先修复时间格式
-      // 优先使用消息携带的发送者昵称
-      // @ts-ignore
-      processedMsg.Sender = msg.RawWire?.Nickname || msg.Sender;
       const processedMsg = {...msg};
+      // 优先使用消息携带的发送者昵称（JSON字段是小写nickname）
+      processedMsg.Sender = msg.RawWire?.nickname || msg.Sender;
       // 解析时间戳，兼容各种格式
       try {
         let ts = msg.Ts;
@@ -146,15 +145,16 @@ const App: React.FC = () => {
       // 2. 更新会话列表
       const sessionId = msg.IsGroup ? msg.CID : msg.CID;
       setSessions(prev => {
+        let updatedSessions;
         const existing = prev.find(s => s.id === sessionId);
         if (existing) {
-          return prev.map(s =>
+          updatedSessions = prev.map(s =>
             s.id === sessionId
-              ? { ...s, lastMessage: msg.Plain, lastTime: new Date().getTime() }
+              ? { ...s, lastMessage: processedMsg.Plain, lastTime: new Date().getTime() }
               : s
           );
         } else {
-          return [...prev, {
+          updatedSessions = [...prev, {
             id: sessionId,
             name: msg.IsGroup ? `群聊 ${sessionId.slice(0, 8)}` : `私聊 ${sessionId.slice(0, 8)}`,
             isGroup: msg.IsGroup,
@@ -162,6 +162,8 @@ const App: React.FC = () => {
             lastTime: new Date().getTime()
           }];
         }
+        // 按最后消息时间倒序排列，最新消息的会话在最上面
+        return updatedSessions.sort((a, b) => (b.lastTime ?? 0) - (a.lastTime ?? 0));
       });
     });
 

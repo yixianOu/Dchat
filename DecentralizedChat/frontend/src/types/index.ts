@@ -23,7 +23,7 @@ export interface DecryptedMessage {
   IsGroup: boolean; // is group message
   Subject: string;  // NATS subject
   RawWire?: {       // raw wire message, contains nickname
-    Nickname?: string;
+    nickname?: string;
   };
 }
 
