@@ -16,12 +16,15 @@ export type User = chat.User;
 
 export interface DecryptedMessage {
   CID: string;      // conversation id or group id
-  Sender: string;   // sender user id
+  Sender: string;   // sender display name (nickname or id)
+  SenderNickname?: string; // sender nickname (optional)
   Ts: string;       // timestamp (ISO string)
   Plain: string;    // decrypted content
   IsGroup: boolean; // is group message
   Subject: string;  // NATS subject
-  // 注意：后端还有 RawWire 字段，前端暂不需要
+  RawWire?: {       // raw wire message, contains nickname
+    Nickname?: string;
+  };
 }
 
 export interface ChatRoomProps {

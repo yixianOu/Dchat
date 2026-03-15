@@ -17,7 +17,7 @@ import {
   getMessages,         // ✅ 新增：获取历史消息
   getAllConversations // ✅ 新增：获取所有会话列表
 } from './services/dchatAPI';
-import { User, DecryptedMessage, ChatSession, Group, NetworkStatus } from './types';
+import { User, DecryptedMessage, ChatSession, Group } from './types';
 import './App.css';
 
 // 统一转换存储消息格式，修复时间戳解析问题
@@ -30,6 +30,7 @@ const convertStorageMessages = (historyMessages: any[]): DecryptedMessage[] => {
     }
     const date = new Date(timestamp);
     return {
+      SenderNickname: msg.sender_nickname,
       CID: msg.conversation_id,
       Sender: msg.sender_nickname || msg.sender_id,
       Ts: isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString(),
@@ -47,7 +48,6 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [networkStatus, setNetworkStatus] = useState<NetworkStatus | null>(null); // ✅ 新增网络状态
   // 可复制信息弹窗状态
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyModalTitle, setCopyModalTitle] = useState('');
@@ -110,6 +110,9 @@ const App: React.FC = () => {
       console.log('📍 当前会话ID:', currentSession?.id, '消息会话ID:', msg.CID);
 
       // 1. 先修复时间格式
+      // 优先使用消息携带的发送者昵称
+      // @ts-ignore
+      processedMsg.Sender = msg.RawWire?.Nickname || msg.Sender;
       const processedMsg = {...msg};
       // 解析时间戳，兼容各种格式
       try {
@@ -177,25 +180,6 @@ const App: React.FC = () => {
     };
   }, [currentSession]); // 加入currentSession依赖，确保能拿到最新的会话值
 
-  // ✅ 新增：定期检查网络状态
-  useEffect(() => {
-    const checkNetworkStatus = async () => {
-      try {
-        const status = await getNetworkStatus();
-        setNetworkStatus(status as NetworkStatus);
-      } catch (error) {
-        console.error('获取网络状态失败:', error);
-      }
-    };
-
-    // 立即检查一次
-    checkNetworkStatus();
-
-    // 每30秒检查一次网络状态
-    const interval = setInterval(checkNetworkStatus, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   // ✅ 切换会话时加载本地历史消息
   useEffect(() => {
@@ -313,19 +297,6 @@ const App: React.FC = () => {
             <span>{user.nickname || '未设置昵称'}</span>
           </div>
           
-          {/* ✅ 新增：网络状态显示 */}
-          {networkStatus && (
-            <div className="network-status">
-              <div className={`status-indicator ${networkStatus.nats?.connected ? 'online' : 'offline'}`}>
-                {networkStatus.nats?.connected ? '🟢 在线' : '🔴 离线'}
-              </div>
-              <div className="network-info">
-                <small>
-                  消息: {networkStatus.nats?.stats?.InMsgs || 0}↓ {networkStatus.nats?.stats?.OutMsgs || 0}↑
-                </small>
-              </div>
-            </div>
-          )}
         </div>
         
         <div className="chat-controls">
