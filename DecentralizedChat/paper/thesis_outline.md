@@ -93,7 +93,7 @@
 
 **内容要点**：
 
-- **Core NATS**：Pub/Sub模式、Subject主题设计、轻量高效
+- **JetStream**：消息持久化、Stream/Consumer概念、ACK确认机制
 - **NATS Routes**：集群发现、全mesh网络、消息广播
 - **LeafNode**：层级扩展、本地LeafNode连接远程Hub
 - **JetStream**：消息持久化、离线消息存储、Consumer消费
@@ -372,8 +372,8 @@ func decryptBox(cipher, nonce []byte, peerPub []byte, selfPriv []byte) (plain []
 
 - **conversations表**：会话元数据
 - **messages表**：消息内容（明文本地存储）
-- **friends表**：好友公钥
-- **groups表**：群组密钥
+- **friend_pub_keys表**：好友公钥
+- **group_sym_keys表**：群组对称密钥
 
 **与云端方案的区别**：
 
@@ -611,3 +611,37 @@ func decryptBox(cipher, nonce []byte, peerPub []byte, selfPriv []byte) (plain []
 - NATS技术原理用自己的话描述
 - 去中心化概念不要照搬维基百科
 - 代码注释不算查重
+
+
+---
+
+## 初稿评审与优化TODO（后续迭代用）
+
+> 基于软件工程本科毕业论文评审标准的简化评估
+
+### 总体评估
+- **当前水平**：中等偏上（75-80分）
+- **主要短板**：需求分析缺UML图、测试章节薄弱
+- **目标水平**：良好（80+）或优秀（90+）
+
+### 高优先级优化（建议补充）
+
+- [ ] **3.1节 - 添加用例图**
+  - 用例：用户注册、添加好友、发送私聊、创建群聊、查看历史、离线同步
+  - 工具：Mermaid或PlantUML
+
+- [ ] **3.3节 - 添加类图**
+  - 核心类：Service、Storage、NATSClient、NSCKeyManager
+  - 展示类之间的关系（依赖、组合）
+
+- [ ] **5.2节 - 补充测试数据**
+  - 压力测试：并发连接数、消息吞吐量
+  - 资源占用：内存、CPU使用数据
+  - 测试用例表：等价类划分、边界值
+
+### 格式调整（最后阶段）
+
+- [ ] 封面格式：按学校模板调整
+- [ ] 图表标题：表题在上、图题在下
+- [ ] 页码设置：摘要用I/II/III，正文从1开始
+- [ ] 参考文献：正文引用改为上标格式
