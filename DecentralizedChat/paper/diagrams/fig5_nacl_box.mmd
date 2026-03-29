@@ -1,0 +1,45 @@
+%% 图5 NaCl Box加密流程（X25519+XSalsa20-Poly1305）
+flowchart LR
+    subgraph 发送方["发送方"]
+        S1[明文消息]
+        S2[生成临时密钥对<br/>X25519]
+        S3[ECDH密钥交换<br/>计算共享密钥]
+        S4[XSalsa20-Poly1305<br/>加密+认证]
+        S5[密文+Nonce]
+    end
+    
+    subgraph 传输["传输层"]
+        T1[NATS网络<br/>仅传输密文]
+    end
+    
+    subgraph 接收方["接收方"]
+        R1[密文+Nonce]
+        R2[ECDH密钥交换<br/>计算共享密钥]
+        R3[XSalsa20-Poly1305<br/>解密+验证]
+        R4[明文消息]
+    end
+    
+    %% 密钥示意
+    SK[发送方私钥<br/>X25519]
+    PK[接收方公钥<br/>X25519]
+    
+    S1 --> S2
+    S2 --> S3
+    SK --> S3
+    PK --> S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> T1
+    T1 --> R1
+    R1 --> R2
+    SK -.->|接收方用<br/>发送方公钥| R2
+    PK -.->|接收方用<br/>自己的私钥| R2
+    R2 --> R3
+    R3 --> R4
+    
+    %% 公钥交换注释
+    Note["注：双方需通过其他可信方式<br/>预先交换X25519公钥"]
+    
+    style 发送方 fill:#e3f2fd
+    style 传输 fill:#fff3e0
+    style 接收方 fill:#e8f5e9

@@ -64,6 +64,18 @@ func (a *App) GetConversationID(peerID string) (string, error)
 func (a *App) GetNetworkStatus() (map[string]interface{}, error)
 ```
 
+#### 5. 消息存储与查询接口 📝 *TODO: 前端待实现*
+```go
+// SearchMessages 搜索本地消息历史
+// TODO: 前端搜索界面待实现
+func (a *App) SearchMessages(query string, limit int) ([]*StoredMessage, error)
+
+// GetMessages 获取会话消息历史（分页）
+// TODO: 前端分页加载待实现
+func (a *App) GetMessages(cid string, limit int, offset int) ([]*StoredMessage, error)
+```
+**说明**: 消息搜索和历史分页功能后端已实现，前端界面待开发。
+
 #### 5. 事件回调接口
 ```go
 func (a *App) OnDecrypted(h func(*chat.DecryptedMessage)) error
@@ -97,6 +109,10 @@ export const dchatAPI = {
   // 增强功能 ⭐
   getConversationID: (peerID: string) => Promise<string>
   getNetworkStatus: () => Promise<NetworkStatus>
+  
+  // 消息存储与查询 📝 TODO: 前端待实现
+  searchMessages: (query: string, limit: number) => Promise<StoredMessage[]>
+  getMessages: (cid: string, limit: number, offset: number) => Promise<StoredMessage[]>
   
   // 事件监听
   onDecrypted: (callback: (msg: DecryptedMessage) => void) => Promise<void>
@@ -145,6 +161,18 @@ interface DecryptedMessage {
   content: string       // 消息内容
   timestamp: number     // 时间戳
   messageType: 'direct' | 'group'
+}
+
+// 存储消息（用于历史查询和搜索）📝 TODO: 前端待使用
+interface StoredMessage {
+  id: string            // 消息ID
+  conversationID: string // 会话ID
+  senderID: string      // 发送者ID
+  senderNickname: string // 发送者昵称
+  content: string       // 消息内容
+  timestamp: number     // 时间戳
+  isRead: boolean       // 是否已读
+  isGroup: boolean      // 是否群聊消息
 }
 
 interface NetworkStatus {

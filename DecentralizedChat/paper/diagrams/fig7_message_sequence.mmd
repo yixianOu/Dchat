@@ -1,0 +1,26 @@
+%% 图6 消息流转时序图
+sequenceDiagram
+    participant U1 as 用户A
+    participant LN1 as LeafNodeA
+    participant Hub as Hub
+    participant LN2 as LeafNodeB
+    participant U2 as 用户B
+    
+    Note over U1,U2: 私聊消息发送流程
+    
+    U1->>U1: 获取好友公钥
+    U1->>U1: NaCl Box加密
+    U1->>U1: 本地SQLite保存
+    
+    U1->>LN1: Publish<br/>dchat.dm.xxx.msg
+    LN1->>Hub: LeafNode转发
+    
+    Hub->>Hub: JetStream持久化
+    Hub->>LN2: 路由消息
+    
+    LN2->>U2: 推送消息
+    U2->>U2: NaCl Box解密
+    U2->>U2: 本地SQLite保存
+    U2->>U2: UI更新
+    
+    Note over Hub: 服务端仅中转密文<br/>无法解密内容

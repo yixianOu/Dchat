@@ -1,0 +1,43 @@
+%% 图10 应用启动流程
+flowchart TB
+    Start([应用启动]) --> InitLog[1. 初始化日志]
+    InitLog --> LoadConfig[2. 加载配置]
+    LoadConfig --> NSCSetup[3. NSC密钥初始化]
+    
+    NSCSetup -->|失败| Err1[记录错误]
+    Err1 --> Stop1([启动终止])
+    
+    NSCSetup -->|成功| StartLeaf[4. 启动LeafNode]
+    
+    StartLeaf -->|失败| Err2[记录错误]
+    Err2 --> Stop2([启动终止])
+    
+    StartLeaf -->|成功| InitDB[5. 初始化SQLite]
+    
+    InitDB -->|失败| Warn1[记录警告]
+    Warn1 --> ConnectNATS[6. 连接NATS客户端]
+    
+    InitDB -->|成功| ConnectNATS
+    
+    ConnectNATS -->|失败| Err3[记录错误]
+    Err3 --> Stop3([启动终止])
+    
+    ConnectNATS -->|成功| CreateChat[7. 创建聊天服务]
+    CreateChat --> LoadKeys[8. 加载NSC密钥]
+    
+    LoadKeys -->|失败| Warn2[记录警告]
+    Warn2 --> SetupHandler[9. 设置消息处理器]
+    
+    LoadKeys -->|成功| SetupHandler
+    
+    SetupHandler --> InitSync[10. 初始化离线同步]
+    InitSync --> RestoreSession[11. 恢复会话]
+    RestoreSession --> End([启动完成])
+    
+    style Start fill:#e8f5e9
+    style End fill:#e8f5e9
+    style Stop1 fill:#ffcdd2
+    style Stop2 fill:#ffcdd2
+    style Stop3 fill:#ffcdd2
+    style Warn1 fill:#fff9c4
+    style Warn2 fill:#fff9c4

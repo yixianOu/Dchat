@@ -1,0 +1,43 @@
+%% 图9 私聊加密流程图
+flowchart TB
+    subgraph 密钥派生["密钥派生（NSC）"]
+        K1[Ed25519签名密钥对<br/>U开头公钥]
+        K2[派生X25519加密密钥对<br/>用于NaCl Box]
+    end
+    
+    subgraph 发送流程["发送流程<br/>SendDirect()"]
+        S1[获取好友公钥<br/>getFriendKey()]
+        S2[派生CID<br/>deriveCID(self, peer)]
+        S3[NaCl Box加密<br/>EncryptDirect()]
+        S4[构造EncWire<br/>{cid,sender,ts,nonce,cipher}]
+        S5[JetStream发布<br/>dchat.dm.<cid>.msg]
+        S6[保存明文到SQLite]
+    end
+    
+    subgraph 接收流程["接收流程<br/>handleEncrypted()"]
+        R1[订阅主题<br/>dchat.dm.<cid>.msg]
+        R2[反序列化EncWire]
+        R3[NaCl Box解密<br/>DecryptDirect()]
+        R4[保存明文到SQLite]
+        R5[分发到UI<br/>EventsEmit]
+    end
+    
+    %% 流程连接
+    K1 -->|GetChatKeyPair| K2
+    K2 --> S3
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+    S4 --> S6
+    
+    R1 --> R2
+    R2 --> R3
+    K2 -->|使用私钥| R3
+    S1 -.->|好友公钥| R3
+    R3 --> R4
+    R3 --> R5
+    
+    style 密钥派生 fill:#fff3e0
+    style 发送流程 fill:#e3f2fd
+    style 接收流程 fill:#e8f5e9

@@ -1,0 +1,17 @@
+%% 图3 NATS Routes全mesh架构
+flowchart TB
+    subgraph HubCluster["Hub Routes集群"]
+        H1[Hub1]
+        H2[Hub2]
+        H3[Hub3]
+        
+        H1 <--> H2
+        H1 <--> H3
+        H2 <--> H3
+    end
+    
+    subgraph LeafNodes["LeafNode"]
+        L1[LeafNode]
+    end
+    
+    L1 ==>|连接| H1

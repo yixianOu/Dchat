@@ -1,0 +1,22 @@
+%% 图1 中心化vs本项目架构对比
+flowchart TB
+    subgraph 中心化架构["中心化架构（微信/QQ）"]
+        C1[用户手机/电脑]
+        C2[云端服务器]
+        C3[(云端数据库)]
+        C1 <-->|互联网| C2
+        C2 <-->|存储所有数据| C3
+    end
+    
+    subgraph 本项目架构["本项目架构（DecentralizedChat）"]
+        D1[用户应用<br/>Wails桌面端]
+        D2[本地SQLite<br/>数据存储]
+        D3[公网Hub集群<br/>仅消息中转]
+        D1 <-->|本地存储| D2
+        D1 <-->|加密消息<br/>无状态中转| D3
+    end
+    
+    style 中心化架构 fill:#ffebee
+    style 本项目架构 fill:#e8f5e9
+    style C3 fill:#ffcdd2
+    style D2 fill:#c8e6c9

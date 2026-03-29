@@ -1,0 +1,36 @@
+%% 图4-1 系统网络架构图（四层架构与数据流向）
+flowchart TB
+    subgraph 应用层["① 应用层（Wails）"]
+        A1[React前端]
+        A2[Go后端<br/>app.go]
+    end
+    
+    subgraph 客户端层["② NATS客户端层"]
+        B1[NATS Service<br/>internal/nats/client.go]
+    end
+    
+    subgraph LeafNode层["③ LeafNode层"]
+        C1[Manager<br/>internal/leafnode/manager.go]
+        C2[本地NATS Server<br/>127.0.0.1:4222]
+    end
+    
+    subgraph 集群层["④ 公网Hub集群层"]
+        D1[Hub节点1]
+        D2[Hub节点2]
+    end
+    
+    %% 核心数据流向（简化）
+    A1 <-->|Wails绑定| A2
+    A2 -.->|调用| B1
+    B1 ==>|TCP连接<br/>127.0.0.1:4222| C2
+    C1 -.->|启动| C2
+    C2 ==>|LeafNode协议<br/>+JWT| D1
+    D1 <==>|Routes| D2
+    
+    %% 消息流转（双向，合并为一条）
+    B1 <-.->|Pub/Sub消息<br/>dchat.dm.xxx.msg| C2
+    
+    style 应用层 fill:#e3f2fd
+    style 客户端层 fill:#fff3e0
+    style LeafNode层 fill:#e8f5e9
+    style 集群层 fill:#fce4ec

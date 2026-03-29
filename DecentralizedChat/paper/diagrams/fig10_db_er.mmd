@@ -1,0 +1,38 @@
+%% 图9 数据库E-R图
+erDiagram
+    CONVERSATIONS ||--o{ MESSAGES : "1:N"
+    
+    CONVERSATIONS {
+        string id PK
+        string type "dm/group"
+        timestamp last_message_at
+        timestamp created_at
+    }
+    
+    MESSAGES {
+        string id PK
+        string cid FK
+        string sender_id
+        string sender_nickname
+        string content
+        timestamp timestamp
+        boolean is_read
+        boolean is_group
+        integer nats_seq
+    }
+    
+    FRIEND_PUB_KEYS {
+        string user_id PK
+        string pub_key
+        timestamp created_at
+    }
+    
+    GROUP_SYM_KEYS {
+        string group_id PK
+        string sym_key
+        timestamp created_at
+    }
+    
+    %% Logical relationships (not FK constraints)
+    CONVERSATIONS ||--o{ FRIEND_PUB_KEYS : "dm_conv"
+    CONVERSATIONS ||--o{ GROUP_SYM_KEYS : "group_conv"

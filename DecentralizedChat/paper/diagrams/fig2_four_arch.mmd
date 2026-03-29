@@ -1,0 +1,36 @@
+%% 图2 四种即时通信架构模式对比
+flowchart TB
+    subgraph 中心化["① 中心化C/S（微信/QQ）"]
+        direction TB
+        A1[客户端] 
+        A2[中心服务器]
+        A3[(云端数据库)]
+        A1 -->|业务请求| A2
+        A2 -->|存储数据| A3
+    end
+    
+    subgraph 联邦式["② 联邦式（Matrix/XMPP）"]
+        direction LR
+        B1[客户端A] -->|连接| B2[服务器A]
+        B3[客户端B] -->|连接| B4[服务器B]
+        B2 <-->|服务器互联| B4
+    end
+    
+    subgraph P2P["③ 纯P2P（Tox/Session）"]
+        direction TB
+        C1[客户端A] <-->|直连<br/>NAT穿透困难| C2[客户端B]
+    end
+    
+    subgraph 本项目["④ 本项目（C/S+本地存储）"]
+        direction TB
+        D1[客户端]
+        D2[Hub集群]
+        D3[(本地SQLite)]
+        D1 -->|消息中转| D2
+        D1 -->|本地存储| D3
+    end
+    
+    style 中心化 fill:#ffebee
+    style 联邦式 fill:#fff3e0
+    style P2P fill:#e3f2fd
+    style 本项目 fill:#e8f5e9

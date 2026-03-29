@@ -1,0 +1,53 @@
+%% 图6 系统总体架构图（重点突出数据在本地）
+flowchart TB
+    subgraph 用户设备["用户设备（数据主权）"]
+        direction TB
+        
+        subgraph UI层["UI层"]
+            U1[React前端]
+        end
+        
+        subgraph 业务层["业务层"]
+            B1[聊天服务<br/>chat.Service]
+            B2[加密模块<br/>NaCl/AES]
+        end
+        
+        subgraph 通信层["通信层"]
+            C1[NATS客户端]
+            C2[LeafNode<br/>127.0.0.1:4222]
+        end
+        
+        subgraph 数据层["数据层（本地存储）"]
+            D1[(SQLite数据库)]
+            D2[好友公钥]
+            D3[群聊密钥]
+            D4[消息历史]
+            D5[会话元数据]
+        end
+    end
+    
+    subgraph 服务端["服务端（无状态）"]
+        S1[Hub集群<br/>仅消息中转]
+        S2[JetStream<br/>离线消息暂存]
+    end
+    
+    %% 连接关系
+    U1 <-->|Wails绑定| B1
+    B1 -->|加密/解密| B2
+    B1 -->|发布/订阅| C1
+    B1 <-->|CRUD| D1
+    C1 -->|本地连接<br/>无认证| C2
+    C2 <-->|LeafNode协议| S1
+    S1 -->|消息持久化| S2
+    
+    D1 --> D2
+    D1 --> D3
+    D1 --> D4
+    D1 --> D5
+    
+    %% 强调数据本地
+    Note["所有用户数据<br/>本地存储<br/>服务端零存储"]
+    
+    style 用户设备 fill:#e8f5e9
+    style 数据层 fill:#c8e6c9
+    style 服务端 fill:#ffebee
