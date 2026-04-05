@@ -16,6 +16,14 @@
 | 图8 | `fig9_dm_crypto.mmd` | 私聊加密流程图 | 4.2.2 私聊加密实现 | 流程图 |
 | 图9 | `fig10_db_er.mmd` | 数据库E-R图 | 4.3.1 数据库设计 | E-R图 |
 | 图10 | `fig11_startup_flow.mmd` | 应用启动流程 | 4.4.1 应用启动流程 | 流程图 |
+| 图11 | `fig12_key_system.mmd` | 双密钥体系 | 2.3.2 密钥体系 | 架构图 |
+| 图12 | `fig13_crypto_compare.mmd` | 私聊与群聊加密对比 | 4.2.2 私聊加密实现 | 对比图 |
+| 图13 | `fig14_module_deps.mmd` | 系统模块依赖图 | 3.3.3 模块划分 | 架构图 |
+| 图14 | `fig15_data_flow.mmd` | 系统数据流图 | 3.3.2 数据流向设计 | 数据流图 |
+| 图15 | `fig16_deployment.mmd` | Hub集群部署架构图 | 4.1.4 Hub集群配置 | 部署图 |
+| 图16 | `fig17_user_state.mmd` | 用户状态转换图 | 4.4.1 应用启动流程 | 状态图 |
+| 图17 | `fig18_security_arch.mmd` | 安全架构层次图 | 2.3.3 密钥安全性 | 架构图 |
+| 图18 | `fig13_crypto_compare.mmd` | 私聊与群聊加密对比 | 4.2.2 私聊加密实现 | 对比图 |
 
 ## 导出命令
 

@@ -1,0 +1,30 @@
+%% 安全架构层次图
+graph TB
+    subgraph App["应用层"]
+        UI[用户界面]
+    end
+    
+    subgraph Security["安全层"]
+        Auth[JWT身份认证<br/>Ed25519签名]
+        Encrypt[端到端加密<br/>NaCl Box/X25519]
+        Storage[本地数据保护<br/>文件权限600]
+    end
+    
+    subgraph Transport["传输层"]
+        NATS[NATS消息传输<br/>TLS可选]
+    end
+    
+    subgraph Server["服务端"]
+        Hub[NATS Hub<br/>仅转发密文]
+        JS[JetStream<br/>离线消息暂存]
+    end
+    
+    UI --> Auth
+    Auth --> Encrypt
+    Encrypt --> Storage
+    Encrypt --> NATS
+    NATS --> Hub
+    Hub --> JS
+    
+    style Security fill:#ffebee,stroke:#c62828
+    style Server fill:#e8f5e9,stroke:#2e7d32

@@ -1,0 +1,31 @@
+%% 系统数据流图
+graph LR
+    subgraph Client["客户端"]
+        A[用户输入] --> B{加密}
+        B -->|明文| C[SQLite本地存储]
+        B -->|密文| D[NATS客户端]
+    end
+    
+    subgraph Network["网络层"]
+        D --> E[LeafNode]
+        E -->|加密消息| F[Hub集群]
+        F -->|路由| G[目标Hub]
+        G -->|推送| H[接收方LeafNode]
+    end
+    
+    subgraph Receiver["接收端"]
+        H --> I[NATS客户端]
+        I --> J{解密}
+        J -->|明文| K[SQLite本地存储]
+        J --> L[用户界面]
+    end
+    
+    subgraph Server["服务端"]
+        F --> M[JetStream]
+        M -->|离线存储| N[消息暂存]
+    end
+    
+    style Client fill:#e3f2fd,stroke:#1976d2
+    style Network fill:#fce4ec,stroke:#c2185b
+    style Receiver fill:#e8f5e9,stroke:#388e3c
+    style Server fill:#fff3e0,stroke:#f57c00
