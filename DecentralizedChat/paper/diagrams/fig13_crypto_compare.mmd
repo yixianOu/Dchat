@@ -1,16 +1,20 @@
-%% 私聊与群聊加密对比
-graph LR
+%% 私聊与群聊加密对比 - 纵向布局
+graph TB
     subgraph DM["私聊加密 - NaCl Box"]
+        direction TB
         D1["发送方临时密钥<br/>+ 接收方公钥"] --> D2["ECDH密钥交换"]
         D2 --> D3["XSalsa20-Poly1305<br/>对称加密"]
         D3 --> D4["前向安全<br/>每次临时密钥"]
     end
     
     subgraph GRP["群聊加密 - AES-256-GCM"]
+        direction TB
         G1["群密钥<br/>随机生成256位"] --> G2["私聊通道分发<br/>给群成员"]
         G2 --> G3["AES-256-GCM<br/>对称加密"]
         G3 --> G4["成员共享密钥<br/>高效群发"]
     end
+    
+    DM ~~~ GRP
     
     style DM fill:#e3f2fd,stroke:#1976d2
     style GRP fill:#e8f5e9,stroke:#388e3c

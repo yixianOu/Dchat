@@ -1,36 +1,35 @@
-%% 图2 四种即时通信架构模式对比
+%% 图2 四种即时通信架构模式对比 - 纵向堆叠
 flowchart TB
-    subgraph 中心化["① 中心化C/S（微信/QQ）"]
+    subgraph 架构1["① 中心化 C/S 架构（微信/QQ）"]
         direction TB
-        A1[客户端] 
-        A2[中心服务器]
-        A3[(云端数据库)]
-        A1 -->|业务请求| A2
-        A2 -->|存储数据| A3
+        A1["📱 客户端"] -->|"业务请求"| A2["☁️ 中心服务器"]
+        A2 -->|"存储所有数据"| A3["🗄️ 云端数据库"]
     end
     
-    subgraph 联邦式["② 联邦式（Matrix/XMPP）"]
-        direction LR
-        B1[客户端A] -->|连接| B2[服务器A]
-        B3[客户端B] -->|连接| B4[服务器B]
-        B2 <-->|服务器互联| B4
-    end
-    
-    subgraph P2P["③ 纯P2P（Tox/Session）"]
+    subgraph 架构2["② 联邦式架构（Matrix/XMPP）"]
         direction TB
-        C1[客户端A] <-->|直连<br/>NAT穿透困难| C2[客户端B]
+        B1["📱 客户端A"] -->|"连接"| B2["🖥️ 服务器A"]
+        B3["📱 客户端B"] -->|"连接"| B4["🖥️ 服务器B"]
+        B2 <-->|"服务器互联"| B4
     end
     
-    subgraph 本项目["④ 本项目（C/S+本地存储）"]
+    subgraph 架构3["③ 纯P2P 架构（Tox/Session）"]
         direction TB
-        D1[客户端]
-        D2[Hub集群]
-        D3[(本地SQLite)]
-        D1 -->|消息中转| D2
-        D1 -->|本地存储| D3
+        C1["📱 客户端A"] <-->|"直连<br/>⚠️ NAT穿透困难"| C2["📱 客户端B"]
     end
     
-    style 中心化 fill:#ffebee
-    style 联邦式 fill:#fff3e0
-    style P2P fill:#e3f2fd
-    style 本项目 fill:#e8f5e9
+    subgraph 架构4["④ 本项目架构（C/S+本地存储）"]
+        direction TB
+        D1["📱 客户端应用"] -->|"加密消息中转"| D2["🌐 Hub集群"]
+        D1 -->|"本地存储"| D3["💾 本地SQLite"]
+    end
+    
+    %% 垂直堆叠（不可见连接）
+    架构1 ~~~ 架构2
+    架构2 ~~~ 架构3
+    架构3 ~~~ 架构4
+    
+    style 架构1 fill:#ffebee,stroke:#c62828,stroke-width:2px
+    style 架构2 fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style 架构3 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style 架构4 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px

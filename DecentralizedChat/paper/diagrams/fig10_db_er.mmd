@@ -1,38 +1,32 @@
-%% 图9 数据库E-R图
-erDiagram
-    CONVERSATIONS ||--o{ MESSAGES : "1:N"
+%% 图9 数据库表关系图 - 紧凑纵向布局
+flowchart TB
+    subgraph 主表["📋 主数据表"]
+        direction TB
+        CONV["💬 CONVERSATIONS<br/>会话表"]
+        MSG["📝 MESSAGES<br/>消息表"]
+    end
     
-    CONVERSATIONS {
-        string id PK
-        string type "dm/group"
-        timestamp last_message_at
-        timestamp created_at
-    }
+    CONV -->|"1:N"| MSG
     
-    MESSAGES {
-        string id PK
-        string cid FK
-        string sender_id
-        string sender_nickname
-        string content
-        timestamp timestamp
-        boolean is_read
-        boolean is_group
-        integer nats_seq
-    }
+    subgraph 扩展表["🔑 扩展表"]
+        direction TB
+        FRIEND["👤 FRIEND_PUB_KEYS<br/>好友公钥"]
+        GROUP["👥 GROUP_SYM_KEYS<br/>群组密钥"]
+    end
     
-    FRIEND_PUB_KEYS {
-        string user_id PK
-        string pub_key
-        timestamp created_at
-    }
+    CONV -.->|"私聊"| FRIEND
+    CONV -.->|"群聊"| GROUP
     
-    GROUP_SYM_KEYS {
-        string group_id PK
-        string sym_key
-        timestamp created_at
-    }
+    subgraph 字段说明["📄 核心字段"]
+        direction TB
+        F1["CONVERSATIONS:<br/>• id (PK)<br/>• type (dm/group)<br/>• last_message_at"]
+        F2["MESSAGES:<br/>• id (PK)<br/>• cid (FK)<br/>• sender_id<br/>• content<br/>• timestamp<br/>• is_read"]
+    end
     
-    %% Logical relationships (not FK constraints)
-    CONVERSATIONS ||--o{ FRIEND_PUB_KEYS : "dm_conv"
-    CONVERSATIONS ||--o{ GROUP_SYM_KEYS : "group_conv"
+    CONV -.-> F1
+    MSG -.-> F2
+    
+    style CONV fill:#e3f2fd,stroke:#1976d2
+    style MSG fill:#e8f5e9,stroke:#388e3c
+    style FRIEND fill:#fff3e0,stroke:#f57c00
+    style GROUP fill:#fce4ec,stroke:#c2185b

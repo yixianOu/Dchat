@@ -1,23 +1,35 @@
-%% 双密钥体系图
-graph TB
-    subgraph 密钥生成["密钥生成流程"]
-        Seed["随机种子<br/>32字节"] --> Ed25519["Ed25519密钥对<br/>签名密钥"]
-        Seed --> |派生| X25519["X25519密钥对<br/>加密密钥"]
+%% 双密钥体系图 - 纵向流程布局
+flowchart TB
+    subgraph 种子["🔐 密钥生成起点"]
+        Seed["随机种子<br/>32字节高熵随机数"]
     end
     
-    subgraph 密钥用途["密钥用途分离"]
-        Ed25519 --> |用于| Auth["NATS JWT认证<br/>身份验证"]
-        X25519 --> |用于| Encrypt["NaCl Box加密<br/>消息加密"]
+    subgraph 密钥派生["🔄 密钥派生"]
+        direction LR
+        Seed2[""] -.->|"Ed25519算法"| Ed25519["Ed25519密钥对<br/>签名密钥"]
+        Seed2 -.->|"派生算法"| X25519["X25519密钥对<br/>加密密钥"]
     end
     
-    subgraph 安全特性["安全特性"]
-        S1["签名与加密分离<br/>避免单点失效"]
-        S2["Ed25519→X25519单向派生<br/>不可逆向推导"]
-        S3["本地存储<br/>不上传服务端"]
+    Seed --> Seed2
+    
+    subgraph 用途分离["📋 密钥用途分离"]
+        direction LR
+        Auth["NATS JWT认证<br/>身份验证"] 
+        Encrypt["NaCl Box加密<br/>消息端到端加密"]
     end
     
-    Encrypt --> S1
+    Ed25519 --> Auth
+    X25519 --> Encrypt
+    
+    subgraph 安全特性["🛡️ 安全特性"]
+        direction TB
+        S1["签名与加密密钥分离<br/>避免单点失效风险"]
+        S2["Ed25519→X25519单向派生<br/>密码学不可逆"]
+        S3["本地安全存储<br/>私钥永不离开设备"]
+    end
+    
     Auth --> S1
+    Encrypt --> S1
     X25519 --> S2
     Seed --> S3
     
@@ -26,3 +38,5 @@ graph TB
     style X25519 fill:#e8f5e9,stroke:#388e3c
     style Auth fill:#fff3e0,stroke:#f57c00
     style Encrypt fill:#e8f5e9,stroke:#388e3c
+    style 安全特性 fill:#f3e5f5,stroke:#7b1fa2
+    style Seed2 fill:transparent,stroke:transparent

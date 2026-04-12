@@ -1,23 +1,35 @@
-%% 系统模块依赖图
+%% 系统模块依赖图 - 纵向层级布局
 graph TB
-    subgraph UI["应用层 - Wails"]
-        Frontend["React前端"] --> Backend["Go后端<br/>app.go"]
+    Frontend["🖥️ React前端"] --> Backend["⚙️ Go后端<br/>app.go"]
+    Backend --> ChatService["💬 聊天服务<br/>chat/service.go"]
+    
+    ChatService --> Network["🌐 网络通信模块"]
+    ChatService --> Crypto["🔐 加密安全模块"]
+    ChatService --> Storage["💾 本地存储模块"]
+    
+    Network --> NATS["NATS消息系统<br/>LeafNode → Hub集群"]
+    Crypto --> NaCl["NaCl加密库<br/>X25519/XSalsa20"]
+    Storage --> SQLite["SQLite数据库"]
+    
+    subgraph UI["应用层"]
+        Frontend
+        Backend
     end
     
     subgraph Service["服务层"]
-        Backend --> ChatService["聊天服务<br/>chat/service.go"]
+        ChatService
     end
     
     subgraph Core["核心模块"]
-        ChatService --> Network["网络通信<br/>leafnode/ nats/"]
-        ChatService --> Crypto["加密安全<br/>nsc_crypto.go crypto.go"]
-        ChatService --> Storage["本地存储<br/>storage/"]
+        Network
+        Crypto
+        Storage
     end
     
     subgraph External["外部依赖"]
-        Network --> NATS["NATS消息系统<br/>LeafNode → Hub集群"]
-        Crypto --> NaCl["NaCl加密库"]
-        Storage --> SQLite["SQLite数据库"]
+        NATS
+        NaCl
+        SQLite
     end
     
     style UI fill:#e3f2fd,stroke:#1976d2
