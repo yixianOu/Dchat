@@ -1,35 +1,40 @@
 %% Hub集群部署架构图
 graph TB
-    subgraph Internet["公网环境"]
-        subgraph HubCluster["Hub集群 - 全mesh互联"]
-            H1[Hub节点1<br/>nats://hub1:4222]
-            H2[Hub节点2<br/>nats://hub2:4222]
-            H3[Hub节点3<br/>nats://hub3:4222]
-            H1 <-->|Routes| H2
-            H2 <-->|Routes| H3
-            H3 <-->|Routes| H1
-        end
-    end
-    
     subgraph UserA["用户A环境"]
+        direction LR
         A1[应用客户端]
         A2[LeafNode<br/>127.0.0.1:4222]
         A3[SQLite数据库]
         A1 --> A2
         A1 --> A3
     end
-    
+
     subgraph UserB["用户B环境"]
+        direction LR
         B1[应用客户端]
         B2[LeafNode<br/>127.0.0.1:4222]
         B3[SQLite数据库]
         B1 --> B2
         B1 --> B3
     end
-    
-    A2 -->|LeafNode连接| H1
-    B2 -->|LeafNode连接| H2
-    
-    style HubCluster fill:#fce4ec,stroke:#c2185b
+
+    subgraph Internet["公网环境"]
+        direction TB
+        subgraph HubCluster["Hub集群 - 全mesh互联"]
+            direction LR
+            H1[Hub节点1<br/>nats://hub1:4222]
+            H2[Hub节点2<br/>nats://hub2:4222]
+            H3[Hub节点3<br/>nats://hub3:4222]
+            H1 <--> |Routes| H2
+            H2 <--> |Routes| H3
+            H3 <--> |Routes| H1
+        end
+    end
+
+    A2 --> |LeafNode连接| H1
+    B2 --> |LeafNode连接| H2
+
     style UserA fill:#e3f2fd,stroke:#1976d2
     style UserB fill:#e8f5e9,stroke:#388e3c
+    style Internet fill:#fce4ec,stroke:#c2185b
+    style HubCluster fill:#fce4ec,stroke:#c2185b

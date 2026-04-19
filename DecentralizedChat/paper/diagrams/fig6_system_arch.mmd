@@ -1,20 +1,20 @@
 %% 图6 系统总体架构图 - 纵向层级布局
-flowchart TB
-    subgraph UI层["🖥️ UI层"]
+graph TB
+    subgraph UI层["UI层"]
         U1["React前端界面"]
     end
-    
-    subgraph 业务层["⚙️ 业务层"]
+
+    subgraph 业务层["业务层"]
         B1["聊天服务<br/>chat.Service"]
         B2["加密模块<br/>NaCl/AES"]
     end
-    
-    subgraph 通信层["🌐 通信层"]
+
+    subgraph 通信层["通信层"]
         C1["NATS客户端"]
         C2["LeafNode<br/>127.0.0.1:4222"]
     end
-    
-    subgraph 数据层["💾 数据层（本地存储）"]
+
+    subgraph 数据层["数据层（本地存储）"]
         direction LR
         D1["[(SQLite)]"]
         D2["好友公钥"]
@@ -22,12 +22,12 @@ flowchart TB
         D4["消息历史"]
         D5["会话元数据"]
     end
-    
-    subgraph 服务端["☁️ 服务端（无状态）"]
+
+    subgraph 服务端["服务端（无状态）<br/>所有用户数据本地存储<br/>服务端零数据存储"]
         S1["Hub集群<br/>仅消息中转"]
         S2["JetStream<br/>离线消息暂存"]
     end
-    
+
     %% 纵向连接
     U1 <-->|"Wails绑定"| B1
     B1 -->|"加密/解密"| B2
@@ -36,19 +36,15 @@ flowchart TB
     C1 -->|"本地连接"| C2
     C2 <-->|"LeafNode协议"| S1
     S1 -->|"消息持久化"| S2
-    
+
     %% 数据层内部连接
     D1 --- D2
     D1 --- D3
     D1 --- D4
     D1 --- D5
-    
-    %% 关键说明
-    Note["🔒 所有用户数据本地存储<br/>☁️ 服务端零数据存储"]
-    
+
     style UI层 fill:#e3f2fd,stroke:#1976d2
     style 业务层 fill:#fff3e0,stroke:#f57c00
     style 通信层 fill:#fce4ec,stroke:#c2185b
     style 数据层 fill:#c8e6c9,stroke:#388e3c
     style 服务端 fill:#ffebee,stroke:#c62828
-    style Note fill:#fff9c4,stroke:#f9a825
