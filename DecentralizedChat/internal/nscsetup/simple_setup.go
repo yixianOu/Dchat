@@ -246,7 +246,12 @@ NKEYs are sensitive and should be treated as secrets.
 	return os.WriteFile(credsPath, []byte(creds), 0600)
 }
 
-// LoadOrGenerateOperatorKey 密钥生成辅助函数
+// 固定的Operator和Account种子，确保所有用户共享同一信任链
+// 管理员须将对应的OperatorJWT和AccountJWT部署到Hub
+const defaultOperatorSeed = "SOAFSTFUMNI7PTAQQQTYS7RP4PUVR6TOZPHG4MO7RYUCBQMVPJ2WBJUY3E"
+const defaultAccountSeed = "SAAFDCI73QEQGB5UWUFV5YHITJUULQWINQE34PQ4ZEO7TCVZPAMQOUXYZE"
+
+// LoadOrGenerateOperatorKey 从固定种子加载Operator密钥（所有用户共享同一Operator）
 func LoadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
 	if data, err := os.ReadFile(filename); err == nil {
 		if key, err := nkeys.FromSeed(data); err == nil {
@@ -254,16 +259,12 @@ func LoadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
 		}
 	}
 
-	key, err := nkeys.CreateOperator()
+	key, err := nkeys.FromSeed([]byte(defaultOperatorSeed))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load default operator key: %w", err)
 	}
 
-	seed, err := key.Seed()
-	if err != nil {
-		return nil, err
-	}
-
+	seed, _ := key.Seed()
 	if err := os.WriteFile(filename, seed, 0600); err != nil {
 		return nil, err
 	}
@@ -271,6 +272,7 @@ func LoadOrGenerateOperatorKey(filename string) (nkeys.KeyPair, error) {
 	return key, nil
 }
 
+// LoadOrGenerateAccountKey 从固定种子加载Account密钥（所有用户共享同一Account）
 func LoadOrGenerateAccountKey(filename string) (nkeys.KeyPair, error) {
 	if data, err := os.ReadFile(filename); err == nil {
 		if key, err := nkeys.FromSeed(data); err == nil {
@@ -278,16 +280,12 @@ func LoadOrGenerateAccountKey(filename string) (nkeys.KeyPair, error) {
 		}
 	}
 
-	key, err := nkeys.CreateAccount()
+	key, err := nkeys.FromSeed([]byte(defaultAccountSeed))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load default account key: %w", err)
 	}
 
-	seed, err := key.Seed()
-	if err != nil {
-		return nil, err
-	}
-
+	seed, _ := key.Seed()
 	if err := os.WriteFile(filename, seed, 0600); err != nil {
 		return nil, err
 	}
