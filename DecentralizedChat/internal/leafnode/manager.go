@@ -82,6 +82,13 @@ func (m *Manager) Stop() {
 	}
 }
 
+// GetServer 获取内部 NATS Server 实例（用于进程内直连）
+func (m *Manager) GetServer() *server.Server {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.server
+}
+
 // IsRunning 是否正在运行
 func (m *Manager) IsRunning() bool {
 	m.mu.RLock()

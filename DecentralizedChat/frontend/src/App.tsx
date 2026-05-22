@@ -127,12 +127,13 @@ const App: React.FC = () => {
         processedMsg.Ts = new Date().toISOString();
       }
 
-      // 2. 严格去重：会话ID+发送者+内容完全一致就认为是重复
+      // 2. 严格去重：会话ID+发送者+内容+时间戳完全一致才认为是重复
       setMessages(prev => {
         const isDuplicate = prev.some(m =>
           m.CID === processedMsg.CID &&
           m.Sender === processedMsg.Sender &&
-          m.Plain === processedMsg.Plain
+          m.Plain === processedMsg.Plain &&
+          m.Ts === processedMsg.Ts
         );
 
         if (isDuplicate) {
@@ -334,7 +335,6 @@ const App: React.FC = () => {
             sessionId={currentSession.id}
             isGroup={currentSession.isGroup}
             messages={getSessionMessages(currentSession.id)}
-            onMessagesUpdate={(newMsg) => setMessages(prev => [...prev, newMsg])}
           />
         ) : (
           <div className="no-session">
