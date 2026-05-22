@@ -71,12 +71,18 @@ type Service struct {
 	directSubs map[string]*nats.Subscription // cid -> sub
 	groupSubs  map[string]*nats.Subscription // gid -> sub
 
+	// 消息分发去重缓存，避免同一消息被实时订阅和离线同步双重推送
+	dispatchedSeqs map[string]struct{} // key: "subject:natsSeq"
+
 	handlers    []func(*DecryptedMessage)
 	errHandlers []func(error)
 
 	ctx    context.Context
 	cancel context.CancelFunc
 }
+
+// maxDispatchedCache 去重缓存最大容量
+const maxDispatchedCache = 2000
 
 // NewService create minimal service
 func NewService(n *natsservice.Service, s *storage.Storage) *Service {
@@ -89,6 +95,7 @@ func NewService(n *natsservice.Service, s *storage.Storage) *Service {
 		groupSymKeys:  make(map[string]string),
 		directSubs:    make(map[string]*nats.Subscription),
 		groupSubs:     make(map[string]*nats.Subscription),
+		dispatchedSeqs: make(map[string]struct{}),
 		handlers:      make([]func(*DecryptedMessage), 0),
 		errHandlers:   make([]func(error), 0),
 		ctx:           ctx,
@@ -152,6 +159,12 @@ func (s *Service) AddFriendNSCKey(nscPubKey string) (string, error) {
 
 	// 添加到好友列表
 	s.AddFriendKey(uid, chatPubKey)
+
+	// 自动加入私聊会话，确保自己发送的消息能通过NATS回显到UI
+	if err := s.JoinDirect(uid); err != nil {
+		slog.Warn("auto-join direct chat failed", "peer", uid, "error", err)
+	}
+
 	return uid, nil
 }
 
@@ -381,6 +394,11 @@ func (s *Service) processOfflineMessage(msg *nats.Msg) error {
 		_ = s.storage.SaveConversation(conv)
 	}
 
+	// 防重：实时订阅路径已用 Nonce 标记，离线同步不重复推送
+	if s.hasDispatched(msg.Subject, w.Nonce) {
+		return nil
+	}
+
 	// 3. 分发：复用现有消息分发逻辑，通知UI更新
 	s.dispatchDecrypted(decrypted)
 
@@ -454,6 +472,27 @@ func (s *Service) CreateGroup() (gid string, groupKey string, err error) {
 	}
 
 	return gid, groupKey, nil
+}
+
+// resolvePeerPubKey 通过CID和自己的ID反查对端公钥（私聊自收消息时使用）
+func (s *Service) resolvePeerPubKey(cid, selfID string) (string, error) {
+	if s.storage == nil {
+		return "", errors.New("storage not initialized")
+	}
+	allFriends, err := s.storage.GetAllFriends()
+	if err != nil {
+		return "", fmt.Errorf("get friends list: %w", err)
+	}
+	for _, fid := range allFriends {
+		if deriveCID(selfID, fid) == cid {
+			pubKey, gkErr := s.getFriendKey(fid)
+			if gkErr != nil {
+				return "", fmt.Errorf("friend key not found for %s: %w", fid, gkErr)
+			}
+			return pubKey, nil
+		}
+	}
+	return "", fmt.Errorf("peer not found for cid %s", cid)
 }
 
 // deriveCID 生成私聊 cid
@@ -771,15 +810,10 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 	selfID := s.user.ID
 	s.mu.RUnlock()
 
-	// 3) 忽略本地自发回环
-	if w.Sender == selfID {
-		return
-	}
-
-	// 4) 判定是否群聊
+	// 3) 判定是否群聊
 	isGroup := strings.HasPrefix(subject, "dchat.grp.")
 
-	// 5) 按需获取密钥并解密
+	// 4) 按需获取密钥并解密
 	var (
 		pt  []byte
 		err error
@@ -801,6 +835,12 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 		// 按需获取好友公钥
 		peerPub, keyErr := s.getFriendKey(w.Sender)
 		if keyErr != nil {
+			// 自己发的私聊消息，w.Sender是selfID，需要找对端的公钥
+			if w.Sender == selfID {
+				peerPub, keyErr = s.resolvePeerPubKey(w.CID, selfID)
+			}
+		}
+		if keyErr != nil {
 			slog.Debug("私聊消息处理失败：好友公钥不存在", "sender", w.Sender, "error", keyErr)
 			s.dispatchError(fmt.Errorf("friend pub key not available for %s: %w", w.Sender, keyErr))
 			return
@@ -813,7 +853,7 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 		return
 	}
 
-	// 6) 构造消息
+	// 5) 构造消息
 	msg := &DecryptedMessage{
 		CID:     w.CID,
 		Sender:  w.Sender,
@@ -824,33 +864,30 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 		Subject: subject,
 	}
 
-	// 7) 自动保存到本地存储（如果storage已初始化）
-	if s.storage != nil {
-		// 获取NATS序列ID用于去重
-		var natsSeq uint64
-		if meta, err := natsMsg.Metadata(); err == nil {
-			natsSeq = meta.Sequence.Stream
-		}
+	// 获取NATS序列ID用于存储去重
+	var natsSeq uint64
+	if meta, err := natsMsg.Metadata(); err == nil {
+		natsSeq = meta.Sequence.Stream
+	}
 
+	// 6) 自动保存到本地存储（如果storage已初始化）
+	if s.storage != nil {
 		storedMsg := &storage.StoredMessage{
 			ID:             generateMessageID(),
 			ConversationID: w.CID,
 			SenderID:       w.Sender,
-			SenderNickname: w.Nickname, // 优先使用消息里的昵称
+			SenderNickname: w.Nickname,
 			Content:        string(pt),
 			Timestamp:      time.Unix(w.TS, 0),
 			IsRead:         false,
 			IsGroup:        isGroup,
 			NatsSeq:        natsSeq,
 		}
-		// 昵称空的话fallback到用户ID
 		if storedMsg.SenderNickname == "" {
 			storedMsg.SenderNickname = w.Sender
 		}
-		// 最佳努力保存，失败不影响消息分发
 		_ = s.storage.SaveMessage(storedMsg)
 
-		// 更新会话最后消息时间
 		convType := "dm"
 		if isGroup {
 			convType = "group"
@@ -869,8 +906,9 @@ func (s *Service) handleEncrypted(subject string, natsMsg *nats.Msg) {
 		_ = s.storage.SaveConversation(conv)
 	}
 
-	// 8) 分发
+	// 7) 分发（实时订阅先到，标记已分发；离线同步后到会跳过）
 	s.dispatchDecrypted(msg)
+	s.markDispatched(subject, w.Nonce)
 }
 
 // dispatchDecrypted 分发解密成功事件
@@ -881,6 +919,33 @@ func (s *Service) dispatchDecrypted(msg *DecryptedMessage) {
 			h(msg)
 		}()
 	}
+}
+
+// hasDispatched 原子检查并标记，返回true表示已分发过
+func (s *Service) hasDispatched(subject, nonce string) bool {
+	key := subject + ":" + nonce
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.dispatchedSeqs[key]; ok {
+		return true
+	}
+	s.markDispatchedLocked(key)
+	return false
+}
+
+// markDispatched 标记消息已分发（调用方需自行确保不重复分发）
+func (s *Service) markDispatched(subject, nonce string) {
+	key := subject + ":" + nonce
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.markDispatchedLocked(key)
+}
+
+func (s *Service) markDispatchedLocked(key string) {
+	if len(s.dispatchedSeqs) >= maxDispatchedCache {
+		s.dispatchedSeqs = make(map[string]struct{})
+	}
+	s.dispatchedSeqs[key] = struct{}{}
 }
 
 // dispatchError 分发错误事件（不 panic；不中断后续消息处理）

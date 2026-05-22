@@ -162,11 +162,12 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 	}
 
-	// 4. 创建本地 NATS Client（连接到本地 LeafNode）
+	// 4. 创建本地 NATS Client（进程内直连本地 LeafNode，不走 TCP）
 	a.natsSvc, err = nats.NewService(nats.ClientConfig{
-		URL:       a.leafnodeMgr.GetLocalNATSURL(),
-		Name:      "DChatClient",
-		CredsFile: a.config.Keys.UserCredsPath,
+		URL:             a.leafnodeMgr.GetLocalNATSURL(),
+		Name:            "DChatClient",
+		CredsFile:       a.config.Keys.UserCredsPath,
+		InProcessServer: a.leafnodeMgr.GetServer(),
 	})
 	if err != nil {
 		a.addStartupError(fmt.Errorf("start nats client failed: %w", err))

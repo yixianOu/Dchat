@@ -27,15 +27,16 @@ type Service struct {
 }
 
 type ClientConfig struct {
-	URL           string        // e.g. nats://localhost:4222
-	User          string        // Optional legacy username (not recommended)
-	Password      string        // Optional legacy password (not recommended)
-	Token         string        // Optional auth token
-	CredsFile     string        // Path to NSC generated .creds file (preferred)
-	Name          string        // Client name
-	Timeout       time.Duration // Connect timeout
-	MaxReconnect  int           // Max reconnect attempts (-1 infinite)
-	ReconnectWait time.Duration // Wait between reconnect attempts
+	URL            string                    // e.g. nats://localhost:4222
+	User           string                    // Optional legacy username (not recommended)
+	Password       string                    // Optional legacy password (not recommended)
+	Token          string                    // Optional auth token
+	CredsFile      string                    // Path to NSC generated .creds file (preferred)
+	Name           string                    // Client name
+	Timeout        time.Duration             // Connect timeout
+	MaxReconnect   int                       // Max reconnect attempts (-1 infinite)
+	ReconnectWait  time.Duration             // Wait between reconnect attempts
+	InProcessServer nats.InProcessConnProvider // 同一进程内的 NATS server，走内存管道，不走 TCP
 }
 
 // NewService creates a NATS client service with auth support
@@ -61,6 +62,11 @@ func NewService(cfg ClientConfig) (*Service, error) {
 		opts = append(opts, nats.Timeout(cfg.Timeout))
 	} else {
 		opts = append(opts, nats.Timeout(5*time.Second))
+	}
+
+	// In-process server (优先于 URL 连接)
+	if cfg.InProcessServer != nil {
+		opts = append(opts, nats.InProcessServer(cfg.InProcessServer))
 	}
 
 	// Reconnect settings
