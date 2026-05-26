@@ -1,13 +1,13 @@
 %% 图19 NATS JWT身份认证流程
 %%{init: {'flowchart': {'nodeSpacing': 12, 'rankSpacing': 60}}}%%
 flowchart TB
-    subgraph CA["CA（Operator + Account）"]
+    subgraph CA["Operator/Account（相当于CA）"]
         CAPri["CA 私钥"]
         CAPub["CA 公钥"]
     end
 
-    CAPri -->|"签发"| UJWT["User JWT<br/>（含 User 公钥）"]
-    UJWT --> Hub["Hub<br/>（预先加载 CA 公钥）<br/>验签后提取 User 公钥"]
+    CAPri -->|"签发"| UJWT["User JWT（含 User 公钥）"]
+    UJWT --> Hub["Hub（预先加载 CA 公钥）验签后提取 User 公钥"]
     CAPub -.-> Hub
 
     style CA fill:#e3f2fd,stroke:#1976d2

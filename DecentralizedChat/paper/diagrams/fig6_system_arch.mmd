@@ -1,4 +1,4 @@
-%% 图6 系统总体架构图 - 纵向层级布局
+%% 图6 系统总体架构图
 graph TB
     subgraph UI层["UI层"]
         U1["React前端界面"]
@@ -9,35 +9,34 @@ graph TB
         B2["加密模块<br/>NaCl/AES"]
     end
 
-    subgraph 通信层["通信层"]
-        C1["NATS客户端"]
-        C2["LeafNode<br/>127.0.0.1:4222"]
-    end
-
-    subgraph 数据层["数据层（本地存储）"]
-        direction LR
-        D1["[(SQLite)]"]
+    subgraph 数据层["本地数据层（CRUD操作）"]
+        D1["SQLite"]
         D2["好友公钥"]
         D3["群聊密钥"]
         D4["消息历史"]
         D5["会话元数据"]
     end
 
-    subgraph 服务端["服务端（无状态）<br/>所有用户数据本地存储<br/>服务端零数据存储"]
+    subgraph 通信层["通信层（进程内通信）"]
+        direction LR
+        C1["NATS客户端"]
+        C2["LeafNode"]
+    end
+
+    subgraph 服务端["服务端（无状态/消息持久化）"]
+        direction LR
         S1["Hub集群<br/>仅消息中转"]
         S2["JetStream<br/>离线消息暂存"]
     end
 
-    %% 纵向连接
     U1 <-->|"Wails绑定"| B1
     B1 -->|"加密/解密"| B2
+    B1 <--> D1
     B1 -->|"发布/订阅"| C1
-    B1 <-->|"CRUD操作"| D1
-    C1 -->|"本地连接"| C2
+    C1 --> C2
     C2 <-->|"LeafNode协议"| S1
-    S1 -->|"消息持久化"| S2
+    S1 --> S2
 
-    %% 数据层内部连接
     D1 --- D2
     D1 --- D3
     D1 --- D4
